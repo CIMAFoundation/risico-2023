@@ -1,33 +1,33 @@
 // import state from lib
 mod library;
 
-use library::state::models::{State, Cell};
-use chrono::prelude::*;
+use chrono::{prelude::*};
+use library::state::models::State;
 
-use crate::library::state::{functions::update_state, models::{CellProperties, CellState}};
+use crate::library::config::data::read_cells_properties;
+
 
 fn main() {
+    let file_path = "/Users/mirko/development/risico/convert/data/world.txt";
+    let cells_properties = read_cells_properties(file_path).unwrap();
+    let ncells = cells_properties.len();
+
+    let start_time = Utc::now();
+    let state: State = State::new(&cells_properties);
     
-    let time: DateTime<Utc> = Utc::now() ;
-    let cells: Vec<Cell> = vec![
-        Cell {
-            properties: &CellProperties {
-                lon: 0.0,
-                lat: 0.0,
-                height: 0.0,
-                width: 0.0,
-                altitude: 0.0,
-                slope: 0.0,
-                aspect: 0.0,
-                vegetation: 0
-            },
-            state: CellState { ffm: 0.0 },
-        }
+
+    let elapsed = Utc::now().signed_duration_since(start_time).num_milliseconds();
+    print!("{} cells created in {} msec\n", ncells, elapsed);
     
-    ];
-    let state: State = State { cells, time };
-    println!("{:?}", state);
-    let state = update_state(&state);
-    println!("{:?}", state);
+
+    for i in 0..10 {
+        print!("{} ", i);
+        let start_time = Utc::now();
+        let _ = state.update();
+        let elapsed = Utc::now().signed_duration_since(start_time).num_milliseconds();
+        print!("{} cells updated in {} msec\n", ncells, elapsed);
+    }
+
+    
 
 }

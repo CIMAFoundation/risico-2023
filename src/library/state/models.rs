@@ -1,16 +1,13 @@
 use chrono::prelude::*;
-use super::functions::update_state;
+use chrono::Duration;
+
 use super::functions::get_ffm;
 
-
+const UPDATE_TIME: i64 = 100;
 #[derive(Debug)]
 pub struct CellProperties {
     pub lon: f64,
     pub lat: f64,
-    pub height: f64,
-    pub width: f64,
-    pub altitude: f64,
-    
     pub slope: f64,
     pub aspect: f64,
     pub vegetation: i16
@@ -62,5 +59,22 @@ impl State<'_> {
             .map(|cell| Cell::new(cell))
             .collect();
         State { cells, time: Utc::now() }
+    }
+
+    pub fn update(&self) -> State {
+    /*
+
+     */
+    // determine the new time for the state
+    
+        let new_time = self.time + Duration::seconds(UPDATE_TIME);
+
+        // execute the update function on each cell
+        let cells = self.cells.iter()
+                    .map(|cell| cell.update())
+                    .collect();
+        // return the new state
+        State { cells: cells, time: new_time }
+
     }
 }   
