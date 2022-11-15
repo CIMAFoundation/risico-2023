@@ -33,6 +33,41 @@ pub struct CellState {
 }
 
 
+pub struct TimeStepOutput {
+    pub time: DateTime<Utc>,
+    pub data: Vec<CellState>
+}
+
+pub struct CellOutput <'a>{
+    pub cell: &'a Cell<'a>,
+
+   	pub dffm: f64,
+	pub W: f64,
+	pub V: f64,
+	pub I: f64,
+	pub VPPF: f64,
+	pub IPPF: f64,
+	pub INDVI: f64,
+	pub VNDVI: f64,
+	pub VPPFNDVI: f64,
+	pub IPPFNDVI: f64,
+	pub NDVI: f64,
+	pub INDWI: f64,
+	pub VNDWI: f64,
+	pub VPPFNDWI: f64,
+	pub IPPFNDWI: f64,
+	pub NDWI: f64,
+	pub contrT: f64,
+	pub SWI: f64,	
+	pub temperature: f64,
+	pub rain: f64,
+	pub windSpeed: f64,
+	pub windDir: f64,
+	pub humidity: f64,
+	pub snowCover: f64,
+}
+
+
 #[derive(Debug)]
 pub struct Cell<'a> {
     // The cell's properties
@@ -51,12 +86,12 @@ impl Cell<'_> {
             state: CellState { ffm: 0.0 },
         }
     }
-    pub fn update(&self) -> Cell {
+    pub fn update(&self, time: &DateTime<Utc>) -> Cell {
         Cell {
             properties: self.properties,
             vegetation: self.vegetation,
             state: CellState { 
-                ffm: get_ffm(self.properties, self.state.ffm)
+                ffm: get_ffm(self.state.ffm)
             },
         }
     }
@@ -84,7 +119,7 @@ impl State<'_> {
 
         // execute the update function on each cell
         let cells = self.cells.iter()
-                    .map(|cell| cell.update())
+                    .map(|cell| cell.update(&new_time))
                     .collect::<Vec<Cell>>();
         //return the new state
         //State { cells: cells, time: new_time }
