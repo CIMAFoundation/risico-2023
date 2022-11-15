@@ -4,16 +4,21 @@ mod library;
 use chrono::{prelude::*};
 use library::state::models::State;
 
-use crate::library::config::data::read_cells_properties;
+use crate::library::config::{data::read_cells_properties, models::Config};
 
 
 fn main() {
-    let file_path = "/Users/mirko/development/risico/convert/data/world.txt";
-    let cells_properties = read_cells_properties(file_path).unwrap();
-    let ncells = cells_properties.len();
+    let cells_path = "data/ethiopia.txt";
+    let veg_path = "data/pveg_ethiopia.txt";
+    
+    
 
     let start_time = Utc::now();
-    let state: State = State::new(&cells_properties);
+    let config = Config::new(&cells_path, &veg_path);
+    let ncells = &config.cells.len();
+    
+    let cells = config.init_state();
+    let state: State = State::new(cells, Utc::now());
     
 
     let elapsed = Utc::now().signed_duration_since(start_time).num_milliseconds();
