@@ -29,7 +29,8 @@ pub struct Vegetation {
 #[derive(Debug)]
 #[derive(Clone)]
 pub struct CellState {
-    pub ffm: f64,
+    pub dffm: f64,
+    pub snowCover: f64,
 }
 
 
@@ -67,6 +68,18 @@ pub struct CellOutput <'a>{
 	pub snowCover: f64,
 }
 
+pub struct CellInput {
+    pub time: DateTime<Utc>,
+    pub temperature: f64,
+    pub rain: f64,
+    pub windSpeed: f64,
+    pub windDir: f64,
+    pub humidity: f64,
+    pub snowCover: f64,
+    pub NDVI: f64,
+    pub NDWI: f64,
+}
+
 
 #[derive(Debug)]
 pub struct Cell<'a> {
@@ -83,7 +96,10 @@ impl Cell<'_> {
         Cell {
             properties,
             vegetation,
-            state: CellState { ffm: 0.0 },
+            state: CellState { 
+                dffm: 0.0,
+                snowCover: 0.0
+            },
         }
     }
     pub fn update(&self, time: &DateTime<Utc>) -> Cell {
@@ -91,7 +107,8 @@ impl Cell<'_> {
             properties: self.properties,
             vegetation: self.vegetation,
             state: CellState { 
-                ffm: get_ffm(self.state.ffm)
+                dffm: get_ffm(self.state.dffm),
+                snowCover: 0.0
             },
         }
     }
