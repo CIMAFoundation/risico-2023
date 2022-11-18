@@ -1,6 +1,8 @@
-use std::{collections::HashMap, fs::File, u8::{self, MAX}};
+use std::{collections::HashMap, fs::File, u8::{self, MAX}, io::{self, BufRead}, path::Path};
 
-use crate::library::state::models;
+use chrono::{DateTime, Utc};
+
+use crate::library::{state::models, io::{models::{InputData, Grid}, readers::read_input_from_file}};
 
 use super::data::{read_cells_properties, read_vegetation};
 
@@ -41,141 +43,72 @@ impl Config {
     }
 }
 
-pub trait Grid {
-    fn get_i_j(&self, lat: f32, lon: f32) -> (usize, usize);
+type VariableMap<'a> = HashMap<String, InputData<'a>>;
+
+#[derive(Debug)]
+pub struct InputDataHandler<'a> {
+    pub grid_registry: HashMap<String, Grid>,
+    pub data_map: HashMap<DateTime<Utc>, VariableMap<'a>>,
 }
 
-pub struct RegularGrid {
-    pub nrows: usize,
-    pub ncols: usize,
-    pub min_lat: f32,
-    pub min_lon: f32,
-    pub max_lat: f32,
-    pub max_lon: f32,
-    pub step_lat: f32,
-    pub step_lon: f32,
-}
+impl InputDataHandler<'_>{
+    pub fn new(file_path: &str) -> InputDataHandler{
+        let mut grid_registry: HashMap<String, Grid> = HashMap::new();
+        let mut data_map: HashMap<DateTime<Utc>, VariableMap> = HashMap::new();
 
-impl Grid for RegularGrid {
-    fn get_i_j(&self, lat: f32, lon: f32) -> (usize, usize) {
-        let i = ((lat - self.min_lat) / self.step_lat) as usize;
-        let j = ((lon - self.min_lon) / self.step_lon) as usize;
-        (i, j)
-    }
-}
+        let mut file = File::open(file_path).expect(&format!("Can't open input file {}", file_path));
 
-pub struct IrregularGrid {
-    pub nrows: usize,
-    pub ncols: usize,
-    pub lats : Vec<f32>,
-    pub lons : Vec<f32>,
-}
 
-impl Grid for IrregularGrid {
-    fn get_i_j(&self, lat: f32, lon: f32) -> (usize, usize) {
-        let i = self.lats.iter().position(|&x| x == lat).unwrap();
-        let j = self.lons.iter().position(|&x| x == lon).unwrap();
-        (i, j)
-    }
-}
+        // file is a text file in which each line is a file with the following structure:
+        // directory/<YYYYmmDDHHMM>_<grid_name>_<variable>.<extension>
+        // read the file and parse the lines
+        let reader = io::BufReader::new(file);
 
-pub struct InputData {
-    pub values: Vec<f32>,
-    pub grid: Box<dyn Grid>
-}
+        for line in reader.lines() {
+            let line = line.unwrap();
+            // extract only the file name using path manipulation
+            let file_name = Path::new(&line).file_name().unwrap().to_str().unwrap();
 
-use std::io::{self, Read};
-use libflate::{zlib::{Encoder, Decoder}, gzip};
+            // split the file name into its components
+            let components: Vec<&str> = file_name.split('_').collect();
+            let date = components[0];
+            let grid_name = components[1];
+            let variable = components[2].split('.').collect::<Vec<&str>>()[0];
 
-pub fn read_input_from_file(file: &str){
-    // Decoding
-    // read file as binary
-    let input: Box<dyn io::Read> =  
-        Box::new(
-            File::open(file)
-                .expect(&format!("Can't open file: {}", file)
-    ));
-    let mut input = io::BufReader::new(input);
-    let mut decoder = gzip::Decoder::new(input).expect("Read GZIP header failed");
-    
-    println!("HEADER: {:?}", decoder.header());
+            // parse the date
+            let date = DateTime::parse_from_str(date, "%Y%m%d%H%M").unwrap(); 
+            let date = date.with_timezone(&Utc);
 
-    let mut is_regular: [u8; 4] = [0; 4];
-    decoder.read_exact(&mut is_regular).expect("Read is_regular failed");
-    let is_regular = u32::from_be_bytes(is_regular);
-    println!("{:?}", &is_regular);
-    
-    let mut nrows: [u8; 4] = [0; 4];
-    decoder.read_exact(&mut nrows).expect("Read nrows failed");
-    let nrows = u32::from_le_bytes(nrows);
-    println!("{:?}", &nrows);
-    
-    let mut ncols: [u8; 4] = [0; 4];
-    decoder.read_exact(&mut ncols).unwrap();
-    let ncols = u32::from_le_bytes(ncols);
-    println!("{:?}", &ncols);
-    
-    let (lats, lons) = match is_regular {
-        0 => {
-            let mut lats: Vec<f32> = Vec::new();
-            for _ in 0..nrows*ncols {
-                let mut lat: [u8; 4] = [0; 4];
-                decoder.read_exact(&mut lat).unwrap();
-                let lat = f32::from_le_bytes(lat);
-                lats.push(lat);
-            }
-
-            let mut lons: Vec<f32> = Vec::new();
-            for _ in 0..nrows*ncols {
-                let mut lon: [u8; 4] = [0; 4];
-                decoder.read_exact(&mut lon).unwrap();
-                let lon = f32::from_le_bytes(lon);
-                lons.push(lon);
-            }
-            (lats, lons)
-        },
-        1..=u32::MAX => {
-            let mut min_lat: [u8; 4] = [0; 4];
-            let mut max_lat: [u8; 4] = [0; 4];
-            decoder.read_exact(&mut min_lat).unwrap();
-            decoder.read_exact(&mut max_lat).unwrap();
-            let min_lat = f32::from_le_bytes(min_lat);
-            let max_lat = f32::from_le_bytes(max_lat);
+            // read the file
             
-            let mut min_lon: [u8; 4] = [0; 4];
-            let mut max_lon: [u8; 4] = [0; 4];
-            decoder.read_exact(&mut min_lon).unwrap();
-            decoder.read_exact(&mut max_lon).unwrap();
-            let min_lon = f32::from_le_bytes(min_lon);
-            let max_lon = f32::from_le_bytes(max_lon);
-
-            let mut lats: Vec<f32> = Vec::new();
-            for i in 0..nrows {
-                let lat = min_lat + (max_lat - min_lat) * (i as f32) / (nrows as f32);
-                lats.push(lat);
-            }
-            let mut lons: Vec<f32> = Vec::new();
-            for i in 0..ncols {
-                let lon = min_lon + (max_lon - min_lon) * (i as f32) / (ncols as f32);
-                lons.push(lon);
-            }
-            (lats, lons)
+            let (_grid, values) = read_input_from_file(&line).unwrap();
             
-        }        
-    };
+            
+            let grid: &Grid;
+            let mut data: InputData;
+            if grid_registry.contains_key(grid_name) {
+                grid = &grid_registry.get(grid_name).unwrap();
+                data = InputData { values: values, grid: grid };
+            }else {
+                let grid = grid_registry.try_insert(grid_name.to_string(), _grid).unwrap();                
+                data = InputData { values: values, grid: grid };
+            }
 
-    let mut values: Vec<f32> = Vec::new();
-    for _ in 0..nrows*ncols {
-        let mut value: [u8; 4] = [0; 4];
-        decoder.read_exact(&mut value).unwrap();
-        let value = f32::from_le_bytes(value);
-        values.push(value);
+            // add the data to the data map
+            if !data_map.contains_key(&date) {
+                data_map.insert(date, HashMap::new());
+            }
+            let data_map = data_map.get_mut(&date).unwrap();
+            data_map.insert(variable.to_string(), data);
+
+        }
+
+        InputDataHandler {
+            grid_registry: grid_registry,
+            data_map: data_map
+        }
+        
     }
-
-    print!("LATS: {:?}", lats);
-    print!("LONS: {:?}", lons);
-
-    // assert_eq!(decoded_data, b"Hello World!");    
 }
 
 

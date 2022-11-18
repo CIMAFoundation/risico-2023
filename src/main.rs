@@ -2,7 +2,7 @@
 mod library;
 
 use chrono::{prelude::*};
-use library::{state::models::State, config::models::read_input_from_file};
+use library::{state::models::State, io::readers::read_input_from_file, config::models::InputDataHandler};
 
 use crate::library::config::{data::read_cells_properties, models::Config};
 
@@ -39,5 +39,17 @@ use crate::library::config::{data::read_cells_properties, models::Config};
 
 
 fn main() {
-    read_input_from_file("data/input/202101310300_GFS025-6473ffdb_H.zbin");
+    let input_path = "data/input/input.txt";
+    let handler = InputDataHandler::new(&input_path);
+    for grid_name in handler.grid_registry.keys() {
+        println!("{}", grid_name);
+    }
+
+    for (date, data_map) in handler.data_map.iter() {
+        println!("{}", date);
+        for (var_name, _) in data_map.iter() {
+            println!("{}", var_name);
+        }
+    }
+
 }
