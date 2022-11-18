@@ -41,14 +41,14 @@ use crate::library::config::{data::read_cells_properties, models::Config};
 fn main() {
     let input_path = "data/input/input.txt";
     let handler = InputDataHandler::new(&input_path);
-    for grid_name in handler.grid_registry.keys() {
-        println!("{}", grid_name);
+    for grid_name in handler.grid_registry.grids.keys() {
+        println!("GRID SAVED: {}", grid_name);
     }
 
     for (date, data_map) in handler.data_map.iter() {
-        println!("{}", date);
+        println!(" .   DATE: {}", date);
         for (var_name, _) in data_map.iter() {
-            println!("{}", var_name);
+            println!("         VARIABLE: {}", var_name);
         }
     }
 

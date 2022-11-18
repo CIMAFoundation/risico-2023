@@ -1,6 +1,7 @@
-use std::{collections::HashMap, fs::File, u8::{self, MAX}, io::{self, BufRead}, path::Path};
+use std::{collections::HashMap, fs::File, u8::{self, MAX}, io::{self, BufRead}, path::Path, clone};
 
 use chrono::{DateTime, Utc};
+use chrono::*;
 
 use crate::library::{state::models, io::{models::{InputData, Grid}, readers::read_input_from_file}};
 
@@ -43,20 +44,46 @@ impl Config {
     }
 }
 
-type VariableMap<'a> = HashMap<String, InputData<'a>>;
+type VariableMap = HashMap<String, InputData>;
 
 #[derive(Debug)]
-pub struct InputDataHandler<'a> {
-    pub grid_registry: HashMap<String, Grid>,
-    pub data_map: HashMap<DateTime<Utc>, VariableMap<'a>>,
+pub struct GridRegistry {
+   pub grids: HashMap<String, Grid>,
+}
+impl GridRegistry {
+    pub fn new() -> GridRegistry {
+        GridRegistry {
+            grids: HashMap::new(),
+        }
+    }
+
+    pub fn has(&self, grid_name: &str) -> bool {
+        self.grids.contains_key(grid_name)
+    }
+
+    pub fn add(&mut self, name: String, grid: Grid) {
+        if self.grids.contains_key(&name) { return; }
+        self.grids.insert(name, grid);
+    }
+
+    pub fn get_grid(&self, name: &str) -> Option<&Grid> {
+        self.grids.get(name)
+    }
+    
 }
 
-impl InputDataHandler<'_>{
+#[derive(Debug)]
+pub struct InputDataHandler {
+    pub grid_registry: GridRegistry,
+    pub data_map: HashMap<DateTime<Utc>, VariableMap>,
+}
+
+impl InputDataHandler{
     pub fn new(file_path: &str) -> InputDataHandler{
-        let mut grid_registry: HashMap<String, Grid> = HashMap::new();
+        let mut grid_registry = GridRegistry::new();
         let mut data_map: HashMap<DateTime<Utc>, VariableMap> = HashMap::new();
 
-        let mut file = File::open(file_path).expect(&format!("Can't open input file {}", file_path));
+        let file = File::open(file_path).expect(&format!("Can't open input file {}", file_path));
 
 
         // file is a text file in which each line is a file with the following structure:
@@ -66,6 +93,9 @@ impl InputDataHandler<'_>{
 
         for line in reader.lines() {
             let line = line.unwrap();
+            
+            if !line.ends_with(".zbin") { continue; }
+
             // extract only the file name using path manipulation
             let file_name = Path::new(&line).file_name().unwrap().to_str().unwrap();
 
@@ -76,23 +106,22 @@ impl InputDataHandler<'_>{
             let variable = components[2].split('.').collect::<Vec<&str>>()[0];
 
             // parse the date
-            let date = DateTime::parse_from_str(date, "%Y%m%d%H%M").unwrap(); 
+            println!("Parsing date: {}", date);
+            let date = match NaiveDateTime::parse_from_str(date, "%Y%m%d%H%M")  {
+                Ok(date) => DateTime::<Utc>::from_utc(date, Utc),
+                Err(error) => panic!("Error parsing date: {error}")
+            };
+            
             let date = date.with_timezone(&Utc);
 
             // read the file
             
             let (_grid, values) = read_input_from_file(&line).unwrap();
             
+            // check if the grid is already in the registry
+            grid_registry.add(grid_name.to_string(), _grid);
             
-            let grid: &Grid;
-            let mut data: InputData;
-            if grid_registry.contains_key(grid_name) {
-                grid = &grid_registry.get(grid_name).unwrap();
-                data = InputData { values: values, grid: grid };
-            }else {
-                let grid = grid_registry.try_insert(grid_name.to_string(), _grid).unwrap();                
-                data = InputData { values: values, grid: grid };
-            }
+            let data = InputData::new(values, grid_name.to_string());
 
             // add the data to the data map
             if !data_map.contains_key(&date) {

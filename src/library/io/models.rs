@@ -80,8 +80,16 @@ impl Grid {
    
 
 #[derive(Debug)]
-pub struct InputData<'a> {
+pub struct InputData{
     pub values: Vec<f32>,
-    pub grid: &'a Grid
+    pub grid_name: String,
 }
 
+impl InputData{
+    pub fn new(values: Vec<f32>, grid_name: String) -> InputData {
+        InputData {
+            values: values,
+            grid_name: grid_name,
+        }
+    }
+}
