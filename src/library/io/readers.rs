@@ -2,39 +2,32 @@
 use std::{io::{self, Read}, fs::File};
 use libflate::gzip;
 
-use crate::library::io::models::Grid;
+use crate::library::io::models::grid::Grid;
 
-use super::models::InputData;
-
-
-
+/// read a file and returns Grid and Vector of data
+/// Grid is a struct with the following fields:
 pub fn read_input_from_file(file: &str) -> Result<(Grid, Vec<f32>), io::Error> {
-    // Decoding
-    // read file as binary
+    
     let input: Box<dyn io::Read> =  
         Box::new(
             File::open(file)
                 .expect(&format!("Can't open file: {}", file)
     ));
-    let mut input = io::BufReader::new(input);
+    let input = io::BufReader::new(input);
     let mut decoder = gzip::Decoder::new(input)?;
     
-    println!("HEADER: {:?}", decoder.header());
-
     let mut is_regular: [u8; 4] = [0; 4];
     decoder.read_exact(&mut is_regular)?;
     let is_regular = u32::from_be_bytes(is_regular);
-    println!("{:?}", &is_regular);
     
     let mut nrows: [u8; 4] = [0; 4];
     decoder.read_exact(&mut nrows).expect("Read nrows failed");
     let nrows = u32::from_le_bytes(nrows);
-    println!("{:?}", &nrows);
     
     let mut ncols: [u8; 4] = [0; 4];
     decoder.read_exact(&mut ncols).unwrap();
     let ncols = u32::from_le_bytes(ncols);
-    println!("{:?}", &ncols);
+    
     
     let grid = match is_regular {
         0 => {
@@ -56,7 +49,7 @@ pub fn read_input_from_file(file: &str) -> Result<(Grid, Vec<f32>), io::Error> {
             Grid::new_irregular(nrows as usize, ncols as usize, lats, lons)
 
         },
-        1..=u32::MAX => {
+        1 => {
             let mut min_lat: [u8; 4] = [0; 4];
             let mut max_lat: [u8; 4] = [0; 4];
             decoder.read_exact(&mut min_lat).unwrap();
@@ -82,8 +75,8 @@ pub fn read_input_from_file(file: &str) -> Result<(Grid, Vec<f32>), io::Error> {
                 lons.push(lon);
             }
             Grid::new_regular(nrows as usize, ncols as usize,  min_lat, min_lon, max_lat, max_lon)
-            
-        }        
+        },
+        _ => panic!("Unknown grid type"),
     };
 
     

@@ -1,4 +1,3 @@
-
 use std::{io::BufRead, collections::HashMap};
 use std::fs;
 use std::io::BufReader;
@@ -6,9 +5,9 @@ use std::io::BufReader;
 use crate::library::state::models::{Properties, Vegetation};
 
 /// Read the cells from a file.
+/// :param file_path: The path to the file.
+/// :return: A list of cells.
 pub fn read_cells_properties(file_path: &str) -> Result<Vec<Properties>, std::io::Error> {
-    /// :param file_path: The path to the file.
-    /// :return: A list of cells.
      
     let file = fs::File::open(file_path)?;        
     let mut cells: Vec<Properties> = Vec::new();
@@ -47,9 +46,9 @@ pub fn read_cells_properties(file_path: &str) -> Result<Vec<Properties>, std::io
 }   
 
 /// Read the cells from a file.
+/// :param file_path: The path to the file.
+/// :return: A list of cells.
 pub fn read_vegetation(file_path: &str) -> Result<HashMap<String, Vegetation>, std::io::Error> {
-    /// :param file_path: The path to the file.
-    /// :return: A list of cells.
      
     let file = fs::File::open(file_path)?;        
     let mut vegetations: HashMap<String, Vegetation> = HashMap::new();
