@@ -1,7 +1,12 @@
 use chrono::prelude::*;
 use chrono::Duration;
 
+use crate::library::config::models::InputDataHandler;
+
+use super::constants::NODATAVAL;
 use super::functions::get_ffm;
+use super::functions::get_output;
+use super::functions::update_moisture;
 
 const UPDATE_TIME: i64 = 100;
 #[derive(Debug)]
@@ -39,8 +44,9 @@ pub struct TimeStepOutput {
     pub data: Vec<CellState>
 }
 
-pub struct CellOutput <'a>{
-    pub cell: &'a Cell<'a>,
+#[derive(Debug)]
+pub struct CellOutput{
+    pub time: DateTime<Utc>,
 
    	pub dffm: f64,
 	pub W: f64,
@@ -66,6 +72,40 @@ pub struct CellOutput <'a>{
 	pub windDir: f64,
 	pub humidity: f64,
 	pub snowCover: f64,
+}
+
+
+impl CellOutput {
+    pub fn new(time: &DateTime<Utc>) -> Self {
+        CellOutput {
+            time: time.clone(),
+            dffm: NODATAVAL,
+            W: NODATAVAL,
+            V: NODATAVAL,
+            I: NODATAVAL,
+            VPPF: NODATAVAL,
+            IPPF: NODATAVAL,
+            INDVI: NODATAVAL,
+            VNDVI: NODATAVAL,
+            VPPFNDVI: NODATAVAL,
+            IPPFNDVI: NODATAVAL,
+            NDVI: NODATAVAL,
+            INDWI: NODATAVAL,
+            VNDWI: NODATAVAL,
+            VPPFNDWI: NODATAVAL,
+            IPPFNDWI: NODATAVAL,
+            NDWI: NODATAVAL,
+            contrT: NODATAVAL,
+            SWI: NODATAVAL,
+            temperature: NODATAVAL,
+            rain: NODATAVAL,
+            windSpeed: NODATAVAL,
+            windDir: NODATAVAL,
+            humidity: NODATAVAL,
+            snowCover: NODATAVAL,
+        }
+        
+    }
 }
 
 pub struct CellInput {
@@ -102,15 +142,23 @@ impl Cell<'_> {
             },
         }
     }
-    pub fn update(&self, time: &DateTime<Utc>) -> Cell {
+
+    pub fn update(&self, time: &DateTime<Utc>, input: &CellInput) -> Cell {
+        let dt = 3600.0;
+        let new_dffm = update_moisture(self, input, dt);
+
         Cell {
             properties: self.properties,
             vegetation: self.vegetation,
             state: CellState { 
-                dffm: get_ffm(self.state.dffm),
-                snowCover: 0.0
+                dffm: new_dffm,
+                ..self.state
             },
         }
+    }
+
+    pub fn get_output(&self, time: &DateTime<Utc>, input: &CellInput) -> CellOutput {
+        get_output(self, time, input)   
     }
 }
 
@@ -118,6 +166,7 @@ impl Cell<'_> {
 pub struct State<'a> {
     // The grid's cells.
     pub cells: Vec<Cell<'a>>,
+    //ßpub outputs: Vec<CellOutput>,
     pub time: DateTime<Utc>
 }
 
@@ -129,18 +178,42 @@ impl State<'_> {
     
 
     /// Update the state of the cells.
-    pub fn update<'a>(&'a self) -> State<'a> {
-    // determine the new time for the state
-    
-        let new_time = self.time + Duration::seconds(UPDATE_TIME);
-
+    pub fn update<'a>(&'a self, input_handler: &mut InputDataHandler, new_time: &DateTime<Utc>) -> State<'a> {
+        // determine the new time for the state
         // execute the update function on each cell
         let cells = self.cells.iter()
-                    .map(|cell| cell.update(&new_time))
+                    .map(|cell| {
+                        let (lat, lon) = (cell.properties.lat  as f32, cell.properties.lon  as f32);
+                        let t = input_handler.get_value("T", &new_time, lat, lon) as f64;
+                        let u = input_handler.get_value("U", &new_time, lat, lon) as f64;
+                        let v = input_handler.get_value("V", &new_time, lat, lon) as f64;
+                        let p = input_handler.get_value("P", &new_time, lat, lon) as f64;
+                        let h = input_handler.get_value("H", &new_time, lat, lon) as f64;
+
+                        let wind_speed = f64::sqrt(f64::powi(u, 2) + f64::powi(v, 2));
+                        let wind_dir = f64::atan2(u, v);
+
+                        let cell_input = CellInput {
+                            time: new_time.to_owned(),
+                            temperature: t,
+                            rain: p,
+                            windSpeed: wind_speed,
+                            windDir: wind_dir,
+                            humidity: h,
+                            snowCover: 0.0,
+                            NDVI: 0.0,
+                            NDWI: 0.0
+                        };
+                        
+                        let new_cell = cell.update(&new_time, &cell_input);
+                        let cell_output = cell.get_output(&new_time, &cell_input);
+                        new_cell
+                    })
                     .collect::<Vec<Cell>>();
         //return the new state
         //State { cells: cells, time: new_time }
 
-        State::new(cells, new_time)
+        State::new(cells, new_time.to_owned())
     }
+
 }   
