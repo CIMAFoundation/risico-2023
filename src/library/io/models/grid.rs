@@ -1,10 +1,14 @@
 use std::collections::HashMap;
 
+use crate::library::state::constants::NODATAVAL;
+
 pub trait GridFunctions {
     fn get_index(&mut self, lat: f32, lon: f32) -> usize;
+
+    fn get_shape(&self) -> (usize, usize);
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone, Copy)]
 pub struct RegularGrid {
     pub nrows: usize,
     pub ncols: usize,
@@ -16,11 +20,57 @@ pub struct RegularGrid {
     pub step_lon: f32,
 }
 
+impl RegularGrid {
+    pub fn new(nrows: usize,
+        ncols: usize,
+        min_lat: f32,
+        min_lon: f32,
+        max_lat: f32,
+        max_lon: f32,) -> Self {
+        let step_lat = (max_lat - min_lat) / (nrows - 1) as f32;
+        let step_lon = (max_lon - min_lon) / (ncols - 1) as f32;
+        RegularGrid {
+            nrows: nrows,
+            ncols: ncols,
+            min_lat: min_lat,
+            min_lon: min_lon,
+            max_lat: max_lat,
+            max_lon: max_lon,
+            step_lat: step_lat,
+            step_lon: step_lon,
+        }
+    }
+
+    pub fn project_to_grid(&mut self, lats: &Vec<f32>, lons: &Vec<f32>, values: Vec<f32>) -> Vec<f32> {
+        let (nrows, ncols) = self.get_shape();
+
+        let mut grid_values = vec![0.0; nrows * ncols];
+        let mut count = vec![0; nrows * ncols];
+        for i in 0..lats.len() {
+            let idx = self.get_index(lats[i], lons[i]);
+            grid_values[idx] += values[i];
+            count[idx] += 1;
+        }
+        for i in 0..grid_values.len() {
+            if count[i] > 0 {
+                grid_values[i] /= count[i] as f32;
+            } else {
+                grid_values[i] = NODATAVAL as f32;
+            }
+        }
+        grid_values
+    }    
+}
+
 impl GridFunctions for RegularGrid {
     fn get_index(&mut self, lat: f32, lon: f32) -> usize {
         let i = ((lat - self.min_lat) / self.step_lat) as usize;
         let j = ((lon - self.min_lon) / self.step_lon) as usize;
         i * self.ncols + j
+    }
+
+    fn get_shape(&self) -> (usize, usize) {
+        (self.nrows, self.ncols)
     }
 }
 
@@ -99,6 +149,11 @@ impl GridFunctions for IrregularGrid {
 
         minidx
     }
+
+    fn get_shape(&self) -> (usize, usize) {
+        (self.nrows, self.ncols)
+    }
+
 }
 
 #[derive(Debug)]
@@ -116,18 +171,7 @@ impl Grid {
         max_lat: f32,
         max_lon: f32,
     ) -> Grid {
-        let step_lat = (max_lat - min_lat) / (nrows - 1) as f32;
-        let step_lon = (max_lon - min_lon) / (ncols - 1) as f32;
-        Grid::Regular(RegularGrid {
-            nrows: nrows,
-            ncols: ncols,
-            min_lat: min_lat,
-            min_lon: min_lon,
-            max_lat: max_lat,
-            max_lon: max_lon,
-            step_lat: step_lat,
-            step_lon: step_lon,
-        })
+        Grid::Regular(RegularGrid::new(nrows, ncols, min_lat, min_lon, max_lat, max_lon))
     }
 
     pub fn new_irregular(nrows: usize, ncols: usize, lats: Vec<f32>, lons: Vec<f32>) -> Grid {

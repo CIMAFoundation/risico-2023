@@ -25,15 +25,16 @@ pub fn read_cells_properties(file_path: &str) -> Result<Vec<Properties>, std::io
         }
 
         //  [TODO] refactor this for using error handling
-        let lat = line_parts[0].parse::<f64>().unwrap();
-        let lon = line_parts[1].parse::<f64>().unwrap();
+        let lon = line_parts[0].parse::<f64>().unwrap();
+        let lat = line_parts[1].parse::<f64>().unwrap();
+        
         let slope = line_parts[2].parse::<f64>().unwrap();
         let aspect = line_parts[3].parse::<f64>().unwrap();
         let vegetation = line_parts[4].to_string();
         
         let cell = Properties {
-            lat,
             lon,
+            lat,
             slope,
             aspect,
             vegetation

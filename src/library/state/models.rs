@@ -128,6 +128,7 @@ pub struct Cell<'a> {
     // The cell's current state.
     pub vegetation: &'a Vegetation,
     pub state: CellState,
+    pub output: Option<CellOutput>,
     // The cell's next state.
 }
 
@@ -140,6 +141,7 @@ impl Cell<'_> {
                 dffm: 0.0,
                 snowCover: 0.0
             },
+            output: None,
         }
     }
 
@@ -147,19 +149,24 @@ impl Cell<'_> {
         let dt = 3600.0;
         let new_dffm = update_moisture(self, input, dt);
 
-        Cell {
+        let new_state = CellState {
+            dffm: new_dffm,
+            snowCover: input.snowCover
+        };
+
+        let new_cell = Cell {
             properties: self.properties,
             vegetation: self.vegetation,
-            state: CellState { 
-                dffm: new_dffm,
-                ..self.state
-            },
+            state: new_state,
+            output: None,
+        };
+        let output = get_output(&new_cell, time, input);
+        Cell {
+            output: Some(output),
+            ..new_cell
         }
     }
 
-    pub fn get_output(&self, time: &DateTime<Utc>, input: &CellInput) -> CellOutput {
-        get_output(self, time, input)   
-    }
 }
 
 #[derive(Debug)]
@@ -184,13 +191,13 @@ impl State<'_> {
         let cells = self.cells.iter()
                     .map(|cell| {
                         let (lat, lon) = (cell.properties.lat  as f32, cell.properties.lon  as f32);
-                        let t = input_handler.get_value("T", &new_time, lat, lon) as f64;
+                        let t = input_handler.get_value("T", &new_time, lat, lon) as f64 -273.15;
                         let u = input_handler.get_value("U", &new_time, lat, lon) as f64;
                         let v = input_handler.get_value("V", &new_time, lat, lon) as f64;
                         let p = input_handler.get_value("P", &new_time, lat, lon) as f64;
                         let h = input_handler.get_value("H", &new_time, lat, lon) as f64;
 
-                        let wind_speed = f64::sqrt(f64::powi(u, 2) + f64::powi(v, 2));
+                        let wind_speed = f64::sqrt(f64::powi(u, 2) + f64::powi(v, 2)) * 3600.0;
                         let wind_dir = f64::atan2(u, v);
 
                         let cell_input = CellInput {
@@ -206,7 +213,6 @@ impl State<'_> {
                         };
                         
                         let new_cell = cell.update(&new_time, &cell_input);
-                        let cell_output = cell.get_output(&new_time, &cell_input);
                         new_cell
                     })
                     .collect::<Vec<Cell>>();

@@ -1,4 +1,58 @@
 use netcdf::*;
+use std::{io::{self, Write}, fs::File};
+use libflate::gzip;
+use crate::library::io::models::grid::Grid;
+
+
+pub fn write_to_zbin_file(file: &str, grid: &mut Grid, values: Vec<f32>) -> Result<(), io::Error> {
+    let output = File::create(file).expect(&format!("Can't create file: {}", file));
+    
+    let output = io::BufWriter::new(output);
+    let mut encoder = gzip::Encoder::new(output)?;
+    
+    let grid = match grid {
+        Grid::Irregular { .. } => {
+            return Err(io::Error::new(io::ErrorKind::Unsupported, "Irregular grids are not supported yet"));
+        },
+        Grid::Regular(grid) => {
+            grid
+        }
+    };
+    
+    let buf = [1u8, 0u8, 0u8, 0u8 ];
+    encoder.write(&buf)?;
+    let nrows = grid.nrows as u32;
+    let ncols = grid.ncols as u32;
+    let buf = nrows.to_le_bytes();
+    encoder.write(&buf)?;
+    let buf = ncols.to_le_bytes();
+    encoder.write(&buf)?;
+
+    let buf = grid.min_lat.to_le_bytes();
+    encoder.write(&buf)?;
+    let buf = grid.max_lat.to_le_bytes();
+    encoder.write(&buf)?;
+
+    let buf = grid.min_lon.to_le_bytes();
+    encoder.write(&buf)?;
+
+    let buf = grid.max_lon.to_le_bytes();
+    encoder.write(&buf)?;
+
+
+    for index in 0..nrows*ncols{
+        let index = index as usize;
+        let val = values[index] as f32;
+        let buf = val.to_le_bytes();
+        encoder.write(&buf)?;        
+    }
+
+    encoder.finish();
+    
+    Ok(())
+}
+
+
 
 pub fn write_netcdf(){
     // Create a new file with default settings
