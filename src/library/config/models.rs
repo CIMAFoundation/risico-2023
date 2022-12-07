@@ -1,4 +1,4 @@
-use std::{collections::HashMap, fs::File, io::{self, BufRead}, path::Path};
+use std::{collections::HashMap, fs::File, io::{self, BufRead}, path::Path, error::Error};
 
 use chrono::{DateTime, Utc};
 use chrono::*;
@@ -9,6 +9,40 @@ use crate::library::io::readers::read_input_from_file;
 use crate::library::io::models::grid::Grid;
 
 use super::data::{read_cells_properties, read_vegetation};
+
+
+
+pub fn read_config(file: impl Into<String>) -> Result<HashMap<String, Vec<String>>, Box<dyn Error>>{
+    let file = file.into();
+    // open file as text and read it using a buffered reader
+    let reader = io::BufReader::new(File::open(file)?);
+    let lines = reader.lines();    
+    
+    let mut hashmap: HashMap<String, Vec<String>> = HashMap::new();
+    
+    for line in lines {
+        let line = line?.trim().to_string();
+        if line.starts_with("%") || line.is_empty() {
+            continue;
+        }
+        let mut parts = line.split("=");
+        let key = parts.next().ok_or(
+            Box::new(io::Error::new(io::ErrorKind::InvalidData, format!("Error parsing line {line}")))
+        )?;
+        let value = parts.next().ok_or(
+            Box::new(io::Error::new(io::ErrorKind::InvalidData, format!("Error parsing value for key {key}: line {line}")))
+        )?;
+
+        if hashmap.contains_key(key) {
+            hashmap.get_mut(key).unwrap().push(value.into());
+        } else {
+            hashmap.insert(key.into(), vec![value.into()]);
+        }
+
+    }
+    println!("{:?}", hashmap);
+    Ok(hashmap)
+}
 
 pub struct Config {
     pub cells: Vec<models::Properties>,
