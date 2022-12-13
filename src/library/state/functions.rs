@@ -1,9 +1,8 @@
-use chrono::Date;
 #[allow(dead_code)]
 ///functions to work on the state of the risico model
 
 use chrono::{DateTime, Utc, Datelike};
-use super::{constants::*, models::{Properties, Vegetation, Cell, CellInput, CellOutput}};
+use super::{constants::*, models::{Cell, CellInput, CellOutput}};
 
 
 pub fn get_ffm(ffm: f64) -> f64 {
@@ -83,7 +82,7 @@ pub fn get_v(v0: f64, w_effect: f64, s_effect: f64, t_effect:f64) -> f64{
 }
 
 pub fn get_t_effect(t: f64) -> f64{
-	if(t <= 0.0) {
+	if t <= 0.0 {
 		return 1.0;
 	}
     (t * 0.0171).exp()	
@@ -329,6 +328,7 @@ pub fn get_output(cell: &Cell, time: &DateTime<Utc>, input: &CellInput) -> CellO
 	let mut I = NODATAVAL;
 	let mut IPPF = NODATAVAL;
 	let mut VPPF = 1.0;
+	
 	if par.hhv != NODATAVAL && dffm != NODATAVAL {
 		// calcolo LHV per la lettiera
 		LHVdff = get_lhv_dff(par.hhv, dffm);

@@ -2,6 +2,13 @@ use std::collections::HashMap;
 
 use crate::library::state::constants::NODATAVAL;
 
+pub enum ClusterMode {
+    Mean,
+    Median,
+    Min,
+    Max,
+}
+
 pub trait GridFunctions {
     fn get_index(&mut self, lat: f32, lon: f32) -> usize;
 
@@ -30,18 +37,24 @@ impl RegularGrid {
         let step_lat = (max_lat - min_lat) / (nrows - 1) as f32;
         let step_lon = (max_lon - min_lon) / (ncols - 1) as f32;
         RegularGrid {
-            nrows: nrows,
-            ncols: ncols,
-            min_lat: min_lat,
-            min_lon: min_lon,
-            max_lat: max_lat,
-            max_lon: max_lon,
-            step_lat: step_lat,
-            step_lon: step_lon,
+            nrows,
+            ncols,
+            min_lat,
+            min_lon,
+            max_lat,
+            max_lon,
+            step_lat,
+            step_lon,
         }
     }
 
-    pub fn project_to_grid(&mut self, lats: &Vec<f32>, lons: &Vec<f32>, values: Vec<f32>) -> Vec<f32> {
+    pub fn project_to_grid(&mut self, 
+            lats: &Vec<f32>, 
+            lons: &Vec<f32>, 
+            values: Vec<f32>,
+            mode: &ClusterMode,
+        ) -> Vec<f32> {
+
         let (nrows, ncols) = self.get_shape();
 
         let mut grid_values = vec![0.0; nrows * ncols];
@@ -51,12 +64,16 @@ impl RegularGrid {
             grid_values[idx] += values[i];
             count[idx] += 1;
         }
-        for i in 0..grid_values.len() {
-            if count[i] > 0 {
-                grid_values[i] /= count[i] as f32;
-            } else {
-                grid_values[i] = NODATAVAL as f32;
-            }
+        match mode {
+            _ => {
+                for i in 0..grid_values.len() {
+                        if count[i] > 0 {
+                            grid_values[i] /= count[i] as f32;
+                        } else {
+                            grid_values[i] = NODATAVAL as f32;
+                        }
+                    }
+                },
         }
         grid_values
     }    
@@ -87,10 +104,10 @@ pub struct IrregularGrid {
 impl IrregularGrid {
     pub fn new(nrows: usize, ncols: usize, lats: Vec<f32>, lons: Vec<f32>) -> IrregularGrid {
         IrregularGrid {
-            nrows: nrows,
-            ncols: ncols,
-            lats: lats,
-            lons: lons,
+            nrows,
+            ncols,
+            lats,
+            lons,
             cache: HashMap::new(),
         }
     }

@@ -1,10 +1,9 @@
 use chrono::prelude::*;
-use chrono::Duration;
 
 use crate::library::config::models::InputDataHandler;
 
 use super::constants::NODATAVAL;
-use super::functions::get_ffm;
+
 use super::functions::get_output;
 use super::functions::update_moisture;
 
@@ -105,6 +104,36 @@ impl CellOutput {
             snowCover: NODATAVAL,
         }
         
+    }
+
+    pub fn get(variable: &str) -> fn(&CellOutput) -> f64{
+        match variable {
+            "dffm" => |out| out.dffm,
+            "W" => |out| out.W,
+            "V" => |out| out.V,
+            "I" => |out| out.I,
+            "VPPF" => |out| out.VPPF,
+            "IPPF" => |out| out.IPPF,
+            "INDVI" => |out| out.INDVI,
+            "VNDVI" => |out| out.VNDVI,
+            "VPPFNDVI" => |out| out.VPPFNDVI,
+            "IPPFNDVI" => |out| out.IPPFNDVI,
+            "NDVI" => |out| out.NDVI,
+            "INDWI" => |out| out.INDWI,
+            "VNDWI" => |out| out.VNDWI,
+            "VPPFNDWI" => |out| out.VPPFNDWI,
+            "IPPFNDWI" => |out| out.IPPFNDWI,
+            "NDWI" => |out| out.NDWI,
+            "contrT" => |out| out.contrT,
+            "SWI" => |out| out.SWI,
+            "temperature" => |out| out.temperature,
+            "rain" => |out| out.rain,
+            "windSpeed" => |out| out.windSpeed,
+            "windDir" => |out| out.windDir,
+            "humidity" => |out| out.humidity,
+            "snowCover" => |out| out.snowCover,
+            _ => |out| NODATAVAL
+        }
     }
 }
 

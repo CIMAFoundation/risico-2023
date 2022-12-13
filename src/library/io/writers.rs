@@ -1,4 +1,4 @@
-use netcdf::*;
+
 use std::{io::{self, Write}, fs::File};
 use libflate::gzip;
 use crate::library::io::models::grid::Grid;
@@ -53,7 +53,7 @@ pub fn write_to_zbin_file(file: &str, grid: &mut Grid, values: Vec<f32>) -> Resu
 }
 
 
-
+#[allow(dead_code)]
 pub fn write_netcdf(){
     // Create a new file with default settings
     let mut file = netcdf::create("crabs.nc").unwrap();
