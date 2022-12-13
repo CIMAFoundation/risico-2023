@@ -8,6 +8,11 @@ use crate::library::{config::{data::read_cells_properties, models::Config}, io::
 
 //use library::io::writers::write_netcdf;
 
+
+
+
+
+
 fn main() {
     let cells_path = "data/ethiopia.txt";
     let veg_path = "data/pveg_ethiopia.txt";
@@ -39,14 +44,6 @@ fn main() {
 
     let timeline = handler.get_timeline();
     
-    let lats = cells.iter().map(
-        |cell| {
-            cell.properties.lat as f32
-        }
-    ).collect();
-    let lons = cells.iter().map(|cell| {
-        cell.properties.lon as f32
-    }).collect();
 
     let state: State = State::new(cells, Utc::now());
 
