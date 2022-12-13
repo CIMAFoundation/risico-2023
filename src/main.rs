@@ -15,7 +15,7 @@ struct OutputVariable {
 }
 
 impl OutputVariable {
-   fn get_output(&self, state: &State, grid: &mut RegularGrid) -> Vec<f32>{
+   fn get_variable_on_grid(&self, state: &State, grid: &mut RegularGrid) -> Vec<f32>{
         let fun = CellOutput::get(&self.internal_name);
         let values = state.cells.iter().map(|cell| {
             fun(&cell.output.as_ref().unwrap()) as f32
