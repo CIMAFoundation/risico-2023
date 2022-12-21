@@ -1,7 +1,8 @@
-use std::collections::HashMap;
+use std::{collections::HashMap, fmt::Debug};
 
 use crate::library::state::constants::NODATAVAL;
 
+#[derive(Debug)]
 pub enum ClusterMode {
     Mean,
     Median,
@@ -9,10 +10,17 @@ pub enum ClusterMode {
     Max,
 }
 
-pub trait GridFunctions {
-    fn get_index(&mut self, lat: f32, lon: f32) -> usize;
 
-    fn get_shape(&self) -> (usize, usize);
+pub trait GridFunctions {
+    fn index(&mut self, lat: f32, lon: f32) -> usize;
+
+    fn shape(&self) -> (usize, usize);
+}
+
+impl Debug for dyn GridFunctions {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        write!(f, "Grid {:?}", self.shape())
+    }
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -55,12 +63,12 @@ impl RegularGrid {
             mode: &ClusterMode,
         ) -> Vec<f32> {
 
-        let (nrows, ncols) = self.get_shape();
+        let (nrows, ncols) = self.shape();
 
         let mut grid_values = vec![0.0; nrows * ncols];
         let mut count = vec![0; nrows * ncols];
         for i in 0..lats.len() {
-            let idx = self.get_index(lats[i], lons[i]);
+            let idx = self.index(lats[i], lons[i]);
             grid_values[idx] += values[i];
             count[idx] += 1;
         }
@@ -80,13 +88,13 @@ impl RegularGrid {
 }
 
 impl GridFunctions for RegularGrid {
-    fn get_index(&mut self, lat: f32, lon: f32) -> usize {
+    fn index(&mut self, lat: f32, lon: f32) -> usize {
         let i = ((lat - self.min_lat) / self.step_lat) as usize;
         let j = ((lon - self.min_lon) / self.step_lon) as usize;
         i * self.ncols + j
     }
 
-    fn get_shape(&self) -> (usize, usize) {
+    fn shape(&self) -> (usize, usize) {
         (self.nrows, self.ncols)
     }
 }
@@ -114,7 +122,7 @@ impl IrregularGrid {
 }
 
 impl GridFunctions for IrregularGrid {
-    fn get_index(&mut self, lat: f32, lon: f32) -> usize {
+    fn index(&mut self, lat: f32, lon: f32) -> usize {
         let lat_bytes = lat.to_le_bytes();
         let lon_bytes = lon.to_le_bytes();
         let mut key:[u8;8] = [0; 8];
@@ -167,38 +175,8 @@ impl GridFunctions for IrregularGrid {
         minidx
     }
 
-    fn get_shape(&self) -> (usize, usize) {
+    fn shape(&self) -> (usize, usize) {
         (self.nrows, self.ncols)
     }
 
-}
-
-#[derive(Debug)]
-pub enum Grid {
-    Regular(RegularGrid),
-    Irregular(IrregularGrid),
-}
-
-impl Grid {
-    pub fn new_regular(
-        nrows: usize,
-        ncols: usize,
-        min_lat: f32,
-        min_lon: f32,
-        max_lat: f32,
-        max_lon: f32,
-    ) -> Grid {
-        Grid::Regular(RegularGrid::new(nrows, ncols, min_lat, min_lon, max_lat, max_lon))
-    }
-
-    pub fn new_irregular(nrows: usize, ncols: usize, lats: Vec<f32>, lons: Vec<f32>) -> Grid {
-        Grid::Irregular(IrregularGrid::new(nrows, ncols, lats, lons))
-    }
-
-    pub fn get_index(&mut self, lat: f32, lon: f32) -> usize {
-        match self {
-            Grid::Regular(grid) => grid.get_index(lat, lon),
-            Grid::Irregular(grid) => grid.get_index(lat, lon),
-        }
-    }
 }

@@ -3,10 +3,10 @@
 
 
 use chrono::{DateTime, Utc};
-use library::{config::models::{ConfigBuilder, Config}, io::models::grid::{ClusterMode, Grid, RegularGrid}, state::models::{State, CellOutput}};
+use library::{config::models::{ConfigBuilder, Config}, io::models::grid::{ClusterMode, RegularGrid, GridFunctions}, state::models::{State, CellOutput}};
 mod library;
 
-
+#[derive(Debug)]
 struct OutputVariable {
     internal_name: String,
     name: String,
@@ -40,17 +40,17 @@ impl OutputVariable {
    }
 }
 
-
-struct OutputType {
+#[derive(Debug)]
+pub struct OutputType {
     name: String,
     path: String,
-    grid: Grid,
+    grid: Box<dyn GridFunctions>,
     format: String,
     variables: Vec<OutputVariable>,
 }
 
 struct OutputWriter {
-    pub OutputTypes: Vec<OutputType>,
+    pub outputTypes: Vec<OutputType>,
 }
 
 impl OutputWriter {

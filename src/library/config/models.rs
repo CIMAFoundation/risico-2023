@@ -1,12 +1,12 @@
-use std::{collections::HashMap, fs::File, io::{self, BufRead}, path::Path, error::{Error, self}};
+use std::{collections::HashMap, fs::File, io::{self, BufRead}, path::Path, error::{Error, self}, fmt::Display, sync::Arc};
 
 use chrono::{DateTime, Utc};
 use chrono::*;
+use itertools::izip;
 
-use crate::library::state::models;
+use crate::{library::{state::models::{self, State}, io::models::grid::{GridFunctions, RegularGrid, ClusterMode}}, OutputType, OutputVariable};
 use crate::library::io::readers::read_input_from_file;
 
-use crate::library::io::models::grid::Grid;
 
 use super::data::{read_cells_properties, read_vegetation};
 
@@ -28,6 +28,12 @@ impl From<&str> for ConfigError {
         ConfigError {
             msg: msg.into(),
         }
+    }
+}
+
+impl Display for ConfigError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.msg)
     }
 }
 
@@ -113,6 +119,22 @@ const USE_NDVI_KEY: &str = "USENDVI";
 const OUTPUTS_KEY: &str = "MODEL";
 const VARIABLES_KEY: &str = "VARIABLE";
 
+pub fn read_grid_txt(grid_file: &str) -> Result<RegularGrid, ConfigError> {
+    // read the file as text
+    let config_map = read_config(grid_file)?;
+    
+    let nrows = config_map.get("GRIDNROWS").and_then(|value| value.get(0)).unwrap().parse::<usize>().unwrap();
+    let ncols = config_map.get("GRIDNCOLS").and_then(|value| value.get(0)).unwrap().parse::<usize>().unwrap();
+    let minlat = config_map.get("MINLAT").and_then(|value| value.get(0)).unwrap().parse::<f32>().unwrap();
+    let minlon = config_map.get("MINLON").and_then(|value| value.get(0)).unwrap().parse::<f32>().unwrap();
+    let maxlat = config_map.get("MAXLAT").and_then(|value| value.get(0)).unwrap().parse::<f32>().unwrap();
+    let maxlon = config_map.get("MAXLON").and_then(|value| value.get(0)).unwrap().parse::<f32>().unwrap();
+
+    let grid = RegularGrid::new(nrows, ncols, minlat, minlon, maxlat, maxlon);
+
+    Ok(grid)
+
+}
 
 impl ConfigBuilder {
     pub fn new(config_file: &str) -> Result<ConfigBuilder, ConfigError> {
@@ -132,12 +154,20 @@ impl ConfigBuilder {
         let vegetation_file = config_map.get(VEGETATION_FILE_KEY).unwrap().get(0).unwrap();
         let ppf_file = config_map.get(PPF_FILE_KEY).unwrap().get(0).unwrap();
         let cache_path = config_map.get(CACHE_PATH_KEY).unwrap().get(0).unwrap();
+        
+        let use_temperature_effect = match config_map.get(USE_TEMPERATURE_EFFECT_KEY){
+            Some(value) => value.get(0).unwrap(),
+            None => "FALSE",
+        };
         let use_temperature_effect = config_map
             .get(USE_TEMPERATURE_EFFECT_KEY)
-            .unwrap()
-            .get(0)
+            .and_then(|value| value.get(0))
             .unwrap();
-        let use_ndvi = config_map.get(USE_NDVI_KEY).unwrap().get(0).unwrap();
+            
+        let use_ndvi = config_map
+            .get(USE_NDVI_KEY)
+            .and_then(|value| value.get(0))
+            .unwrap();
 
         let output_types_defs = config_map.get(OUTPUTS_KEY).ok_or("Outputs not found")?;
         let variables_defs = config_map.get(VARIABLES_KEY).ok_or("Variables not found")?;
@@ -211,18 +241,83 @@ impl ConfigBuilder {
         Ok(config_builder)
     }
 
+
     /// Build the config from the builder
     /// read the cells and vegetation files
     /// read the warm state file according to date
     /// read the ppf file and store the values in the cells
     /// return the config
     pub fn build(&self, date: DateTime<Utc>) -> Result<Config, ConfigError> {
+        
         let mut cells = read_cells_properties(&self.cells_file).map_err(|error| format!("error reading {}, {error}", self.cells_file))?;
         let vegetations = read_vegetation(&self.vegetation_file).map_err(|error| format!("error reading {}, {error}", self.vegetation_file))?;
-        let warm_state = read_warm_state(&self.warm_state_path, date).ok_or(vec![WarmState::default(); cells.len()]);
-
         
-        Err(ConfigError { msg: "unimplemnted".to_string() })
+        let warm_state = read_warm_state(&self.warm_state_path, date)
+                                .unwrap_or(
+                                    vec![WarmState::default(); cells.len()]
+                                );
+        
+        let ppf = match &self.ppf_file {
+            Some(ppf_file) => read_ppf(&ppf_file)
+                        .map_err(|error| format!("error reading {}, {}", &ppf_file, error))?,
+            None => vec![(1.0, 1.0); cells.len()]
+        };
+
+        let mut config = Config::default();
+        config.model_name = self.model_name.clone();
+        config.warm_state_path = self.warm_state_path.clone();
+        config.warm_state = warm_state;
+        config.cells = cells;
+        config.ppf = ppf;
+        config.vegetations = vegetations;
+
+        config.outputs = self.outputs.iter()
+            .map(|output| {
+                /// create OutputType from ConfigOutputType
+                /// read the grid file
+                let grid = read_grid_txt(&output.grid)
+                                .unwrap();
+
+                let output_variables = output.variables.iter()
+                    .map(|variable_config| {
+                    let cluster_mode = match variable_config.cluster_mode.as_str() {
+                        "mean" => ClusterMode::Mean,
+                        "max" => ClusterMode::Max,
+                        "min" => ClusterMode::Min,
+                        _ => ClusterMode::Mean,
+                    };
+                    
+                    /// create OutputVariable from ConfigOutputVariable
+                    OutputVariable {
+                        internal_name: variable_config.internal_name.clone(),
+                        name: variable_config.name.clone(),
+                        precision: variable_config.precision.parse::<i32>().unwrap(),
+                        cluster_mode: cluster_mode,
+                    }
+                }).collect::<Vec<OutputVariable>>();
+                        
+                OutputType {
+                    name: output.name.clone(),
+                    path: output.path.clone(),
+                    format: output.format.clone(),
+                    grid: Box::new(grid),
+                    variables: output_variables,
+                }
+            
+            }).collect::<Vec<OutputType>>();
+        config.use_temperature_effect = self.use_temperature_effect;
+        config.use_ndvi = self.use_ndvi;
+        Ok(config)
+    }
+
+    pub fn write_output(&self, date: DateTime<Utc>, state: &State) -> Result<(), ConfigError> {
+        for output_type in &self.outputs {
+            for variable in &output_type.variables {
+                //variable.
+            }            
+        }
+
+        Ok(())
     }
 }
 
@@ -230,26 +325,26 @@ impl ConfigBuilder {
 
 
 
+#[derive(Debug, Default)]
 pub struct Config {
     pub model_name: String,
     pub warm_state_path: String,
 
     pub warm_state: Vec<WarmState>,    
     pub cells: Vec<models::Properties>,
+    pub ppf: Vec<(f32, f32)>,
     pub vegetations: HashMap<String, models::Vegetation>,
     
-    pub outputs: Vec<ConfigOutputType>,
+    pub outputs: Vec<OutputType>,
     pub use_temperature_effect: bool,
     pub use_ndvi: bool,
-
-
 }
 
 impl Config {
 
     pub fn init_state(&self) -> Vec<models::Cell> {
         let mut cells: Vec<models::Cell> = Vec::new();
-        for cell in self.cells.iter() {
+        for (cell, ppf, warm_state) in izip!(&self.cells, &self.ppf, &self.warm_state) {
             let vegetation = match self.vegetations.get(&cell.vegetation){
                 Some(vegetation) => vegetation,
                 None => panic!("Vegetation not found: {}", cell.vegetation)
@@ -342,7 +437,7 @@ impl LazyInputFile {
         }
     }
 
-    pub fn load(&mut self, grid_registry: &mut HashMap<String, Grid>) -> Result<(), InputFileParseError> {
+    pub fn load(&mut self, grid_registry: &mut HashMap<String, Box<dyn GridFunctions>>) -> Result<(), InputFileParseError> {
         if !self.data.is_none(){
             return Ok(());
         }
@@ -363,7 +458,7 @@ impl LazyInputFile {
 
 #[derive(Debug)]
 pub struct InputDataHandler {
-    pub grid_registry: HashMap<String, Grid>,
+    pub grid_registry: HashMap<String, Box<dyn GridFunctions>>,
     pub data_map: HashMap<DateTime<Utc>, HashMap<String, LazyInputFile>>,
 }
 
@@ -427,7 +522,7 @@ impl InputDataHandler{
         let data = data.as_ref().unwrap();
 
         let grid = self.grid_registry.get_mut(&lazy_file.grid_name).unwrap();
-        let index = grid.get_index(lat, lon);
+        let index = grid.index(lat, lon);
 
         data[index]
     }
@@ -457,9 +552,23 @@ impl InputDataHandler{
 
 #[derive(Default, Debug, Clone)]
 pub struct WarmState {
-    pub dffm: f32,    
+    pub dffm: f32,
+    pub NDSI: f32,
+    pub NDSI_TTL: f32,
+    pub MSI: f32,
+    pub MSI_TTL: f32,
+    pub NDVI: f32,
+    pub NDVI_TIME: f32, 
+    pub NDWI: f32,
+    pub NDWI_TIME: f32,
 }
 
+/// Reads the warm state from the file
+/// The warm state is stored in a file with the following structure:
+/// <base_warm_file>_<YYYYmmDDHHMM>
+/// where <base_warm_file> is the base name of the file and <YYYYmmDDHHMM> is the date of the warm state
+/// The warm state is stored in a text file with the following structure:
+/// dffm 
 fn read_warm_state(base_warm_file: &str, date: DateTime<Utc>) -> Option<Vec<WarmState>> {
     // for the last n days before date, try to read the warm state
     // compose the filename as <base_warm_file>_<YYYYmmDDHHMM>  
@@ -490,9 +599,43 @@ fn read_warm_state(base_warm_file: &str, date: DateTime<Utc>) -> Option<Vec<Warm
         let line = line.unwrap();
         let components: Vec<&str> = line.split_whitespace().collect();
         let dffm = components[0].parse::<f32>().unwrap();
-        warm_state.push(WarmState{dffm});
+        			
+		let NDSI = components[1].parse::<f32>().unwrap();
+        let NDSI_TTL = components[2].parse::<f32>().unwrap();
+
+        let MSI = components[3].parse::<f32>().unwrap();
+        let MSI_TTL = components[4].parse::<f32>().unwrap();
+        
+
+		let NDVI = components[5].parse::<f32>().unwrap();
+        let NDVI_TIME = components[6].parse::<f32>().unwrap();
+        
+		let NDWI = components[7].parse::<f32>().unwrap();
+        let NDWI_TIME = components[8].parse::<f32>().unwrap();        
+
+        warm_state.push(WarmState { dffm , NDSI, NDSI_TTL, MSI, MSI_TTL, NDVI, NDVI_TIME, NDWI, NDWI_TIME });
     }
     Some(warm_state)
 }
 
+/// Reads the PPF file and returns a vector of with (ppf_summer, ppf_winter) tuples
+/// The PPF file is a text file with the following structure:
+/// ppf_summer ppf_winter
+/// where ppf_summer and ppf_winter are floats
+pub fn read_ppf(ppf_file: &str) -> Result<Vec<(f32, f32)>, ConfigError> {
+    let file = File::open(ppf_file)
+                    .map_err(|error| format!("Could not open file {}: {}", ppf_file, error))?;
+    
+    let reader = io::BufReader::new(file);
+    let mut ppf: Vec<(f32, f32)> = Vec::new();
+    for line in reader.lines() {
+        let line = line.unwrap();
+        let components: Vec<&str> = line.split_whitespace().collect();
+        let lat = components[0].parse::<f32>().unwrap();
+        let lon = components[1].parse::<f32>().unwrap();
+        ppf.push((lat, lon));
+    }
+    Ok(ppf)
+
+}
 

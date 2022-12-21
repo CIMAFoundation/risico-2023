@@ -2,11 +2,13 @@
 use std::{io::{self, Read}, fs::File};
 use libflate::gzip;
 
-use crate::library::io::models::grid::Grid;
+use crate::library::io::models::grid::GridFunctions;
+
+use super::models::grid::{RegularGrid, IrregularGrid};
 
 /// read a file and returns Grid and Vector of data
 /// Grid is a struct with the following fields:
-pub fn read_input_from_file(file: &str) -> Result<(Grid, Vec<f32>), io::Error> {
+pub fn read_input_from_file(file: &str) -> Result<(Box<dyn GridFunctions>, Vec<f32>), io::Error> {
     
     let input: Box<dyn io::Read> =  
         Box::new(
@@ -18,7 +20,7 @@ pub fn read_input_from_file(file: &str) -> Result<(Grid, Vec<f32>), io::Error> {
     
     let mut is_regular: [u8; 4] = [0; 4];
     decoder.read_exact(&mut is_regular)?;
-    let is_regular = u32::from_be_bytes(is_regular);
+    let is_regular = u32::from_le_bytes(is_regular);
     
     let mut nrows: [u8; 4] = [0; 4];
     decoder.read_exact(&mut nrows).expect("Read nrows failed");
@@ -29,7 +31,7 @@ pub fn read_input_from_file(file: &str) -> Result<(Grid, Vec<f32>), io::Error> {
     let ncols = u32::from_le_bytes(ncols);
     
     
-    let grid = match is_regular {
+    let grid: Box<dyn GridFunctions> = match is_regular {
         0 => {
             let mut lats: Vec<f32> = Vec::new();
             for _ in 0..nrows*ncols {
@@ -46,8 +48,7 @@ pub fn read_input_from_file(file: &str) -> Result<(Grid, Vec<f32>), io::Error> {
                 let lon = f32::from_le_bytes(lon);
                 lons.push(lon);
             }
-            Grid::new_irregular(nrows as usize, ncols as usize, lats, lons)
-
+            Box::new(IrregularGrid::new(nrows as usize, ncols as usize, lats, lons))
         },
         1 => {
             let mut min_lat: [u8; 4] = [0; 4];
@@ -74,7 +75,7 @@ pub fn read_input_from_file(file: &str) -> Result<(Grid, Vec<f32>), io::Error> {
                 let lon = min_lon + (max_lon - min_lon) * (i as f32) / (ncols as f32);
                 lons.push(lon);
             }
-            Grid::new_regular(nrows as usize, ncols as usize,  min_lat, min_lon, max_lat, max_lon)
+            Box::new(RegularGrid::new(nrows as usize, ncols as usize,  min_lat, min_lon, max_lat, max_lon))
         },
         _ => panic!("Unknown grid type"),
     };

@@ -1,23 +1,16 @@
 
 use std::{io::{self, Write}, fs::File};
 use libflate::gzip;
-use crate::library::io::models::grid::Grid;
+
+use super::models::grid::{IrregularGrid, RegularGrid, GridFunctions};
 
 
-pub fn write_to_zbin_file(file: &str, grid: &mut Grid, values: Vec<f32>) -> Result<(), io::Error> {
+pub fn write_to_zbin_file(file: &str, grid: &RegularGrid, values: Vec<f32>) -> Result<(), io::Error> {
     let output = File::create(file).expect(&format!("Can't create file: {}", file));
     
     let output = io::BufWriter::new(output);
     let mut encoder = gzip::Encoder::new(output)?;
     
-    let grid = match grid {
-        Grid::Irregular { .. } => {
-            return Err(io::Error::new(io::ErrorKind::Unsupported, "Irregular grids are not supported yet"));
-        },
-        Grid::Regular(grid) => {
-            grid
-        }
-    };
     
     let buf = [1u8, 0u8, 0u8, 0u8 ];
     encoder.write(&buf)?;
