@@ -1,6 +1,6 @@
 use std::{collections::HashMap, fmt::Debug};
 
-use crate::library::state::constants::NODATAVAL;
+use crate::library::{state::constants::NODATAVAL, config::models::{read_config, ConfigError}};
 
 #[derive(Debug)]
 pub enum ClusterMode {
@@ -84,7 +84,23 @@ impl RegularGrid {
                 },
         }
         grid_values
-    }    
+    }
+    
+    pub fn from_txt_file(grid_file: &str) -> Result<RegularGrid, ConfigError> {
+        // read the file as text
+        let config_map = read_config(grid_file)?;
+        
+        let nrows = config_map.get("GRIDNROWS").and_then(|value| value.get(0)).unwrap().parse::<usize>().unwrap();
+        let ncols = config_map.get("GRIDNCOLS").and_then(|value| value.get(0)).unwrap().parse::<usize>().unwrap();
+        let minlat = config_map.get("MINLAT").and_then(|value| value.get(0)).unwrap().parse::<f32>().unwrap();
+        let minlon = config_map.get("MINLON").and_then(|value| value.get(0)).unwrap().parse::<f32>().unwrap();
+        let maxlat = config_map.get("MAXLAT").and_then(|value| value.get(0)).unwrap().parse::<f32>().unwrap();
+        let maxlon = config_map.get("MAXLON").and_then(|value| value.get(0)).unwrap().parse::<f32>().unwrap();
+
+        let grid = RegularGrid::new(nrows, ncols, minlat, minlon, maxlat, maxlon);
+
+        Ok(grid)
+    }
 }
 
 impl GridFunctions for RegularGrid {

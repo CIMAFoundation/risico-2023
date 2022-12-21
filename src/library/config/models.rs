@@ -1,14 +1,43 @@
-use std::{collections::HashMap, fs::File, io::{self, BufRead}, path::Path, error::{Error, self}, fmt::Display, sync::Arc};
+use std::{
+    collections::HashMap,
+    fmt::Display,
+    fs::File,
+    io::{self, BufRead},
+    path::Path,
+    
+};
 
-use chrono::{DateTime, Utc};
 use chrono::*;
+use chrono::{DateTime, Utc};
 use itertools::izip;
 
-use crate::{library::{state::models::{self, State}, io::models::grid::{GridFunctions, RegularGrid, ClusterMode}}, OutputType, OutputVariable};
-use crate::library::io::readers::read_input_from_file;
-
+use crate::library::io::{readers::read_input_from_file, models::output::{OutputType, OutputVariable}};
+use crate::{
+    library::{
+        io::models::grid::{ClusterMode, GridFunctions, RegularGrid},
+        state::models::{self, State},
+    }
+};
 
 use super::data::{read_cells_properties, read_vegetation};
+
+type ConfigMap = HashMap<String, Vec<String>>;
+
+trait ConfigMapExt {
+    /// Get the first value of a key in the config map
+    fn first(&self, key: &str) -> Option<String>;
+    fn all(&self, key: &str) -> Option<Vec<String>>;
+}
+
+impl ConfigMapExt for ConfigMap {
+    fn first(&self, key: &str) -> Option<String> {
+        self.get(key).and_then(|values| values.get(0).cloned())
+    }
+
+    fn all(&self, key: &str) -> Option<Vec<String>> {
+        self.get(key).cloned()
+    }
+}
 
 #[derive(Debug)]
 pub struct ConfigError {
@@ -17,17 +46,13 @@ pub struct ConfigError {
 
 impl From<String> for ConfigError {
     fn from(msg: String) -> Self {
-        ConfigError {
-            msg
-        }
+        ConfigError { msg }
     }
 }
 
 impl From<&str> for ConfigError {
     fn from(msg: &str) -> Self {
-        ConfigError {
-            msg: msg.into(),
-        }
+        ConfigError { msg: msg.into() }
     }
 }
 
@@ -38,15 +63,16 @@ impl Display for ConfigError {
 }
 
 /// Read the config file and return a map of key-value pairs
-pub fn read_config(file_name: impl Into<String>) -> Result<HashMap<String, Vec<String>>, ConfigError>{
+pub fn read_config(file_name: impl Into<String>) -> Result<ConfigMap, ConfigError> {
     let file_name = file_name.into();
     // open file as text and read it using a buffered reader
-    let file = File::open(&file_name).map_err(|error| format!("error opening config file: {error}"))?;
+    let file =
+        File::open(&file_name).map_err(|error| format!("error opening config file: {error}"))?;
     let reader = io::BufReader::new(file);
-    let lines = reader.lines();    
-    
-    let mut hashmap: HashMap<String, Vec<String>> = HashMap::new();
-    
+    let lines = reader.lines();
+
+    let mut config_map: ConfigMap = ConfigMap::new();
+
     for (i, line) in lines.enumerate() {
         let line = line.map_err(|error| format!("error line: {i} \n {error}"))?;
         let line = line.trim().to_string();
@@ -59,53 +85,23 @@ pub fn read_config(file_name: impl Into<String>) -> Result<HashMap<String, Vec<S
         }
         // implement split using regex
         let mut parts = line.split("=");
-        let key = parts.next().ok_or(
-            format!("error parsing on line[{i}] {line}.")
-        )?;
-        let value = parts.next().ok_or(
-            format!("error parsing value for key {key}: line[{i}] {line}.")
-        )?;
+        let key = parts
+            .next()
+            .ok_or(format!("error parsing on line[{i}] {line}."))?;
+        let value = parts.next().ok_or(format!(
+            "error parsing value for key {key}: line[{i}] {line}."
+        ))?;
 
-        if hashmap.contains_key(key) {
-            hashmap.get_mut(key).expect("It must have a value here!").push(value.into());
+        if config_map.contains_key(key) {
+            config_map
+                .get_mut(key)
+                .expect("It must have a value here!")
+                .push(value.into());
         } else {
-            hashmap.insert(key.into(), vec![value.into()]);
+            config_map.insert(key.into(), vec![value.into()]);
         }
-
     }
-    Ok(hashmap)
-}
-
-#[derive(Default, Debug, Clone)]
-struct ConfigOutputVariable {
-    internal_name: String,
-    name: String,
-    cluster_mode: String,
-    precision: String,
-}
-
-#[derive(Default, Debug, Clone)]
-pub struct ConfigOutputType {
-    name: String,
-    path: String,
-    grid: String,
-    format: String,
-    variables: Vec<ConfigOutputVariable>,
-}
-
-
-
-#[derive(Default, Debug)]
-pub struct ConfigBuilder {
-    pub model_name: String,
-    pub warm_state_path: String,
-    pub cells_file: String,
-    pub vegetation_file: String,
-    pub ppf_file: Option<String>,
-    pub cache_path: String,
-    pub use_temperature_effect: bool,
-    pub use_ndvi: bool,
-    pub outputs: Vec<ConfigOutputType>,
+    Ok(config_map)
 }
 
 const MODEL_NAME_KEY: &str = "MODELNAME";
@@ -119,74 +115,22 @@ const USE_NDVI_KEY: &str = "USENDVI";
 const OUTPUTS_KEY: &str = "MODEL";
 const VARIABLES_KEY: &str = "VARIABLE";
 
-pub fn read_grid_txt(grid_file: &str) -> Result<RegularGrid, ConfigError> {
-    // read the file as text
-    let config_map = read_config(grid_file)?;
-    
-    let nrows = config_map.get("GRIDNROWS").and_then(|value| value.get(0)).unwrap().parse::<usize>().unwrap();
-    let ncols = config_map.get("GRIDNCOLS").and_then(|value| value.get(0)).unwrap().parse::<usize>().unwrap();
-    let minlat = config_map.get("MINLAT").and_then(|value| value.get(0)).unwrap().parse::<f32>().unwrap();
-    let minlon = config_map.get("MINLON").and_then(|value| value.get(0)).unwrap().parse::<f32>().unwrap();
-    let maxlat = config_map.get("MAXLAT").and_then(|value| value.get(0)).unwrap().parse::<f32>().unwrap();
-    let maxlon = config_map.get("MAXLON").and_then(|value| value.get(0)).unwrap().parse::<f32>().unwrap();
+impl Config {
+    fn parse_output_types(
+        output_types_defs: Vec<String>,
+        variables_defs: Vec<String>,
+    ) -> Result<Vec<OutputType>, ConfigError> {
+        let mut output_types_map: HashMap<String, OutputType> = HashMap::new();
 
-    let grid = RegularGrid::new(nrows, ncols, minlat, minlon, maxlat, maxlon);
-
-    Ok(grid)
-
-}
-
-impl ConfigBuilder {
-    pub fn new(config_file: &str) -> Result<ConfigBuilder, ConfigError> {
-        let config_map = read_config(config_file)?;
-
-        let mut config_builder = ConfigBuilder::default();
-
-        
-        // try to get the model name, expect it to be there
-        let model_name = config_map
-            .get(MODEL_NAME_KEY)
-            .ok_or(format!("Error: {MODEL_NAME_KEY} not found in config"))?
-            .get(0)
-            .expect("msg");
-        let warm_state_file = config_map.get(WARM_STATE_PATH_KEY).unwrap().get(0).unwrap();
-        let cells_file = config_map.get(CELLS_FILE_KEY).unwrap().get(0).unwrap();
-        let vegetation_file = config_map.get(VEGETATION_FILE_KEY).unwrap().get(0).unwrap();
-        let ppf_file = config_map.get(PPF_FILE_KEY).unwrap().get(0).unwrap();
-        let cache_path = config_map.get(CACHE_PATH_KEY).unwrap().get(0).unwrap();
-        
-        let use_temperature_effect = match config_map.get(USE_TEMPERATURE_EFFECT_KEY){
-            Some(value) => value.get(0).unwrap(),
-            None => "FALSE",
-        };
-        let use_temperature_effect = config_map
-            .get(USE_TEMPERATURE_EFFECT_KEY)
-            .and_then(|value| value.get(0))
-            .unwrap();
-            
-        let use_ndvi = config_map
-            .get(USE_NDVI_KEY)
-            .and_then(|value| value.get(0))
-            .unwrap();
-
-        let output_types_defs = config_map.get(OUTPUTS_KEY).ok_or("Outputs not found")?;
-        let variables_defs = config_map.get(VARIABLES_KEY).ok_or("Variables not found")?;
-
-        let mut output_types_map: HashMap<String, ConfigOutputType> = HashMap::new();
-        for output_def in output_types_defs {
-            let parts = output_def.split(":").collect::<Vec<&str>>();
+        for out_type_def in output_types_defs {
+            let parts = out_type_def.split(":").collect::<Vec<&str>>();
             if parts.len() != 5 {
                 return Err("Invalid output definition".into());
             }
-            let (internal_name, name, path, grid, format) =
+            let (internal_name, name, path, grid_path, format) =
                 (parts[0], parts[1], parts[2], parts[3], parts[4]);
-            let mut output_type = ConfigOutputType::default();
 
-            output_type.name = name.to_string();
-            output_type.path = path.to_string();
-            output_type.grid = grid.to_string();
-            output_type.format = format.to_string();
-
+            let mut output_type = OutputType::new(name, path, grid_path, format);
             output_types_map.insert(internal_name.to_string(), output_type);
         }
 
@@ -197,157 +141,144 @@ impl ConfigBuilder {
             }
             let (output_type, internal_name, name, cluster_mode, precision) =
                 (parts[0], parts[1], parts[2], parts[3], parts[4]);
-            let mut variable = ConfigOutputVariable::default();
-            variable.internal_name = internal_name.to_string();
-            variable.name = name.to_string();
-            variable.cluster_mode = cluster_mode.to_string();
-            variable.precision = precision.to_string();
+
+            let precision = precision.parse::<i32>().map_err(|_| "Invalid precision")?;
+
+            let cluster_mode = match cluster_mode {
+                "MEAN" | "mean" => ClusterMode::Mean,
+                "MAX" | "max" => ClusterMode::Max,
+                "MIN" | "mean" => ClusterMode::Min,
+                _ => return Err("Invalid cluster mode".into()),
+            };
+            let mut variable = OutputVariable::new(internal_name, name, cluster_mode, precision);
 
             let output_type = output_types_map
                 .get_mut(output_type)
                 .ok_or(format!("Output type not found {output_type}"))?;
-            output_type.variables.push(variable);
+            output_type.add_variable(variable);
         }
 
-        config_builder.model_name = model_name.to_string();
-        config_builder.warm_state_path = warm_state_file.to_string();
-        config_builder.cells_file = cells_file.to_string();
-        config_builder.vegetation_file = vegetation_file.to_string();
-        config_builder.ppf_file = Some(ppf_file.to_string());
-        config_builder.cache_path = cache_path.to_string();
-        config_builder.use_temperature_effect = match use_temperature_effect.as_str() {
-            "0" => false,
-            "1" => true,
-            "true" => true,
-            "false" => false,
-            "TRUE" => true,
-            "FALSE" => false,
-            _ => false,
-        };
-        config_builder.use_ndvi = match use_ndvi.as_str() {
-            "0" => false,
-            "1" => true,
-            "true" => true,
-            "false" => false,
-            "TRUE" => true,
-            "FALSE" => false,
-            _ => false,
-        };
-        config_builder.outputs = output_types_map
-            .values()
-            .map(|output| output.clone())
-            .collect();
+        let output_types = output_types_map.into_values().collect();
 
-        Ok(config_builder)
+        Ok(output_types)
     }
 
-
-    /// Build the config from the builder
-    /// read the cells and vegetation files
-    /// read the warm state file according to date
-    /// read the ppf file and store the values in the cells
-    /// return the config
-    pub fn build(&self, date: DateTime<Utc>) -> Result<Config, ConfigError> {
-        
-        let mut cells = read_cells_properties(&self.cells_file).map_err(|error| format!("error reading {}, {error}", self.cells_file))?;
-        let vegetations = read_vegetation(&self.vegetation_file).map_err(|error| format!("error reading {}, {error}", self.vegetation_file))?;
-        
-        let warm_state = read_warm_state(&self.warm_state_path, date)
-                                .unwrap_or(
-                                    vec![WarmState::default(); cells.len()]
-                                );
-        
-        let ppf = match &self.ppf_file {
-            Some(ppf_file) => read_ppf(&ppf_file)
-                        .map_err(|error| format!("error reading {}, {}", &ppf_file, error))?,
-            None => vec![(1.0, 1.0); cells.len()]
-        };
+    pub fn new(config_file: &str, date: DateTime<Utc>) -> Result<Config, ConfigError> {
+        let config_map = read_config(config_file)?;
 
         let mut config = Config::default();
-        config.model_name = self.model_name.clone();
-        config.warm_state_path = self.warm_state_path.clone();
-        config.warm_state = warm_state;
-        config.cells = cells;
-        config.ppf = ppf;
-        config.vegetations = vegetations;
 
-        config.outputs = self.outputs.iter()
-            .map(|output| {
-                /// create OutputType from ConfigOutputType
-                /// read the grid file
-                let grid = read_grid_txt(&output.grid)
-                                .unwrap();
+        // try to get the model name, expect it to be there
+        let model_name = config_map
+            .first(MODEL_NAME_KEY)
+            .ok_or(format!("Error: {MODEL_NAME_KEY} not found in config"))?;
 
-                let output_variables = output.variables.iter()
-                    .map(|variable_config| {
-                    let cluster_mode = match variable_config.cluster_mode.as_str() {
-                        "mean" => ClusterMode::Mean,
-                        "max" => ClusterMode::Max,
-                        "min" => ClusterMode::Min,
-                        _ => ClusterMode::Mean,
-                    };
-                    
-                    /// create OutputVariable from ConfigOutputVariable
-                    OutputVariable {
-                        internal_name: variable_config.internal_name.clone(),
-                        name: variable_config.name.clone(),
-                        precision: variable_config.precision.parse::<i32>().unwrap(),
-                        cluster_mode: cluster_mode,
-                    }
-                }).collect::<Vec<OutputVariable>>();
-                        
-                OutputType {
-                    name: output.name.clone(),
-                    path: output.path.clone(),
-                    format: output.format.clone(),
-                    grid: Box::new(grid),
-                    variables: output_variables,
-                }
-            
-            }).collect::<Vec<OutputType>>();
-        config.use_temperature_effect = self.use_temperature_effect;
-        config.use_ndvi = self.use_ndvi;
+        let warm_state_path = config_map
+            .first(WARM_STATE_PATH_KEY)
+            .ok_or(format!("Error: {WARM_STATE_PATH_KEY} not found in config"))?;
+
+        let cells_file = config_map
+            .first(CELLS_FILE_KEY)
+            .ok_or(format!("Error: {CELLS_FILE_KEY} not found in config"))?;
+
+        let vegetation_file = config_map
+            .first(VEGETATION_FILE_KEY)
+            .ok_or(format!("Error: {VEGETATION_FILE_KEY} not found in config"))?;
+
+        let cache_path = config_map
+            .first(CACHE_PATH_KEY)
+            .ok_or(format!("Error: {CACHE_PATH_KEY} not found in config"))?;
+
+        let ppf_file = config_map.first(PPF_FILE_KEY);
+
+        let use_temperature_effect = match config_map.first(USE_TEMPERATURE_EFFECT_KEY) {
+            Some(value) => match value.as_str() {
+                "true" | "True" | "TRUE" | "1" => true,
+                _ => false,
+            },
+            None => false,
+        };
+
+        let use_ndvi = match config_map.first(USE_NDVI_KEY) {
+            Some(value) => match value.as_str() {
+                "true" | "True" | "TRUE" | "1" => true,
+                _ => false,
+            },
+            None => false,
+        };
+
+        let output_types_defs = config_map
+            .all(OUTPUTS_KEY)
+            .ok_or(format!("KEY {OUTPUTS_KEY} not found"))?;
+        let variables_defs = config_map
+            .all(VARIABLES_KEY)
+            .ok_or(format!("KEY {VARIABLES_KEY} not found"))?;
+
+        let output_types = Self::parse_output_types(output_types_defs, variables_defs)?;
+
+        let mut cells = read_cells_properties(&cells_file)
+            .map_err(|error| format!("error reading {}, {error}", cells_file))?;
+        let vegetations = read_vegetation(&vegetation_file)
+            .map_err(|error| format!("error reading {}, {error}", vegetation_file))?;
+
+        let warm_state =
+            read_warm_state(&warm_state_path, date)
+                .unwrap_or(vec![WarmState::default(); cells.len()]);
+
+        let ppf = match ppf_file {
+            Some(ppf_file) => read_ppf(&ppf_file)
+                .map_err(|error| format!("error reading {}, {}", &ppf_file, error))?,
+            None => vec![(1.0, 1.0); cells.len()],
+        };
+
+        let config = Config {
+            model_name: model_name,
+            warm_state_path: warm_state_path,
+            warm_state,
+            cells,
+            ppf,
+            vegetations,
+            outputs: output_types,
+            use_temperature_effect: use_temperature_effect,
+            use_ndvi: use_ndvi,
+        };
+
         Ok(config)
     }
 
     pub fn write_output(&self, date: DateTime<Utc>, state: &State) -> Result<(), ConfigError> {
-        for output_type in &self.outputs {
-            for variable in &output_type.variables {
-                //variable.
-            }            
-        }
-
+        // for output_type in &self.outputs {
+        //     for variable in &output_type.variables {
+        //         //variable.
+        //     }
+        // }
+        unimplemented!();
         Ok(())
     }
 }
-
-
-
-
 
 #[derive(Debug, Default)]
 pub struct Config {
     pub model_name: String,
     pub warm_state_path: String,
 
-    pub warm_state: Vec<WarmState>,    
+    pub warm_state: Vec<WarmState>,
     pub cells: Vec<models::Properties>,
     pub ppf: Vec<(f32, f32)>,
     pub vegetations: HashMap<String, models::Vegetation>,
-    
+
     pub outputs: Vec<OutputType>,
     pub use_temperature_effect: bool,
     pub use_ndvi: bool,
 }
 
 impl Config {
-
     pub fn init_state(&self) -> Vec<models::Cell> {
         let mut cells: Vec<models::Cell> = Vec::new();
         for (cell, ppf, warm_state) in izip!(&self.cells, &self.ppf, &self.warm_state) {
-            let vegetation = match self.vegetations.get(&cell.vegetation){
+            let vegetation = match self.vegetations.get(&cell.vegetation) {
                 Some(vegetation) => vegetation,
-                None => panic!("Vegetation not found: {}", cell.vegetation)
+                None => panic!("Vegetation not found: {}", cell.vegetation),
             };
             let cell = models::Cell::new(cell, vegetation);
             cells.push(cell);
@@ -357,64 +288,61 @@ impl Config {
 }
 
 #[derive(Debug, Clone)]
-pub struct InputFileParseError{
-    message: String
+pub struct InputFileParseError {
+    message: String,
 }
 
 impl From<std::io::Error> for InputFileParseError {
     fn from(err: std::io::Error) -> Self {
         Self {
-            message: err.to_string()
+            message: err.to_string(),
         }
     }
 }
 
-impl From<&str> for InputFileParseError{
+impl From<&str> for InputFileParseError {
     fn from(err: &str) -> Self {
         Self {
-            message: err.to_string()
+            message: err.to_string(),
         }
     }
 }
 
-
-impl From<String> for InputFileParseError{
+impl From<String> for InputFileParseError {
     fn from(err: String) -> Self {
-        Self {
-            message: err
-        }
+        Self { message: err }
     }
 }
 
 /// Parse an input filename and return a tuple with grid_name, variable and datetime
 fn parse_line(line: &str) -> Result<(String, String, DateTime<Utc>), InputFileParseError> {
     let filename = Path::new(&line)
-                        .file_name()
-                        .ok_or(format!("Invalid line in input file list: {line}"))?
-                        .to_str()
-                        .expect("Should be a valid string");
+        .file_name()
+        .ok_or(format!("Invalid line in input file list: {line}"))?
+        .to_str()
+        .expect("Should be a valid string");
 
     let name_and_ext = filename.split('.').collect::<Vec<&str>>();
-    
+
     if name_and_ext.len() == 0 || name_and_ext.len() > 2 {
         return Err(format!("Error parsing filename {line}").into());
     }
 
     let name = name_and_ext[0];
     let components: Vec<&str> = name.split('_').collect();
-    
+
     if components.len() != 3 {
         return Err(format!("Error parsing filename {name}").into());
     }
-    
+
     let date = components[0];
     let grid_name = components[1].to_string();
-    let variable = components[2].to_string();    
+    let variable = components[2].to_string();
 
     // parse the date
     println!("Parsing date: {}", date);
     let date = NaiveDateTime::parse_from_str(date, "%Y%m%d%H%M")
-            .map_err(|error| format!("Error parsing date: {error}"))?;
+        .map_err(|error| format!("Error parsing date: {error}"))?;
 
     let date = DateTime::<Utc>::from_utc(date, Utc);
 
@@ -425,7 +353,7 @@ fn parse_line(line: &str) -> Result<(String, String, DateTime<Utc>), InputFilePa
 pub struct LazyInputFile {
     pub grid_name: String,
     pub path: String,
-    pub data: Option<Vec<f32>>
+    pub data: Option<Vec<f32>>,
 }
 
 impl LazyInputFile {
@@ -433,25 +361,28 @@ impl LazyInputFile {
         LazyInputFile {
             grid_name,
             path,
-            data: None
+            data: None,
         }
     }
 
-    pub fn load(&mut self, grid_registry: &mut HashMap<String, Box<dyn GridFunctions>>) -> Result<(), InputFileParseError> {
-        if !self.data.is_none(){
+    pub fn load(
+        &mut self,
+        grid_registry: &mut HashMap<String, Box<dyn GridFunctions>>,
+    ) -> Result<(), InputFileParseError> {
+        if !self.data.is_none() {
             return Ok(());
         }
 
         let (grid, data) = read_input_from_file(&self.path)
-                            .map_err(|error| format!("Error reading input file {}: {error}", self.path))?;
-        
+            .map_err(|error| format!("Error reading input file {}: {error}", self.path))?;
+
         self.data = Some(data);
-        
+
         // insert the grid in the registry if not already present
         if !grid_registry.contains_key(&self.grid_name) {
             grid_registry.insert(self.grid_name.clone(), grid);
         }
-        
+
         Ok(())
     }
 }
@@ -462,17 +393,16 @@ pub struct InputDataHandler {
     pub data_map: HashMap<DateTime<Utc>, HashMap<String, LazyInputFile>>,
 }
 
-impl InputDataHandler{
-    pub fn new(file_path: &str) -> InputDataHandler{
-        let mut handler =  InputDataHandler {
+impl InputDataHandler {
+    pub fn new(file_path: &str) -> InputDataHandler {
+        let mut handler = InputDataHandler {
             grid_registry: HashMap::new(),
-            data_map: HashMap::new()
+            data_map: HashMap::new(),
         };
-        
-        let data_map =  &mut handler.data_map;
+
+        let data_map = &mut handler.data_map;
 
         let file = File::open(file_path).expect(&format!("Can't open input file {}", file_path));
-
 
         // file is a text file in which each line is a file with the following structure:
         // directory/<YYYYmmDDHHMM>_<grid_name>_<variable>.<extension>
@@ -481,19 +411,20 @@ impl InputDataHandler{
 
         for line in reader.lines() {
             let line = line.unwrap();
-            
-            if !line.ends_with(".zbin") { continue; }
-            
+
+            if !line.ends_with(".zbin") {
+                continue;
+            }
 
             let maybe_parsed = parse_line(&line);
             if maybe_parsed.is_err() {
                 let err = maybe_parsed.err();
                 print!("Error parsing filename {line}: {err:?}");
-                continue
+                continue;
             }
 
             let (grid_name, variable, date) = maybe_parsed.unwrap();
-            
+
             let date = date.with_timezone(&Utc);
 
             let lazy_input_file = LazyInputFile::new(grid_name, line);
@@ -503,20 +434,25 @@ impl InputDataHandler{
             }
             let data_map = data_map.get_mut(&date).unwrap();
             data_map.insert(variable.to_string(), lazy_input_file);
-
         }
 
         handler
-        
     }
-    
+
     /// Returns the data for the given date and variable on the selected coordinates
-    pub fn get_value(&mut self, var:&str, date: &DateTime<Utc>, lat: f32, lon: f32) -> f32 {
-        let data_map = self.data_map.get_mut(date).expect(&format!("No data for date {date}"));
-        let lazy_file = data_map.get_mut(var).expect(&format!("No data for variable {var}"));
+    pub fn get_value(&mut self, var: &str, date: &DateTime<Utc>, lat: f32, lon: f32) -> f32 {
+        let data_map = self
+            .data_map
+            .get_mut(date)
+            .expect(&format!("No data for date {date}"));
+        let lazy_file = data_map
+            .get_mut(var)
+            .expect(&format!("No data for variable {var}"));
 
         if lazy_file.data.is_none() {
-            lazy_file.load(&mut self.grid_registry).expect(&format!("Error loading file {}", lazy_file.path));
+            lazy_file
+                .load(&mut self.grid_registry)
+                .expect(&format!("Error loading file {}", lazy_file.path));
         }
         let data = &lazy_file.data;
         let data = data.as_ref().unwrap();
@@ -527,12 +463,11 @@ impl InputDataHandler{
         data[index]
     }
 
-
     /// Returns the timeline
     pub fn get_timeline(&self) -> Vec<DateTime<Utc>> {
         let mut timeline: Vec<DateTime<Utc>> = Vec::new();
         for date in self.data_map.keys() {
-            timeline.push(*date);            
+            timeline.push(*date);
         }
         // sort the timeline
         timeline.sort();
@@ -558,7 +493,7 @@ pub struct WarmState {
     pub MSI: f32,
     pub MSI_TTL: f32,
     pub NDVI: f32,
-    pub NDVI_TIME: f32, 
+    pub NDVI_TIME: f32,
     pub NDWI: f32,
     pub NDWI_TIME: f32,
 }
@@ -568,10 +503,10 @@ pub struct WarmState {
 /// <base_warm_file>_<YYYYmmDDHHMM>
 /// where <base_warm_file> is the base name of the file and <YYYYmmDDHHMM> is the date of the warm state
 /// The warm state is stored in a text file with the following structure:
-/// dffm 
+/// dffm
 fn read_warm_state(base_warm_file: &str, date: DateTime<Utc>) -> Option<Vec<WarmState>> {
     // for the last n days before date, try to read the warm state
-    // compose the filename as <base_warm_file>_<YYYYmmDDHHMM>  
+    // compose the filename as <base_warm_file>_<YYYYmmDDHHMM>
     let mut file: Option<File> = None;
 
     for days_before in 0..5 {
@@ -581,13 +516,16 @@ fn read_warm_state(base_warm_file: &str, date: DateTime<Utc>) -> Option<Vec<Warm
 
         let file_handle = File::open(filename);
         if file_handle.is_err() {
-            println!("Could not find warm state file for {}", current_date.format("%Y%m%d%H%M"));
+            println!(
+                "Could not find warm state file for {}",
+                current_date.format("%Y%m%d%H%M")
+            );
             continue;
-        }   
-        file = Some(file_handle.expect("Should unwrap")); 
+        }
+        file = Some(file_handle.expect("Should unwrap"));
         break;
     }
-    if file.is_none()  {
+    if file.is_none() {
         println!("Warning warm file not found");
         return None;
     }
@@ -599,21 +537,30 @@ fn read_warm_state(base_warm_file: &str, date: DateTime<Utc>) -> Option<Vec<Warm
         let line = line.unwrap();
         let components: Vec<&str> = line.split_whitespace().collect();
         let dffm = components[0].parse::<f32>().unwrap();
-        			
-		let NDSI = components[1].parse::<f32>().unwrap();
+
+        let NDSI = components[1].parse::<f32>().unwrap();
         let NDSI_TTL = components[2].parse::<f32>().unwrap();
 
         let MSI = components[3].parse::<f32>().unwrap();
         let MSI_TTL = components[4].parse::<f32>().unwrap();
-        
 
-		let NDVI = components[5].parse::<f32>().unwrap();
+        let NDVI = components[5].parse::<f32>().unwrap();
         let NDVI_TIME = components[6].parse::<f32>().unwrap();
-        
-		let NDWI = components[7].parse::<f32>().unwrap();
-        let NDWI_TIME = components[8].parse::<f32>().unwrap();        
 
-        warm_state.push(WarmState { dffm , NDSI, NDSI_TTL, MSI, MSI_TTL, NDVI, NDVI_TIME, NDWI, NDWI_TIME });
+        let NDWI = components[7].parse::<f32>().unwrap();
+        let NDWI_TIME = components[8].parse::<f32>().unwrap();
+
+        warm_state.push(WarmState {
+            dffm,
+            NDSI,
+            NDSI_TTL,
+            MSI,
+            MSI_TTL,
+            NDVI,
+            NDVI_TIME,
+            NDWI,
+            NDWI_TIME,
+        });
     }
     Some(warm_state)
 }
@@ -624,8 +571,8 @@ fn read_warm_state(base_warm_file: &str, date: DateTime<Utc>) -> Option<Vec<Warm
 /// where ppf_summer and ppf_winter are floats
 pub fn read_ppf(ppf_file: &str) -> Result<Vec<(f32, f32)>, ConfigError> {
     let file = File::open(ppf_file)
-                    .map_err(|error| format!("Could not open file {}: {}", ppf_file, error))?;
-    
+        .map_err(|error| format!("Could not open file {}: {}", ppf_file, error))?;
+
     let reader = io::BufReader::new(file);
     let mut ppf: Vec<(f32, f32)> = Vec::new();
     for line in reader.lines() {
@@ -636,6 +583,4 @@ pub fn read_ppf(ppf_file: &str) -> Result<Vec<(f32, f32)>, ConfigError> {
         ppf.push((lat, lon));
     }
     Ok(ppf)
-
 }
-
