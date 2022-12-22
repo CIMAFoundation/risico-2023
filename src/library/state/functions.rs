@@ -11,7 +11,7 @@ pub fn get_ffm(ffm: f32) -> f32 {
 
 
 ///calculate PPF from the date and the two values
-pub fn get_ppf(time: DateTime<Utc>, ppf_summer: f32, ppf_winter: f32) -> f32{
+pub fn get_ppf(time: &DateTime<Utc>, ppf_summer: f32, ppf_winter: f32) -> f32{
 	const MARCH_31:u32 = 89;
     const APRIL_1:u32 = 90;
     const MAY_31:u32 = 150;
@@ -326,8 +326,8 @@ pub fn get_output(cell: &Cell, time: &DateTime<Utc>, input: &CellInput) -> CellO
 	let mut LHVdff = NODATAVAL;
 	let mut LHVl1 = NODATAVAL;
 	let mut I = NODATAVAL;
-	let mut IPPF = NODATAVAL;
-	let mut VPPF = 1.0;
+	
+	let ppf = get_ppf(time, cell.properties.ppf_summer, cell.properties.ppf_winter);
 	
 	if par.hhv != NODATAVAL && dffm != NODATAVAL {
 		// calcolo LHV per la lettiera
@@ -349,8 +349,9 @@ pub fn get_output(cell: &Cell, time: &DateTime<Utc>, input: &CellInput) -> CellO
 	// }
 	//let vNDWI = (1 - f32::max(f32::min(NDWI, 1.0), 0.0));
 
-	// IPPF = I != NODATAVAL ? I * PPF : NODATAVAL;
-	// VPPF = V != NODATAVAL ? V * PPF : NODATAVAL;
+	let IPPF = if I != NODATAVAL  { I * ppf } else { NODATAVAL };
+	let VPPF = if V != NODATAVAL  { V * ppf } else { NODATAVAL };
+
 	// IPPFNDVI = I != NODATAVAL ? IPPF * vNDVI : NODATAVAL;
 	// VPPFNDVI = V != NODATAVAL ? VPPF * vNDVI : NODATAVAL;
 	// INDVI = I != NODATAVAL ? I * vNDVI : NODATAVAL;
@@ -381,6 +382,8 @@ pub fn get_output(cell: &Cell, time: &DateTime<Utc>, input: &CellInput) -> CellO
 	out.W = W_Effect;
 	out.V = V;
 	out.I = I;
+	out.VPPF = VPPF;
+	out.IPPF = IPPF;
 
 	// out.IPPF = IPPF;
 	// out.VPPF = VPPF;

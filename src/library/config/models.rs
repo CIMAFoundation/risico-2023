@@ -235,6 +235,12 @@ impl Config {
             None => vec![(1.0, 1.0); cells.len()],
         };
 
+        // patch cell properties with ppf
+        for (cell, ppf) in cells.iter_mut().zip(ppf.iter()) {
+            cell.ppf_summer = (*ppf).0;
+            cell.ppf_winter = (*ppf).1;
+        }
+
         let config = Config {
             model_name: model_name,
             warm_state_path: warm_state_path,

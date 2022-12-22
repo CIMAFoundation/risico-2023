@@ -37,7 +37,9 @@ pub fn read_cells_properties(file_path: &str) -> Result<Vec<Properties>, std::io
             lat,
             slope,
             aspect,
-            vegetation
+            vegetation,
+            ppf_summer: 1.0,
+            ppf_winter: 1.0,
         };
         cells.push(cell);
     }

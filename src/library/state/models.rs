@@ -15,7 +15,9 @@ pub struct Properties {
     pub lat: f32,
     pub slope: f32,
     pub aspect: f32,
-    pub vegetation: String
+    pub vegetation: String,
+    pub ppf_summer: f32,
+    pub ppf_winter: f32,
 }
 
 #[derive(Debug)]
