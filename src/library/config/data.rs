@@ -25,11 +25,11 @@ pub fn read_cells_properties(file_path: &str) -> Result<Vec<Properties>, std::io
         }
 
         //  [TODO] refactor this for using error handling
-        let lon = line_parts[0].parse::<f64>().unwrap();
-        let lat = line_parts[1].parse::<f64>().unwrap();
+        let lon = line_parts[0].parse::<f32>().unwrap();
+        let lat = line_parts[1].parse::<f32>().unwrap();
         
-        let slope = line_parts[2].parse::<f64>().unwrap();
-        let aspect = line_parts[3].parse::<f64>().unwrap();
+        let slope = line_parts[2].parse::<f32>().unwrap();
+        let aspect = line_parts[3].parse::<f32>().unwrap();
         let vegetation = line_parts[4].to_string();
         
         let cell = Properties {
@@ -75,13 +75,13 @@ pub fn read_vegetation(file_path: &str) -> Result<HashMap<String, Vegetation>, s
 
         //  [TODO] refactor this for using error handling
         let id = line_elements[0].to_string();
-        let d0 = line_elements[1].parse::<f64>().unwrap();
-        let d1 = line_elements[2].parse::<f64>().unwrap();
-        let hhv = line_elements[3].parse::<f64>().unwrap();
-        let umid = line_elements[4].parse::<f64>().unwrap();
-        let v0 = line_elements[5].parse::<f64>().unwrap();
-        let T0 = line_elements[6].parse::<f64>().unwrap();
-        let sat = line_elements[7].parse::<f64>().unwrap();
+        let d0 = line_elements[1].parse::<f32>().unwrap();
+        let d1 = line_elements[2].parse::<f32>().unwrap();
+        let hhv = line_elements[3].parse::<f32>().unwrap();
+        let umid = line_elements[4].parse::<f32>().unwrap();
+        let v0 = line_elements[5].parse::<f32>().unwrap();
+        let T0 = line_elements[6].parse::<f32>().unwrap();
+        let sat = line_elements[7].parse::<f32>().unwrap();
         let name = line_elements[8].to_string();
         
         let veg_id = id.clone();

@@ -5,13 +5,13 @@ use chrono::{DateTime, Utc, Datelike};
 use super::{constants::*, models::{Cell, CellInput, CellOutput}};
 
 
-pub fn get_ffm(ffm: f64) -> f64 {
+pub fn get_ffm(ffm: f32) -> f32 {
     ffm + 1.0
 }
 
 
 ///calculate PPF from the date and the two values
-pub fn get_ppf(time: DateTime<Utc>, ppf_summer: f64, ppf_winter: f64) -> f64{
+pub fn get_ppf(time: DateTime<Utc>, ppf_summer: f32, ppf_winter: f32) -> f32{
 	const MARCH_31:u32 = 89;
     const APRIL_1:u32 = 90;
     const MAY_31:u32 = 150;
@@ -29,12 +29,12 @@ pub fn get_ppf(time: DateTime<Utc>, ppf_summer: f64, ppf_winter: f64) -> f64{
     let ppf = match day_number{
         1..=MARCH_31 => ppf_winter,
         APRIL_1..=MAY_31 => {
-            let val:f64 = (day_number - (MARCH_31 + 1)) as f64 / (MAY_31 - MAY_31) as f64;
+            let val:f32 = (day_number - (MARCH_31 + 1)) as f32 / (MAY_31 - MAY_31) as f32;
             val * ppf_summer + (1.0 - val) * ppf_winter
         }
         JUNE_1..=SEPTEMBER_30 => ppf_summer,
         OCTOBER_1..=NOVEMBER_30 => {
-            let val: f64 = 1.0 - ((day_number - (SEPTEMBER_30 + 1)) as f64 / (NOVEMBER_30 - SEPTEMBER_30) as f64);
+            let val: f32 = 1.0 - ((day_number - (SEPTEMBER_30 + 1)) as f32 / (NOVEMBER_30 - SEPTEMBER_30) as f32);
             val * ppf_summer + (1.0 - val) * ppf_winter
         },
         DECEMBER_1..=366 => ppf_winter,
@@ -44,8 +44,8 @@ pub fn get_ppf(time: DateTime<Utc>, ppf_summer: f64, ppf_winter: f64) -> f64{
 }
 
 ///calculate the wind effect on fire propagation
-pub fn get_wind_effect(w_speed: f64, w_dir: f64, slope: f64, aspect: f64) -> f64{
-	let mut w: f64 = 0.0;
+pub fn get_wind_effect(w_speed: f32, w_dir: f32, slope: f32, aspect: f32) -> f32{
+	let mut w: f32 = 0.0;
 	//wind speed effect    
 	let ws = (1.0 + DELTA1 * (DELTA2 + ((w_speed / DELTA3) - DELTA4)).tanh())
 					* (1.0 - (w_speed / DELTA5));
@@ -65,11 +65,11 @@ pub fn get_wind_effect(w_speed: f64, w_dir: f64, slope: f64, aspect: f64) -> f64
 }
 
 
-pub fn get_slope_effect(slope: f64) -> f64 {
+pub fn get_slope_effect(slope: f32) -> f32 {
 	1.0 + LAMBDA * (slope / (PI / 2.0))	
 }
 
-pub fn get_v0(v0: f64, d0: f64, d1: f64, dffm: f64, snowCover: f64) -> f64{
+pub fn get_v0(v0: f32, d0: f32, d1: f32, dffm: f32, snowCover: f32) -> f32{
     if snowCover > 0.0 || d0 == NODATAVAL { 
         return 0.0;
     }
@@ -77,29 +77,29 @@ pub fn get_v0(v0: f64, d0: f64, d1: f64, dffm: f64, snowCover: f64) -> f64{
 	v0 * (-1.0 * (dffm / 20.0).powf(2.0)).exp()	
 }
 
-pub fn get_v(v0: f64, w_effect: f64, s_effect: f64, t_effect:f64) -> f64{
+pub fn get_v(v0: f32, w_effect: f32, s_effect: f32, t_effect:f32) -> f32{
 	v0 * w_effect * s_effect * t_effect
 }
 
-pub fn get_t_effect(t: f64) -> f64{
+pub fn get_t_effect(t: f32) -> f32{
 	if t <= 0.0 {
 		return 1.0;
 	}
     (t * 0.0171).exp()	
 }
 
-pub fn get_lhv_dff(hhv: f64, dffm: f64) -> f64 {
+pub fn get_lhv_dff(hhv: f32, dffm: f32) -> f32 {
 	hhv * (1.0 - (dffm / 100.0)) - Q * (dffm / 100.0)
 }
 
-pub fn get_lhv_l1(humidity: f64, MSI: f64, hhv: f64) -> f64{
+pub fn get_lhv_l1(humidity: f32, MSI: f32, hhv: f32) -> f32{
 	
 	if humidity == NODATAVAL {
         return 0.0;
     }
-    let lhv_l1: f64;
+    let lhv_l1: f32;
     if MSI >= 0.0 && MSI <= 1.0 {
-        let l1_msi = f64::max(20.0, humidity - (20.0 * MSI));
+        let l1_msi = f32::max(20.0, humidity - (20.0 * MSI));
         lhv_l1 = hhv * (1.0 - (l1_msi / 100.0)) - Q * (l1_msi / 100.0);
     }
     else{
@@ -111,7 +111,7 @@ pub fn get_lhv_l1(humidity: f64, MSI: f64, hhv: f64) -> f64{
 
 
 ///calculate the fire intensity
-pub fn getI(d0: f64, d1: f64, v: f64, relative_greenness: f64, lhv_dff: f64, lhv_l1: f64) -> f64{
+pub fn getI(d0: f32, d1: f32, v: f32, relative_greenness: f32, lhv_dff: f32, lhv_l1: f32) -> f32{
     let mut d0 = d0;
     let mut d1 = d1;
 
@@ -134,19 +134,19 @@ pub fn getI(d0: f64, d1: f64, v: f64, relative_greenness: f64, lhv_dff: f64, lhv
 
 
 ///Get the new value for the dfmm when is raining (p>p*)
-pub fn update_dffm_rain(R: f64, dffm: f64, sat: f64) -> f64{
+pub fn update_dffm_rain(R: f32, dffm: f32, sat: f32) -> f32{
 	let delta_dffm = R * R1 * (-R2 / ((sat + 1.0) - dffm)).exp() *(1.0 - (-R3 / R).exp());
 	let dffm = dffm + delta_dffm;
 
-	f64::min(dffm, sat)
+	f32::min(dffm, sat)
 }
 
 
 ///Get the new value for the dfmm when there is no rain (p<p*)
-pub fn update_dffm_dry(dffm: f64, sat: f64, t: f64, w: f64, h: f64, t0: f64, dt: f64) -> f64{
+pub fn update_dffm_dry(dffm: f32, sat: f32, t: f32, w: f32, h: f32, t0: f32, dt: f32) -> f32{
 	let emc  = A1 * h.powf(A2) + 
                     A3 * ((h - 100.0)/10.0).exp() + 
-                    A4 * (30.0 - f64::min(t, 30.0))*(1.0 - (-A5 * h).exp());
+                    A4 * (30.0 - f32::min(t, 30.0))*(1.0 - (-A5 * h).exp());
 	let k1 = t0 / (1.0 + A6 * t.powf(B1) + A7 * w.powf(B2));
 
 	//dinamica di drying / wetting
@@ -156,7 +156,7 @@ pub fn update_dffm_dry(dffm: f64, sat: f64, t: f64, w: f64, h: f64, t0: f64, dt:
 }
 
 
-pub fn index_from_swi(dffm: f64, SWI: f64) -> f64{
+pub fn index_from_swi(dffm: f32, SWI: f32) -> f32{
 	if SWI <= 10.0 { return 0.0 } ;
     dffm
 
@@ -164,7 +164,7 @@ pub fn index_from_swi(dffm: f64, SWI: f64) -> f64{
 
 
 
-pub fn update_moisture(cell: &Cell, input: &CellInput, dt: f64 ) -> f64{
+pub fn update_moisture(cell: &Cell, input: &CellInput, dt: f32 ) -> f32{
 	let par = cell.vegetation;
 	let dffm = cell.state.dffm;
 
@@ -186,7 +186,7 @@ pub fn update_moisture(cell: &Cell, input: &CellInput, dt: f64 ) -> f64{
 	let W = if input.windSpeed != NODATAVAL { input.windSpeed } else { 0.0 };
 	let R = if input.rain != NODATAVAL { input.rain } else { 0.0 };
 
-	//let dT = f64::max(1.0, f64::min(72.0, ((currentTime - previousTime) / 3600.0)));
+	//let dT = f32::max(1.0, f32::min(72.0, ((currentTime - previousTime) / 3600.0)));
 	//		float pdffm = dffm;
 	// modello per temperature superiori a 0 gradi Celsius
 	if R > MAXRAIN {
@@ -199,7 +199,7 @@ pub fn update_moisture(cell: &Cell, input: &CellInput, dt: f64 ) -> f64{
 	
 }
 
-pub fn update_snow_cover(input: &CellInput, NDSI: f64) -> f64{
+pub fn update_snow_cover(input: &CellInput, NDSI: f32) -> f32{
 	// Controllo la neve. Se >25 cm, considero innevato, altrimenti no
 	
 	let mut snowCover = input.snowCover;
@@ -347,7 +347,7 @@ pub fn get_output(cell: &Cell, time: &DateTime<Utc>, input: &CellInput) -> CellO
 	// if (par.useNDVI) {
 	// 	vNDVI = (1 - max(min(NDVI, 1.0f), 0.0f));
 	// }
-	//let vNDWI = (1 - f64::max(f64::min(NDWI, 1.0), 0.0));
+	//let vNDWI = (1 - f32::max(f32::min(NDWI, 1.0), 0.0));
 
 	// IPPF = I != NODATAVAL ? I * PPF : NODATAVAL;
 	// VPPF = V != NODATAVAL ? V * PPF : NODATAVAL;

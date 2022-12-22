@@ -1,6 +1,6 @@
-use crate::library::state::models::{CellOutput, State};
+use crate::library::{state::models::{CellOutput, State}, config::models::ConfigError, io::writers::write_to_zbin_file};
 
-use super::grid::{ClusterMode, RegularGrid, GridFunctions};
+use super::grid::{ClusterMode, RegularGrid };
 
 #[derive(Debug)]
 pub struct OutputVariable {
@@ -11,18 +11,18 @@ pub struct OutputVariable {
 }
 
 impl OutputVariable {
-   pub fn get_variable_on_grid(&self, state: &State, grid: &mut RegularGrid) -> Vec<f32>{
+   pub fn get_variable_on_grid(&self, state: &State, grid: &RegularGrid) -> Vec<f32>{
         let fun = CellOutput::get(&self.internal_name);
         let values = state.cells.iter().map(|cell| {
             fun(&cell.output.as_ref().unwrap()) as f32
         }).collect();
         let cells = &state.cells;
         let lats = cells.iter().map(
-            |cell| cell.properties.lat as f32
+            |cell| cell.properties.lat
         ).collect();
 
         let lons = cells.iter().map(|cell| {
-            cell.properties.lon as f32
+            cell.properties.lon
         }).collect();
 
 
@@ -49,34 +49,46 @@ impl OutputVariable {
 pub struct OutputType {
     name: String,
     path: String,
-    grid: Box<dyn GridFunctions>,
+    grid: RegularGrid,
     format: String,
     variables: Vec<OutputVariable>,
 }
 
 impl OutputType {
-    pub fn new(name: &str, path: &str, grid_path: &str, format: &str) -> Self {
+    pub fn new(name: &str, path: &str, grid_path: &str, format: &str) -> Result<Self, ConfigError> {
         let grid = RegularGrid::from_txt_file(grid_path).unwrap();
-        Self {
+        Ok(Self {
             name: name.to_string(),
             path: path.to_string(),
-            grid: Box::new(grid),
+            grid: grid,
             format: format.to_string(),
             variables: Vec::new(),
-        }
+        })
     }
 
     pub fn add_variable(&mut self, variable: OutputVariable) {
         self.variables.push(variable);
     }
+
+    fn write_zbin(&self, state: &State) -> Result<(), ConfigError> {
+        let grid = self.grid;
+        for variable in &self.variables {
+            let date_string = state.time.format("%Y%m%d%H%M").to_string();
+            //todo!("get run date from config");
+            let run_date = "202102010000";
+            let file = format!("{}/{}_{}_{}_{}.zbin", self.path, self.name, run_date, date_string, variable.name);
+            let values = variable.get_variable_on_grid(&state, &grid);
+            
+            write_to_zbin_file(&file, &grid, values)
+                .map_err(|err| format!("Cannot write file {}: error {err}", file))?;
+        }
+        Ok(())
+    }
+
+    pub fn write_variables(&self, state: &State) -> Result<(), ConfigError>{
+        match self.format.as_str() {
+            "ZBIN" => self.write_zbin(state),
+            _ => Ok(())
+        }
+    }
 }
-
-// struct OutputWriter {
-//     pub outputTypes: Vec<OutputType>,
-// }
-
-// impl OutputWriter {
-//     fn write_output(&self, time: &DateTime<Utc>, state: &State) {
-//         let file = format!("data/output/dffm_{}.zbin", time.format("%Y%m%d%H%M%S"));
-//     }
-// }

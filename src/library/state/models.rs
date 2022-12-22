@@ -1,40 +1,41 @@
 use chrono::prelude::*;
 
 use crate::library::config::models::InputDataHandler;
+use crate::library::config::models::WarmState;
 
 use super::constants::NODATAVAL;
-
+use rayon::prelude::*;
 use super::functions::get_output;
 use super::functions::update_moisture;
 
 const UPDATE_TIME: i64 = 100;
 #[derive(Debug)]
 pub struct Properties {
-    pub lon: f64,
-    pub lat: f64,
-    pub slope: f64,
-    pub aspect: f64,
+    pub lon: f32,
+    pub lat: f32,
+    pub slope: f32,
+    pub aspect: f32,
     pub vegetation: String
 }
 
 #[derive(Debug)]
 pub struct Vegetation {
     pub id: String,	
-    pub d0: f64,
-    pub d1: f64,
-    pub hhv: f64,	
-    pub umid: f64,
-    pub v0: f64,
-    pub T0: f64,
-    pub	sat: f64,
+    pub d0: f32,
+    pub d1: f32,
+    pub hhv: f32,	
+    pub umid: f32,
+    pub v0: f32,
+    pub T0: f32,
+    pub	sat: f32,
     pub name: String
 }
 
 #[derive(Debug)]
 #[derive(Clone)]
 pub struct CellState {
-    pub dffm: f64,
-    pub snowCover: f64,
+    pub dffm: f32,
+    pub snowCover: f32,
 }
 
 
@@ -47,30 +48,30 @@ pub struct TimeStepOutput {
 pub struct CellOutput{
     pub time: DateTime<Utc>,
 
-   	pub dffm: f64,
-	pub W: f64,
-	pub V: f64,
-	pub I: f64,
-	pub VPPF: f64,
-	pub IPPF: f64,
-	pub INDVI: f64,
-	pub VNDVI: f64,
-	pub VPPFNDVI: f64,
-	pub IPPFNDVI: f64,
-	pub NDVI: f64,
-	pub INDWI: f64,
-	pub VNDWI: f64,
-	pub VPPFNDWI: f64,
-	pub IPPFNDWI: f64,
-	pub NDWI: f64,
-	pub contrT: f64,
-	pub SWI: f64,	
-	pub temperature: f64,
-	pub rain: f64,
-	pub windSpeed: f64,
-	pub windDir: f64,
-	pub humidity: f64,
-	pub snowCover: f64,
+   	pub dffm: f32,
+	pub W: f32,
+	pub V: f32,
+	pub I: f32,
+	pub VPPF: f32,
+	pub IPPF: f32,
+	pub INDVI: f32,
+	pub VNDVI: f32,
+	pub VPPFNDVI: f32,
+	pub IPPFNDVI: f32,
+	pub NDVI: f32,
+	pub INDWI: f32,
+	pub VNDWI: f32,
+	pub VPPFNDWI: f32,
+	pub IPPFNDWI: f32,
+	pub NDWI: f32,
+	pub contrT: f32,
+	pub SWI: f32,	
+	pub temperature: f32,
+	pub rain: f32,
+	pub windSpeed: f32,
+	pub windDir: f32,
+	pub humidity: f32,
+	pub snowCover: f32,
 }
 
 
@@ -106,7 +107,7 @@ impl CellOutput {
         
     }
 
-    pub fn get(variable: &str) -> fn(&CellOutput) -> f64{
+    pub fn get(variable: &str) -> fn(&CellOutput) -> f32{
         match variable {
             "dffm" => |out| out.dffm,
             "W" => |out| out.W,
@@ -132,21 +133,21 @@ impl CellOutput {
             "windDir" => |out| out.windDir,
             "humidity" => |out| out.humidity,
             "snowCover" => |out| out.snowCover,
-            _ => |out| NODATAVAL
+            _ => |_| NODATAVAL
         }
     }
 }
 
 pub struct CellInput {
     pub time: DateTime<Utc>,
-    pub temperature: f64,
-    pub rain: f64,
-    pub windSpeed: f64,
-    pub windDir: f64,
-    pub humidity: f64,
-    pub snowCover: f64,
-    pub NDVI: f64,
-    pub NDWI: f64,
+    pub temperature: f32,
+    pub rain: f32,
+    pub windSpeed: f32,
+    pub windDir: f32,
+    pub humidity: f32,
+    pub snowCover: f32,
+    pub NDVI: f32,
+    pub NDWI: f32,
 }
 
 
@@ -162,12 +163,16 @@ pub struct Cell<'a> {
 }
 
 impl Cell<'_> {
-    pub fn new<'a>(properties: &'a Properties, vegetation: &'a Vegetation) -> Cell<'a> {
+    pub fn new<'a>(
+        properties: &'a Properties, 
+        warm_state: &'a WarmState,
+        vegetation: &'a Vegetation
+    ) -> Cell<'a> {
         Cell {
             properties,
             vegetation,
             state: CellState { 
-                dffm: 0.0,
+                dffm: warm_state.dffm as f32,
                 snowCover: 0.0
             },
             output: None,
@@ -202,32 +207,36 @@ impl Cell<'_> {
 pub struct State<'a> {
     // The grid's cells.
     pub cells: Vec<Cell<'a>>,
-    //ßpub outputs: Vec<CellOutput>,
+    //pub outputs: Vec<CellOutput>,
     pub time: DateTime<Utc>
 }
 
 impl State<'_> {
     /// Create a new state.
-    pub fn new(cells: Vec<Cell>, time: DateTime<Utc>) -> State {
+    pub fn new(
+        cells: Vec<Cell>, 
+        
+        time: DateTime<Utc>
+    ) -> State {
         State { cells, time }
     }
     
 
     /// Update the state of the cells.
-    pub fn update<'a>(&'a self, input_handler: &mut InputDataHandler, new_time: &DateTime<Utc>) -> State<'a> {
+    pub fn update<'a>(&'a self, input_handler: &InputDataHandler, new_time: &DateTime<Utc>) -> State<'a> {
         // determine the new time for the state
         // execute the update function on each cell
         let cells = self.cells.iter()
                     .map(|cell| {
                         let (lat, lon) = (cell.properties.lat  as f32, cell.properties.lon  as f32);
-                        let t = input_handler.get_value("T", &new_time, lat, lon) as f64 -273.15;
-                        let u = input_handler.get_value("U", &new_time, lat, lon) as f64;
-                        let v = input_handler.get_value("V", &new_time, lat, lon) as f64;
-                        let p = input_handler.get_value("P", &new_time, lat, lon) as f64;
-                        let h = input_handler.get_value("H", &new_time, lat, lon) as f64;
+                        let t = input_handler.get_value("T", &new_time, lat, lon) as f32 -273.15;
+                        let u = input_handler.get_value("U", &new_time, lat, lon) as f32;
+                        let v = input_handler.get_value("V", &new_time, lat, lon) as f32;
+                        let p = input_handler.get_value("P", &new_time, lat, lon) as f32;
+                        let h = input_handler.get_value("H", &new_time, lat, lon) as f32;
 
-                        let wind_speed = f64::sqrt(f64::powi(u, 2) + f64::powi(v, 2)) * 3600.0;
-                        let wind_dir = f64::atan2(u, v);
+                        let wind_speed = f32::sqrt(f32::powi(u, 2) + f32::powi(v, 2)) * 3600.0;
+                        let wind_dir = f32::atan2(u, v);
 
                         let cell_input = CellInput {
                             time: new_time.to_owned(),
@@ -240,7 +249,8 @@ impl State<'_> {
                             NDVI: 0.0,
                             NDWI: 0.0
                         };
-                        
+                        (cell, cell_input)
+                    }).map(|(cell, cell_input)| {
                         let new_cell = cell.update(&new_time, &cell_input);
                         new_cell
                     })
@@ -250,5 +260,13 @@ impl State<'_> {
 
         State::new(cells, new_time.to_owned())
     }
+
+    pub fn coords(&self) -> (Vec<f32>, Vec<f32>) {
+        (
+            self.cells.iter().map(|cell| cell.properties.lat).collect::<Vec<f32>>(),
+            self.cells.iter().map(|cell| cell.properties.lon).collect::<Vec<f32>>()
+        )
+    }
+    
 
 }   

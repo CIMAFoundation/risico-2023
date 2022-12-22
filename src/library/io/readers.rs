@@ -2,13 +2,13 @@
 use std::{io::{self, Read}, fs::File};
 use libflate::gzip;
 
-use crate::library::io::models::grid::GridFunctions;
+use crate::library::io::models::grid::Grid;
 
 use super::models::grid::{RegularGrid, IrregularGrid};
 
 /// read a file and returns Grid and Vector of data
 /// Grid is a struct with the following fields:
-pub fn read_input_from_file(file: &str) -> Result<(Box<dyn GridFunctions>, Vec<f32>), io::Error> {
+pub fn read_input_from_file(file: &str) -> Result<(Box<dyn Grid>, Vec<f32>), io::Error> {
     
     let input: Box<dyn io::Read> =  
         Box::new(
@@ -31,7 +31,7 @@ pub fn read_input_from_file(file: &str) -> Result<(Box<dyn GridFunctions>, Vec<f
     let ncols = u32::from_le_bytes(ncols);
     
     
-    let grid: Box<dyn GridFunctions> = match is_regular {
+    let grid: Box<dyn Grid> = match is_regular {
         0 => {
             let mut lats: Vec<f32> = Vec::new();
             for _ in 0..nrows*ncols {

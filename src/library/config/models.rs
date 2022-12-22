@@ -2,7 +2,7 @@ use std::{
     collections::HashMap,
     fmt::Display,
     fs::File,
-    io::{self, BufRead},
+    io::{self, BufRead, Write},
     path::Path,
     
 };
@@ -11,10 +11,10 @@ use chrono::*;
 use chrono::{DateTime, Utc};
 use itertools::izip;
 
-use crate::library::io::{readers::read_input_from_file, models::output::{OutputType, OutputVariable}};
+use crate::library::{io::{readers::read_input_from_file, models::output::{OutputType, OutputVariable}}, state::{models::Cell, constants::NODATAVAL}};
 use crate::{
     library::{
-        io::models::grid::{ClusterMode, GridFunctions, RegularGrid},
+        io::models::grid::{ClusterMode, Grid},
         state::models::{self, State},
     }
 };
@@ -130,7 +130,13 @@ impl Config {
             let (internal_name, name, path, grid_path, format) =
                 (parts[0], parts[1], parts[2], parts[3], parts[4]);
 
-            let mut output_type = OutputType::new(name, path, grid_path, format);
+            let mut output_type = OutputType::new(name, path, grid_path, format)
+            .map_err(|_err| 
+                format!(
+                    "Invalid output type definition: {out_type_def}",
+                    out_type_def = out_type_def
+                )
+            )?;
             output_types_map.insert(internal_name.to_string(), output_type);
         }
 
@@ -147,7 +153,7 @@ impl Config {
             let cluster_mode = match cluster_mode {
                 "MEAN" | "mean" => ClusterMode::Mean,
                 "MAX" | "max" => ClusterMode::Max,
-                "MIN" | "mean" => ClusterMode::Min,
+                "MIN" | "min" => ClusterMode::Min,
                 _ => return Err("Invalid cluster mode".into()),
             };
             let mut variable = OutputVariable::new(internal_name, name, cluster_mode, precision);
@@ -165,8 +171,6 @@ impl Config {
 
     pub fn new(config_file: &str, date: DateTime<Utc>) -> Result<Config, ConfigError> {
         let config_map = read_config(config_file)?;
-
-        let mut config = Config::default();
 
         // try to get the model name, expect it to be there
         let model_name = config_map
@@ -235,7 +239,7 @@ impl Config {
             model_name: model_name,
             warm_state_path: warm_state_path,
             warm_state,
-            cells,
+            cells_properties: cells,
             ppf,
             vegetations,
             outputs: output_types,
@@ -246,13 +250,58 @@ impl Config {
         Ok(config)
     }
 
-    pub fn write_output(&self, date: DateTime<Utc>, state: &State) -> Result<(), ConfigError> {
-        // for output_type in &self.outputs {
-        //     for variable in &output_type.variables {
-        //         //variable.
-        //     }
-        // }
-        unimplemented!();
+    
+    pub fn new_state(&self, date: DateTime<Utc>) -> State {
+        let cells = izip!(&self.cells_properties, &self.warm_state, &self.ppf)
+            .map(|(props, warm_state, ppf)| {
+                let veg = self.vegetations.get(&props.vegetation).unwrap();
+                Cell::new(&props, &warm_state, &veg)
+            })
+            .collect();
+        
+        State {
+            cells: cells,
+            time: date,
+        }
+    }
+    
+    pub fn write_output(&self, state: &State) -> Result<(), ConfigError> {
+        for output in &self.outputs {
+            match output.write_variables(state) {
+                Ok(_) => (),
+                Err(e) => println!("Error writing output: {}", e)
+            }
+        }
+        Ok(())
+    }
+
+    pub fn write_warm_state(&self, state: &State) -> Result<(), ConfigError> {
+        let date_string = state.time.format("%Y%m%d%H%M").to_string();
+        let warm_state_name = format!("{}_{}", self.warm_state_path, date_string);
+        let mut warm_state_file = File::create(&warm_state_name)
+            .map_err(|error| format!("error creating {}, {}", &warm_state_name, error))?;
+        for cell in &state.cells {
+            let dffm = cell.state.dffm;
+            let NDSI = NODATAVAL; //cell.state.NDSI;
+            let NDSI_TTL = NODATAVAL;  //cell.state.NDSI_TTL;
+            let MSI = NODATAVAL;  //cell.state.MSI;
+            let MSI_TTL = NODATAVAL;  //cell.state.MSI_TTL;
+            let NDVI = NODATAVAL;  //cell.state.NDVI;
+            let NDVI_TIME = NODATAVAL;  //cell.state.NDVI_TIME;
+            let NDWI = NODATAVAL;  //cell.state.NDWI;
+            let NDWI_TTL = NODATAVAL;  //cell.state.NDWI_TTL;
+
+            let line = format!(
+                "{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}",
+                dffm, NDSI, NDSI_TTL, MSI, MSI_TTL, NDVI, NDVI_TIME, NDWI, NDWI_TTL
+            );
+            writeln!(warm_state_file, "{}", line).map_err(|error| {
+                format!(
+                    "error writing to {}, {}",
+                    &warm_state_name, error
+                )
+            })?;            
+        }         
         Ok(())
     }
 }
@@ -263,7 +312,7 @@ pub struct Config {
     pub warm_state_path: String,
 
     pub warm_state: Vec<WarmState>,
-    pub cells: Vec<models::Properties>,
+    pub cells_properties: Vec<models::Properties>,
     pub ppf: Vec<(f32, f32)>,
     pub vegetations: HashMap<String, models::Vegetation>,
 
@@ -272,20 +321,6 @@ pub struct Config {
     pub use_ndvi: bool,
 }
 
-impl Config {
-    pub fn init_state(&self) -> Vec<models::Cell> {
-        let mut cells: Vec<models::Cell> = Vec::new();
-        for (cell, ppf, warm_state) in izip!(&self.cells, &self.ppf, &self.warm_state) {
-            let vegetation = match self.vegetations.get(&cell.vegetation) {
-                Some(vegetation) => vegetation,
-                None => panic!("Vegetation not found: {}", cell.vegetation),
-            };
-            let cell = models::Cell::new(cell, vegetation);
-            cells.push(cell);
-        }
-        cells
-    }
-}
 
 #[derive(Debug, Clone)]
 pub struct InputFileParseError {
@@ -367,7 +402,7 @@ impl LazyInputFile {
 
     pub fn load(
         &mut self,
-        grid_registry: &mut HashMap<String, Box<dyn GridFunctions>>,
+        grid_registry: &mut HashMap<String, Box<dyn Grid>>,
     ) -> Result<(), InputFileParseError> {
         if !self.data.is_none() {
             return Ok(());
@@ -389,9 +424,10 @@ impl LazyInputFile {
 
 #[derive(Debug)]
 pub struct InputDataHandler {
-    pub grid_registry: HashMap<String, Box<dyn GridFunctions>>,
+    pub grid_registry: HashMap<String, Box<dyn Grid>>,
     pub data_map: HashMap<DateTime<Utc>, HashMap<String, LazyInputFile>>,
 }
+
 
 impl InputDataHandler {
     pub fn new(file_path: &str) -> InputDataHandler {
@@ -439,26 +475,36 @@ impl InputDataHandler {
         handler
     }
 
+    pub fn load_data(&mut self, date: &DateTime<Utc>, lats: &[f32], lons: &[f32]) {
+        let data_map = self.data_map.get_mut(date).unwrap();
+        for (_, lazy_file) in data_map.iter_mut() {
+            if lazy_file.data.is_none() {
+                lazy_file
+                    .load(&mut self.grid_registry)
+                    .expect(&format!("Error loading file {}", lazy_file.path));
+            }
+            // build cache
+            let _ = lazy_file.data.as_ref().unwrap();
+            let grid = self.grid_registry.get_mut(&lazy_file.grid_name).unwrap();
+            grid.build_cache(lats, lons);
+        }
+    }
+
     /// Returns the data for the given date and variable on the selected coordinates
-    pub fn get_value(&mut self, var: &str, date: &DateTime<Utc>, lat: f32, lon: f32) -> f32 {
+    pub fn get_value(&self, var: &str, date: &DateTime<Utc>, lat: f32, lon: f32) -> f32 {
         let data_map = self
             .data_map
-            .get_mut(date)
+            .get(date)
             .expect(&format!("No data for date {date}"));
         let lazy_file = data_map
-            .get_mut(var)
+            .get(var)
             .expect(&format!("No data for variable {var}"));
 
-        if lazy_file.data.is_none() {
-            lazy_file
-                .load(&mut self.grid_registry)
-                .expect(&format!("Error loading file {}", lazy_file.path));
-        }
         let data = &lazy_file.data;
         let data = data.as_ref().unwrap();
 
-        let grid = self.grid_registry.get_mut(&lazy_file.grid_name).unwrap();
-        let index = grid.index(lat, lon);
+        let grid = self.grid_registry.get(&lazy_file.grid_name).unwrap();
+        let index = grid.index(&lat, &lon);
 
         data[index]
     }

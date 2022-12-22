@@ -2,7 +2,7 @@
 use std::{io::{self, Write}, fs::File};
 use libflate::gzip;
 
-use super::models::grid::{IrregularGrid, RegularGrid, GridFunctions};
+use super::models::grid::{RegularGrid };
 
 
 pub fn write_to_zbin_file(file: &str, grid: &RegularGrid, values: Vec<f32>) -> Result<(), io::Error> {
