@@ -1,8 +1,12 @@
+use std::f32::NAN;
+
 #[allow(dead_code)]
 ///functions to work on the state of the risico model
-
+use ndarray::{azip};
 use chrono::{DateTime, Utc, Datelike};
-use super::{constants::*, models::{Cell, CellInput, CellOutput}};
+use itertools::izip;
+use ndarray::Array1;
+use super::{constants::*, models::{ Input, Output, State}};
 
 
 pub fn get_ffm(ffm: f32) -> f32 {
@@ -162,56 +166,64 @@ pub fn index_from_swi(dffm: f32, SWI: f32) -> f32{
 
 }
 
+pub fn update_moisture(state: &State, input: &Input, dt: f32 ) -> Array1<f32>{
+	let dffm = state.dffm;
+	let d0 = state.d0;
+	let sat = state.sat;
+	let T0 = state.T0;
+	let snow_cover = state.snow_cover;
+	let temperature = input.temperature;
+	let humidity = input.humidity;
+	let wind_speed = input.wind_speed;
+	let rain = input.rain;
 
+	let new_dffm = izip!(dffm, d0, sat, T0, snow_cover,  temperature, humidity, wind_speed, rain)
+		.map(|(dffm, d0, sat, T0, snow_cover,  temperature, humidity, wind_speed, rain)|{
+			if d0 == NODATAVAL {
+				return	NODATAVAL
+			}
 
-pub fn update_moisture(cell: &Cell, input: &CellInput, dt: f32 ) -> f32{
-	let par = cell.vegetation;
-	let dffm = cell.state.dffm;
+			if snow_cover > SNOW_COVER_THRESHOLD{
+				return sat;
+			}
 
-	if par.d0 == NODATAVAL {
-		return NODATAVAL;
-	}
+			if dffm == NODATAVAL || temperature == NODATAVAL || humidity == NODATAVAL{
+				return dffm;
+			}
+			
+			let T = if temperature > 0.0  { temperature }  else  {0.0};
+			
+			let H = if humidity < 100.0 { humidity } else { 100.0 };
+			let W = if wind_speed != NODATAVAL { wind_speed } else { 0.0 };
+			let R = if rain != NODATAVAL { rain } else { 0.0 };
 
-	if cell.state.snowCover > SNOW_COVER_THRESHOLD{
-		return par.sat;
-	}
-
-	if dffm == NODATAVAL || input.temperature == NODATAVAL || input.humidity == NODATAVAL{
-		return dffm;
-	}
+			//let dT = f32::max(1.0, f32::min(72.0, ((currentTime - previousTime) / 3600.0)));
+			//		float pdffm = dffm;
+			// modello per temperature superiori a 0 gradi Celsius
+			if R > MAXRAIN {
+				return update_dffm_rain(R, dffm, sat);
+			}
+			
+			update_dffm_dry(dffm, sat, T, W, H, T0, dt)
 	
-	let T = if input.temperature > 0.0  { input.temperature }  else  {0.0};
-	
-	let H = if input.humidity < 100.0 { input.humidity } else { 100.0 };
-	let W = if input.windSpeed != NODATAVAL { input.windSpeed } else { 0.0 };
-	let R = if input.rain != NODATAVAL { input.rain } else { 0.0 };
+	}).collect();
+	new_dffm
 
-	//let dT = f32::max(1.0, f32::min(72.0, ((currentTime - previousTime) / 3600.0)));
-	//		float pdffm = dffm;
-	// modello per temperature superiori a 0 gradi Celsius
-	if R > MAXRAIN {
-		return update_dffm_rain(R, dffm, par.sat);
-	}
-	else {
-		return update_dffm_dry(dffm, par.sat, T, W, H, par.T0, dt);
-	}
-	
-	
 }
 
-pub fn update_snow_cover(input: &CellInput, NDSI: f32) -> f32{
-	// Controllo la neve. Se >25 cm, considero innevato, altrimenti no
+// pub fn update_snow_cover(input: &Input, NDSI: f32) -> f32{
+// 	// Controllo la neve. Se >25 cm, considero innevato, altrimenti no
 	
-	let mut snowCover = input.snowCover;
-	if NDSI != NODATAVAL{
-		if NDSI == MODISSNOWVAL {
-			snowCover = 1.0;
-		} else {
-			snowCover = NODATAVAL;
-		}
-	}
-	snowCover
-}
+// 	let mut snowCover = input.snow_cover;
+// 	if NDSI != NODATAVAL{
+// 		if NDSI == MODISSNOWVAL {
+// 			snowCover = 1.0;
+// 		} else {
+// 			snowCover = NODATAVAL;
+// 		}
+// 	}
+// 	snowCover
+// }
 
 // pub fn updateSatelliteData(RISICO_CellInput *input)
 // {
@@ -288,124 +300,85 @@ pub fn update_snow_cover(input: &CellInput, NDSI: f32) -> f32{
 // 	}
 // }
 
-pub fn get_output(cell: &Cell, time: &DateTime<Utc>, input: &CellInput) -> CellOutput{
-	let mut out = CellOutput::new(time);
-	
-	let state = &cell.state;
-	let par = cell.vegetation;
 
-	let slope = cell.properties.slope;
-	let aspect = cell.properties.aspect;
-
-	if state.dffm == NODATAVAL || input.temperature == NODATAVAL	{
-		return out;
-	}
-
-	let WSpeed = if input.windSpeed != NODATAVAL { input.windSpeed }   else { 0.0 };
-	let WDir = if input.windDir != NODATAVAL  { input.windDir } else { 0.0 };
-	let T = input.temperature;
-
-	
-	// Contributo del vento
-	let W_Effect = get_wind_effect(WSpeed, WDir, slope, aspect);
-	
-	let dffm = state.dffm;
-	let snowCover = state.snowCover;
-
-	// calcolo della velocità iniziale
-	let V0 = get_v0(par.v0, par.d0, par.d1, dffm, snowCover);
-
-	let mut T_Effect = 1.0;
-	let use_TEffect = false;
-	if use_TEffect{
-		T_Effect = get_t_effect(T);
-	}
-	let slopeEffect = get_slope_effect(slope);
-	let V = get_v(V0, W_Effect, slopeEffect, T_Effect);
-
-	let mut LHVdff = NODATAVAL;
-	let mut LHVl1 = NODATAVAL;
-	let mut I = NODATAVAL;
-	
-	let ppf = get_ppf(time, cell.properties.ppf_summer, cell.properties.ppf_winter);
-	
-	if par.hhv != NODATAVAL && dffm != NODATAVAL {
-		// calcolo LHV per la lettiera
-		LHVdff = get_lhv_dff(par.hhv, dffm);
-		// calcolo LHV per la vegetazione viva
-		let MSI = NODATAVAL;
-		LHVl1 = get_lhv_l1(par.umid, MSI, par.hhv);
-		// Calcolo Intensità
-		let NDVI = NODATAVAL;
-		I = getI(par.d0, par.d1, V, NDVI, LHVdff, LHVl1);
-		// Calcolo PPF
-		
-		//PPF = getPPF(time, par.PPF_summer, par.PPF_winter);
-	}
-
-	let vNDVI = 1.0;
-	// if (par.useNDVI) {
-	// 	vNDVI = (1 - max(min(NDVI, 1.0f), 0.0f));
+pub fn get_output(state: &State, input: &Input) -> Output{
+	let time = &state.time;
+	// if dffm == NODATAVAL || temperature == NODATAVAL	{
+	// 	// return NODATAVAL;
 	// }
-	//let vNDWI = (1 - f32::max(f32::min(NDWI, 1.0), 0.0));
+	let len = state.lats.len();
 
-	let IPPF = if I != NODATAVAL  { I * ppf } else { NODATAVAL };
-	let VPPF = if V != NODATAVAL  { V * ppf } else { NODATAVAL };
+	let mut w_effect = Array1::<f32>::zeros(len);
+	let mut V0 = Array1::<f32>::zeros(len);
+	let mut t_effect = Array1::<f32>::ones(len);
+	let mut slope_effect = Array1::<f32>::ones(len);
+	let mut V = Array1::<f32>::zeros(len);
+	let mut PPF = Array1::<f32>::zeros(len);
+	let mut I = Array1::<f32>::ones(len) * NAN;
 
-	// IPPFNDVI = I != NODATAVAL ? IPPF * vNDVI : NODATAVAL;
-	// VPPFNDVI = V != NODATAVAL ? VPPF * vNDVI : NODATAVAL;
-	// INDVI = I != NODATAVAL ? I * vNDVI : NODATAVAL;
-	// VNDVI = V != NODATAVAL ? V * vNDVI : NODATAVAL;
+	azip!(( 
+			V0 in &mut V0, 
+			&dffm in &state.dffm, 
+			&v0 in &state.v0, 
+			&d0 in &state.d0, 
+			&d1 in &state.d1, 
+			&snow_cover in &state.snow_cover,
+		){
+		*V0 = get_v0(v0, d0, d1, dffm, snow_cover);
+	});
 
-	// IPPFNDWI = I != NODATAVAL ? IPPF * vNDWI : NODATAVAL;
-	// VPPFNDWI = V != NODATAVAL ? VPPF * vNDWI : NODATAVAL;
-	// INDWI = I != NODATAVAL ? I * vNDWI : NODATAVAL;
-	// VNDWI = V != NODATAVAL ? V * vNDWI : NODATAVAL;
+	azip!(( 
+			w_effect in &mut w_effect,
+			slope_effect in &mut slope_effect,
+			&wind_dir in &input.wind_dir, 
+			&wind_speed in &input.wind_speed, 
+			&slope in &state.slope, 
+			&aspect in &state.aspect,
+		){
+		*w_effect = get_wind_effect(wind_speed, wind_dir, slope, aspect);
+		*slope_effect = get_slope_effect(slope);
+	});
 
-	//out.cellID = this.ID;
-	out.time = input.time;
-	//out.coord.set(m_oCoord.x, m_oCoord.y);
+	let use_t_effect = false;
+	if use_t_effect {
+		azip!(( 
+			t_effect in &mut t_effect, 
+			&temperature in &input.temperature,
+		){
+			*t_effect = get_t_effect(temperature);
+		});
+	}
+	azip!((
+			ppf in &mut PPF,
+			&ppf_summer in &state.ppf_summer,
+			&ppf_winter in &state.ppf_winter,
+		){
+		*ppf = get_ppf(time, ppf_summer, ppf_winter);
+	});
 
-	// Variabili di input
-	out.temperature = input.temperature;
-	out.rain = input.rain;
-	out.humidity = input.humidity;
-	out.windDir = input.windDir;
-	out.windSpeed = input.windSpeed;
+	azip!((
+		V in &mut V,
+		&V0 in &V0,
+		&w_effect in &w_effect,
+		&slope_effect in &slope_effect,
+		&t_effect in &t_effect,
+		){
+		*V = get_v(V0, w_effect, slope_effect, t_effect);
+	});
 
-	// variabili di stato
-	out.dffm = dffm;
-	out.snowCover = snowCover;
-
-	// variabili di output
-	out.contrT = T_Effect;
-	out.W = W_Effect;
-	out.V = V;
-	out.I = I;
-	out.VPPF = VPPF;
-	out.IPPF = IPPF;
-
-	// out.IPPF = IPPF;
-	// out.VPPF = VPPF;
-
-	// out.VPPFNDVI = VPPFNDVI;
-	// out.IPPFNDVI = IPPFNDVI;
-	// out.VNDVI = VNDVI;
-	// out.INDVI = INDVI;
-
-	// out.NDVI = NODATAVAL;
-	// if (par.useNDVI)
-	// {
-	// 	out.NDVI = vNDVI;
-	// }
-
-	// out.VPPFNDWI = VPPFNDWI;
-	// out.IPPFNDWI = IPPFNDWI;
-	// out.VNDWI = VNDWI;
-	// out.INDWI = INDWI;
-	// out.NDWI = vNDWI;
-
-	//out.SWI = calculateIndexFromSWI(dffm, input.SWI);
-	out
-
+	Output {
+		temperature: input.temperature,
+		rain: input.rain,
+		humidity: input.humidity,
+		wind_dir: input.wind_dir,
+		wind_speed: input.wind_speed,
+		dffm: state.dffm,
+		snow_cover: state.snow_cover,
+		t_effect: t_effect,
+		W: w_effect,
+		V: V,
+		I: I,
+		PPF: PPF,
+		time: time.clone(),
+	}
 }

@@ -1,4 +1,4 @@
-use crate::library::{state::models::{CellOutput, State}, config::models::ConfigError, io::writers::write_to_zbin_file};
+use crate::library::{state::models::{Output, State}, config::models::ConfigError, io::writers::write_to_zbin_file};
 
 use super::grid::{ClusterMode, RegularGrid };
 
@@ -11,20 +11,8 @@ pub struct OutputVariable {
 }
 
 impl OutputVariable {
-   pub fn get_variable_on_grid(&self, state: &State, grid: &RegularGrid) -> Vec<f32>{
-        let fun = CellOutput::get(&self.internal_name);
-        let values = state.cells.iter().map(|cell| {
-            fun(&cell.output.as_ref().unwrap()) as f32
-        }).collect();
-        let cells = &state.cells;
-        let lats = cells.iter().map(
-            |cell| cell.properties.lat
-        ).collect();
-
-        let lons = cells.iter().map(|cell| {
-            cell.properties.lon
-        }).collect();
-
+   pub fn get_variable_on_grid(&self, lats: &[f32], lons: &[f32], output: &Output, grid: &RegularGrid) -> Vec<f32>{
+        let values = output.get(&self.internal_name);
 
         let values = grid.project_to_grid(&lats, &lons, values, &self.cluster_mode);
         // transform to desired number of decimal places precision
@@ -70,14 +58,14 @@ impl OutputType {
         self.variables.push(variable);
     }
 
-    fn write_zbin(&self, state: &State) -> Result<(), ConfigError> {
+    fn write_zbin(&self, output: &Output, lats: &[f32], lons: &[f32]) -> Result<(), ConfigError> {
         let grid = self.grid;
         for variable in &self.variables {
-            let date_string = state.time.format("%Y%m%d%H%M").to_string();
+            let date_string = output.time.format("%Y%m%d%H%M").to_string();
             //todo!("get run date from config");
             let run_date = "202102010000";
             let file = format!("{}/{}_{}_{}_{}.zbin", self.path, self.name, run_date, date_string, variable.name);
-            let values = variable.get_variable_on_grid(&state, &grid);
+            let values = variable.get_variable_on_grid(&lats, &lons, &output, &grid);
             
             write_to_zbin_file(&file, &grid, values)
                 .map_err(|err| format!("Cannot write file {}: error {err}", file))?;
@@ -85,9 +73,9 @@ impl OutputType {
         Ok(())
     }
 
-    pub fn write_variables(&self, state: &State) -> Result<(), ConfigError>{
+    pub fn write_variables(&self, output: &Output, lats: &[f32], lons:&[f32]) -> Result<(), ConfigError>{
         match self.format.as_str() {
-            "ZBIN" => self.write_zbin(state),
+            "ZBIN" => self.write_zbin(output, lats, lons),
             _ => Ok(())
         }
     }

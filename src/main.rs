@@ -2,8 +2,10 @@
 // import state from lib
 mod library;
 use chrono::{prelude::*};
+use itertools::izip;
+use ndarray::Array1;
 
-use crate::library::config::models::{Config, InputDataHandler};
+use crate::library::{config::models::{Config, InputDataHandler}, state::models::Input};
 
 fn main() {
     let start_time = Utc::now();
@@ -30,13 +32,40 @@ fn main() {
 
     let timeline = handler.get_timeline();
 
-    let (lats, lons) = state.coords();
+    let coords = state.coords();
+    let lats = coords.0;
+    let lons = coords.1;
+
     for time in timeline {
         print!("{} ", time);
         let start_time = Utc::now();
-        handler.load_data(&time, &lats, &lons);
+        handler.load_data(&time, lats, lons);
+        
+        let t = handler.get_values("T", &time, lats, lons) -273.15;
+        let u = handler.get_values("U", &time, lats, lons);
+        let v = handler.get_values("V", &time, lats, lons);
+        let p = handler.get_values("P", &time, lats, lons);
+        let h = handler.get_values("H", &time, lats, lons);
 
-        let new_state = state.update(&handler, &time);
+        let wind_speed = 
+            (u.mapv(|_u| _u.powi(2)) + v.mapv(|_v| _v.powi(2)))
+            .mapv(f32::sqrt) * 3600.0;
+        
+        let wind_dir = izip!(u,v).map(|(_u, _v)| f32::atan2(_u, _v)).collect::<Array1<f32>>();
+
+        let input = Input {
+            time: time,
+            temperature: t,
+            wind_speed: wind_speed,
+            wind_dir: wind_dir,
+            humidity: h,
+            rain: p,
+            snow_cover: Array1::from_elem(lats.len(), 0.0),
+            ndvi: Array1::from_elem(lats.len(), 1.0),
+            ndwi: Array1::from_elem(lats.len(), 1.0),
+        };
+
+        let new_state = state.update(&input, &time);
         let state = new_state;
         
         let elapsed = Utc::now().signed_duration_since(start_time).num_milliseconds();

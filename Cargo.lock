@@ -507,6 +507,7 @@ dependencies = [
  "chrono",
  "itertools",
  "libflate",
+ "ndarray",
  "netcdf",
  "rayon",
  "serde",

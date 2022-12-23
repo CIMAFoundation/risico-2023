@@ -10,8 +10,9 @@ use std::{
 use chrono::*;
 use chrono::{DateTime, Utc};
 use itertools::izip;
+use ndarray::Array1;
 
-use crate::library::{io::{readers::read_input_from_file, models::output::{OutputType, OutputVariable}}, state::{models::Cell, constants::NODATAVAL}};
+use crate::library::{io::{readers::read_input_from_file, models::output::{OutputType, OutputVariable}}, state::{constants::NODATAVAL}};
 use crate::{
     library::{
         io::models::grid::{ClusterMode, Grid},
@@ -257,19 +258,19 @@ impl Config {
     }
 
     
-    pub fn new_state(&self, date: DateTime<Utc>) -> State {
-        let cells = izip!(&self.cells_properties, &self.warm_state, &self.ppf)
-            .map(|(props, warm_state, ppf)| {
-                let veg = self.vegetations.get(&props.vegetation).unwrap();
-                Cell::new(&props, &warm_state, &veg)
-            })
-            .collect();
+    // pub fn new_state(&self, date: DateTime<Utc>) -> State {
+    //     let cells = izip!(&self.cells_properties, &self.warm_state, &self.ppf)
+    //         .map(|(props, warm_state, ppf)| {
+    //             let veg = self.vegetations.get(&props.vegetation).unwrap();
+    //             Cell::new(&props, &warm_state, &veg)
+    //         })
+    //         .collect();
         
-        State {
-            cells: cells,
-            time: date,
-        }
-    }
+    //     State {
+    //         cells: cells,
+    //         time: date,
+    //     }
+    // }
     
     pub fn write_output(&self, state: &State) -> Result<(), ConfigError> {
         for output in &self.outputs {
@@ -497,7 +498,12 @@ impl InputDataHandler {
     }
 
     /// Returns the data for the given date and variable on the selected coordinates
-    pub fn get_value(&self, var: &str, date: &DateTime<Utc>, lat: f32, lon: f32) -> f32 {
+    pub fn get_values(&self, 
+            var: &str, 
+            date: &DateTime<Utc>, 
+            lats: &[f32], 
+            lons: &[f32]) 
+            -> Array1<f32> {
         let data_map = self
             .data_map
             .get(date)
@@ -510,9 +516,9 @@ impl InputDataHandler {
         let data = data.as_ref().unwrap();
 
         let grid = self.grid_registry.get(&lazy_file.grid_name).unwrap();
-        let index = grid.index(&lat, &lon);
-
-        data[index]
+        izip!(lats, lons)
+            .map(|(lat, lon)| grid.get_value(data, *lat, *lon))
+            .map(|index| data[index]).collect()       
     }
 
     /// Returns the timeline

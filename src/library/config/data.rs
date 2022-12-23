@@ -2,7 +2,7 @@ use std::{io::BufRead, collections::HashMap};
 use std::fs;
 use std::io::BufReader;
 
-use crate::library::state::models::{Properties, Vegetation};
+use crate::library::state::models::{Vegetation};
 
 /// Read the cells from a file.
 /// :param file_path: The path to the file.
@@ -32,7 +32,7 @@ pub fn read_cells_properties(file_path: &str) -> Result<Vec<Properties>, std::io
         let aspect = line_parts[3].parse::<f32>().unwrap();
         let vegetation = line_parts[4].to_string();
         
-        let cell = Properties {
+        
             lon,
             lat,
             slope,
@@ -40,8 +40,7 @@ pub fn read_cells_properties(file_path: &str) -> Result<Vec<Properties>, std::io
             vegetation,
             ppf_summer: 1.0,
             ppf_winter: 1.0,
-        };
-        cells.push(cell);
+        
     }
     
     Result::Ok(cells)

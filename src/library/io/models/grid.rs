@@ -64,9 +64,9 @@ impl RegularGrid {
 
     pub fn project_to_grid(
         &self,
-        lats: &Vec<f32>,
-        lons: &Vec<f32>,
-        values: Vec<f32>,
+        lats: &[f32],
+        lons: &[f32],
+        values: &[f32],
         mode: &ClusterMode,
     ) -> Vec<f32> {
         let (nrows, ncols) = self.shape();
