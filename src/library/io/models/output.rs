@@ -13,7 +13,7 @@ pub struct OutputVariable {
 impl OutputVariable {
    pub fn get_variable_on_grid(&self, lats: &[f32], lons: &[f32], output: &Output, grid: &RegularGrid) -> Vec<f32>{
         let values = output.get(&self.internal_name);
-
+        let values = values.as_slice().unwrap();
         let values = grid.project_to_grid(&lats, &lons, values, &self.cluster_mode);
         // transform to desired number of decimal places precision
         let cutval = f32::powi(10.0, self.precision);

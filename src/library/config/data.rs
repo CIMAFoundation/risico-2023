@@ -1,27 +1,38 @@
+use std::rc::Rc;
 use std::{io::BufRead, collections::HashMap};
 use std::fs;
 use std::io::BufReader;
 
-use crate::library::state::models::{Vegetation};
+use crate::library::state::models::{Vegetation, Properties};
+
+use super::models::ConfigError;
 
 /// Read the cells from a file.
 /// :param file_path: The path to the file.
 /// :return: A list of cells.
-pub fn read_cells_properties(file_path: &str) -> Result<Vec<Properties>, std::io::Error> {
-     
-    let file = fs::File::open(file_path)?;        
-    let mut cells: Vec<Properties> = Vec::new();
+pub fn read_cells_properties(file_path: &str) 
+    -> Result<(
+        (Vec<f32>, Vec<f32>, Vec<f32>, Vec<f32>, Vec<String>)
+    ), ConfigError> {
+    let file = fs::File::open(file_path)
+        .map_err(|err| format!("can't open file: {err}."))?;
+
+    let mut lons: Vec<f32> = Vec::new();
+    let mut lats: Vec<f32> = Vec::new();
+    let mut slopes: Vec<f32> = Vec::new();
+    let mut aspects: Vec<f32> = Vec::new();
+    let mut vegetations: Vec<String> = Vec::new();
 
     let reader = BufReader::new(file);
     
     for line in reader.lines(){
-        let line = line?;
+        let line = line
+            .map_err(|err| format!("can't read from file: {err}."))?;
         let line_parts: Vec<&str> = line.trim().split(' ').collect();
         
         if line_parts.len() < 5 {
             let error_message = format!("Invalid line in file: {}", line);
-            let error = std::io::Error::new(std::io::ErrorKind::InvalidData, error_message);
-            return Err(error);
+            return Err(error_message.into());
         }
 
         //  [TODO] refactor this for using error handling
@@ -31,29 +42,31 @@ pub fn read_cells_properties(file_path: &str) -> Result<Vec<Properties>, std::io
         let slope = line_parts[2].parse::<f32>().unwrap();
         let aspect = line_parts[3].parse::<f32>().unwrap();
         let vegetation = line_parts[4].to_string();
-        
-        
-            lon,
-            lat,
-            slope,
-            aspect,
-            vegetation,
-            ppf_summer: 1.0,
-            ppf_winter: 1.0,
+        lons.push(lon);
+        lats.push(lat);
+        slopes.push(slope);
+        aspects.push(aspect);
+        vegetations.push(vegetation);
         
     }
-    
-    Result::Ok(cells)
+
+    Ok( 
+        (lats, lons, slopes, aspects, vegetations)
+    )
     
 }   
 
 /// Read the cells from a file.
 /// :param file_path: The path to the file.
 /// :return: A list of cells.
-pub fn read_vegetation(file_path: &str) -> Result<HashMap<String, Vegetation>, std::io::Error> {
+pub fn read_vegetation(file_path: &str) -> 
+    Result<
+        HashMap<String, Rc<Vegetation>>,
+        std::io::Error
+    > {
      
     let file = fs::File::open(file_path)?;        
-    let mut vegetations: HashMap<String, Vegetation> = HashMap::new();
+    let mut vegetations: HashMap<String, Rc<Vegetation>> = HashMap::new();
 
     let reader = BufReader::new(file);
     
@@ -87,7 +100,7 @@ pub fn read_vegetation(file_path: &str) -> Result<HashMap<String, Vegetation>, s
         
         let veg_id = id.clone();
         
-        let veg = Vegetation {
+        let veg = Rc::new(Vegetation {
             id,
             d0,
             d1,
@@ -97,7 +110,7 @@ pub fn read_vegetation(file_path: &str) -> Result<HashMap<String, Vegetation>, s
             T0,
             sat,
             name
-        };
+        });
         
         vegetations.insert(veg_id, veg);
     }

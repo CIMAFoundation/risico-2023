@@ -12,7 +12,7 @@ fn main() {
 
     let date = Utc.datetime_from_str("202102010000", "%Y%m%d%H%M").unwrap();
     let config = Config::new("/opt/risico/RISICOETHIOPIA/configuration.txt", Utc::now()).unwrap();
-    let state = config.new_state(date);
+    let mut state = config.new_state(date);
     let input_path = "/opt/risico/RISICOETHIOPIA/INPUT/input.txt";
 
     let elapsed = Utc::now().signed_duration_since(start_time).num_milliseconds();
@@ -32,9 +32,11 @@ fn main() {
 
     let timeline = handler.get_timeline();
 
-    let coords = state.coords();
-    let lats = coords.0;
-    let lons = coords.1;
+    // let coords = state.coords();
+    // let lats = coords.0.as_slice().unwrap();
+    // let lons = coords.1.as_slice().unwrap();
+    let lats = config.properties.lats.as_slice().unwrap();
+    let lons = config.properties.lons.as_slice().unwrap();
 
     for time in timeline {
         print!("{} ", time);
@@ -65,13 +67,14 @@ fn main() {
             ndwi: Array1::from_elem(lats.len(), 1.0),
         };
 
-        let new_state = state.update(&input, &time);
-        let state = new_state;
+        state.update(&input, &time);
         
+        let output = state.output(&input);
+
         let elapsed = Utc::now().signed_duration_since(start_time).num_milliseconds();
         println!("state updated in {} msec\n", elapsed);
 
-        match config.write_output(&state) {
+        match config.write_output(&output, lats, lons) {
             Ok(_) => (),
             Err(err) => println!("Error writing output: {}", err)
         };

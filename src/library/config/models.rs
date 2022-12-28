@@ -12,7 +12,7 @@ use chrono::{DateTime, Utc};
 use itertools::izip;
 use ndarray::Array1;
 
-use crate::library::{io::{readers::read_input_from_file, models::output::{OutputType, OutputVariable}}, state::{constants::NODATAVAL}};
+use crate::library::{io::{readers::read_input_from_file, models::output::{OutputType, OutputVariable}}, state::{constants::NODATAVAL, models::{Properties, Output}}};
 use crate::{
     library::{
         io::models::grid::{ClusterMode, Grid},
@@ -221,34 +221,52 @@ impl Config {
 
         let output_types = Self::parse_output_types(output_types_defs, variables_defs)?;
 
-        let mut cells = read_cells_properties(&cells_file)
+        let (lats, lons, slopes, aspects, vegetations) = read_cells_properties(&cells_file)
             .map_err(|error| format!("error reading {}, {error}", cells_file))?;
-        let vegetations = read_vegetation(&vegetation_file)
+
+        let n_cells = lons.len();
+        if n_cells != lats.len()
+            || n_cells != slopes.len()
+            || n_cells != aspects.len()
+            || n_cells != vegetations.len()
+        {
+            panic!("All properties must have the same length");
+        }
+        
+
+        let vegetations_dict = read_vegetation(&vegetation_file)
             .map_err(|error| format!("error reading {}, {error}", vegetation_file))?;
 
         let warm_state =
             read_warm_state(&warm_state_path, date)
-                .unwrap_or(vec![WarmState::default(); cells.len()]);
+                .unwrap_or(vec![WarmState::default(); n_cells]);
 
         let ppf = match ppf_file {
             Some(ppf_file) => read_ppf(&ppf_file)
                 .map_err(|error| format!("error reading {}, {}", &ppf_file, error))?,
-            None => vec![(1.0, 1.0); cells.len()],
+            None => vec![(1.0, 1.0); n_cells],
         };
+        let ppf_summer = ppf.iter().map(|(s, _)| *s).collect();
+        let ppf_winter = ppf.iter().map(|(_, w)| *w).collect();
 
-        // patch cell properties with ppf
-        for (cell, ppf) in cells.iter_mut().zip(ppf.iter()) {
-            cell.ppf_summer = (*ppf).0;
-            cell.ppf_winter = (*ppf).1;
-        }
+
+        let props = Properties::new(
+            lats,
+            lons,
+            slopes,
+            aspects,
+            vegetations, 
+            vegetations_dict,
+            ppf_summer,
+            ppf_winter,
+        );
+        
 
         let config = Config {
             model_name: model_name,
             warm_state_path: warm_state_path,
             warm_state,
-            cells_properties: cells,
-            ppf,
-            vegetations,
+            properties: props,
             outputs: output_types,
             use_temperature_effect: use_temperature_effect,
             use_ndvi: use_ndvi,
@@ -258,23 +276,21 @@ impl Config {
     }
 
     
-    // pub fn new_state(&self, date: DateTime<Utc>) -> State {
-    //     let cells = izip!(&self.cells_properties, &self.warm_state, &self.ppf)
-    //         .map(|(props, warm_state, ppf)| {
-    //             let veg = self.vegetations.get(&props.vegetation).unwrap();
-    //             Cell::new(&props, &warm_state, &veg)
-    //         })
-    //         .collect();
-        
-    //     State {
-    //         cells: cells,
-    //         time: date,
-    //     }
-    // }
+    pub fn new_state(&self, date: DateTime<Utc>) -> State {
+        let dffm = Array1::from_vec(self.warm_state.iter().map(|w| w.dffm).collect());
+
+        State {
+            props: &self.properties,
+            dffm,
+
+
+            time: date,
+        }
+    }
     
-    pub fn write_output(&self, state: &State) -> Result<(), ConfigError> {
-        for output in &self.outputs {
-            match output.write_variables(state) {
+    pub fn write_output(&self, output: &Output, lats: &[f32], lons: &[f32]) -> Result<(), ConfigError> {
+        for output_type in &self.outputs {
+            match output_type.write_variables(output, lats, lons) {
                 Ok(_) => (),
                 Err(e) => println!("Error writing output: {}", e)
             }
@@ -287,8 +303,8 @@ impl Config {
         let warm_state_name = format!("{}_{}", self.warm_state_path, date_string);
         let mut warm_state_file = File::create(&warm_state_name)
             .map_err(|error| format!("error creating {}, {}", &warm_state_name, error))?;
-        for cell in &state.cells {
-            let dffm = cell.state.dffm;
+        for idx in 0..state.props.lats.len() {
+            let dffm = state.dffm[idx];
             let NDSI = NODATAVAL; //cell.state.NDSI;
             let NDSI_TTL = NODATAVAL;  //cell.state.NDSI_TTL;
             let MSI = NODATAVAL;  //cell.state.MSI;
@@ -313,15 +329,13 @@ impl Config {
     }
 }
 
-#[derive(Debug, Default)]
+#[derive(Debug)]
 pub struct Config {
     pub model_name: String,
     pub warm_state_path: String,
 
     pub warm_state: Vec<WarmState>,
-    pub cells_properties: Vec<models::Properties>,
-    pub ppf: Vec<(f32, f32)>,
-    pub vegetations: HashMap<String, models::Vegetation>,
+    pub properties: Properties,
 
     pub outputs: Vec<OutputType>,
     pub use_temperature_effect: bool,
@@ -517,7 +531,7 @@ impl InputDataHandler {
 
         let grid = self.grid_registry.get(&lazy_file.grid_name).unwrap();
         izip!(lats, lons)
-            .map(|(lat, lon)| grid.get_value(data, *lat, *lon))
+            .map(|(lat, lon)| grid.index(lat, lon))
             .map(|index| data[index]).collect()       
     }
 

@@ -73,9 +73,9 @@ impl RegularGrid {
 
         let mut grid_values = vec![0.0; nrows * ncols];
         let mut count = vec![0; nrows * ncols];
-        izip!(lats, lons).enumerate().for_each(|(i, (lat, lon))| {
+        izip!(lats, lons, values).for_each(|(lat, lon, value)| {
             let idx = self.index(&lat, &lon);
-            grid_values[idx] += values[i];
+            grid_values[idx] += value;
             count[idx] += 1;
         });
         match mode {

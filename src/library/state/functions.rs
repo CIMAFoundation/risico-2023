@@ -167,18 +167,20 @@ pub fn index_from_swi(dffm: f32, SWI: f32) -> f32{
 }
 
 pub fn update_moisture(state: &State, input: &Input, dt: f32 ) -> Array1<f32>{
-	let dffm = state.dffm;
-	let d0 = state.d0;
-	let sat = state.sat;
-	let T0 = state.T0;
-	let snow_cover = state.snow_cover;
-	let temperature = input.temperature;
-	let humidity = input.humidity;
-	let wind_speed = input.wind_speed;
-	let rain = input.rain;
+	let dffm = &state.dffm;
+	let vegs = &state.props.vegetations;
+	let snow_cover = 0.0; //state.snow_cover;
+	let temperature = &input.temperature;
+	let humidity = &input.humidity;
+	let wind_speed = &input.wind_speed;
+	let rain = &input.rain;
 
-	let new_dffm = izip!(dffm, d0, sat, T0, snow_cover,  temperature, humidity, wind_speed, rain)
-		.map(|(dffm, d0, sat, T0, snow_cover,  temperature, humidity, wind_speed, rain)|{
+	
+	let new_dffm = izip!(dffm, vegs,  temperature, humidity, wind_speed, rain)
+		.map(|(dffm,  veg, temperature, humidity, wind_speed, rain)|{
+			let d0 = veg.d0;
+			let sat = veg.sat;
+			let T0 = veg.T0;
 			if d0 == NODATAVAL {
 				return	NODATAVAL
 			}
@@ -187,24 +189,24 @@ pub fn update_moisture(state: &State, input: &Input, dt: f32 ) -> Array1<f32>{
 				return sat;
 			}
 
-			if dffm == NODATAVAL || temperature == NODATAVAL || humidity == NODATAVAL{
-				return dffm;
+			if *dffm == NODATAVAL || *temperature == NODATAVAL || *humidity == NODATAVAL{
+				return *dffm;
 			}
 			
-			let T = if temperature > 0.0  { temperature }  else  {0.0};
+			let T = if *temperature > 0.0  { *temperature }  else  {0.0};
 			
-			let H = if humidity < 100.0 { humidity } else { 100.0 };
-			let W = if wind_speed != NODATAVAL { wind_speed } else { 0.0 };
-			let R = if rain != NODATAVAL { rain } else { 0.0 };
+			let H = if *humidity < 100.0 { *humidity } else { 100.0 };
+			let W = if *wind_speed != NODATAVAL { *wind_speed } else { 0.0 };
+			let R = if *rain != NODATAVAL { *rain } else { 0.0 };
 
 			//let dT = f32::max(1.0, f32::min(72.0, ((currentTime - previousTime) / 3600.0)));
 			//		float pdffm = dffm;
 			// modello per temperature superiori a 0 gradi Celsius
 			if R > MAXRAIN {
-				return update_dffm_rain(R, dffm, sat);
+				return update_dffm_rain(R, *dffm, sat);
 			}
 			
-			update_dffm_dry(dffm, sat, T, W, H, T0, dt)
+			update_dffm_dry(*dffm, sat, T, W, H, T0, dt)
 	
 	}).collect();
 	new_dffm
@@ -306,7 +308,8 @@ pub fn get_output(state: &State, input: &Input) -> Output{
 	// if dffm == NODATAVAL || temperature == NODATAVAL	{
 	// 	// return NODATAVAL;
 	// }
-	let len = state.lats.len();
+	let len = state.props.lats.len();
+
 
 	let mut w_effect = Array1::<f32>::zeros(len);
 	let mut V0 = Array1::<f32>::zeros(len);
@@ -315,16 +318,17 @@ pub fn get_output(state: &State, input: &Input) -> Output{
 	let mut V = Array1::<f32>::zeros(len);
 	let mut PPF = Array1::<f32>::zeros(len);
 	let mut I = Array1::<f32>::ones(len) * NAN;
+	
+	let vegs = &state.props.vegetations;
+	let snow_cover = 0.0;
 
 	azip!(( 
 			V0 in &mut V0, 
 			&dffm in &state.dffm, 
-			&v0 in &state.v0, 
-			&d0 in &state.d0, 
-			&d1 in &state.d1, 
-			&snow_cover in &state.snow_cover,
+			veg in vegs,
+			// &snow_cover in &state.snow_cover,
 		){
-		*V0 = get_v0(v0, d0, d1, dffm, snow_cover);
+		*V0 = get_v0(veg.v0, veg.d0, veg.d1, dffm, snow_cover);
 	});
 
 	azip!(( 
@@ -332,8 +336,8 @@ pub fn get_output(state: &State, input: &Input) -> Output{
 			slope_effect in &mut slope_effect,
 			&wind_dir in &input.wind_dir, 
 			&wind_speed in &input.wind_speed, 
-			&slope in &state.slope, 
-			&aspect in &state.aspect,
+			&slope in &state.props.slopes, 
+			&aspect in &state.props.aspects,
 		){
 		*w_effect = get_wind_effect(wind_speed, wind_dir, slope, aspect);
 		*slope_effect = get_slope_effect(slope);
@@ -350,8 +354,8 @@ pub fn get_output(state: &State, input: &Input) -> Output{
 	}
 	azip!((
 			ppf in &mut PPF,
-			&ppf_summer in &state.ppf_summer,
-			&ppf_winter in &state.ppf_winter,
+			&ppf_summer in &state.props.ppf_summer,
+			&ppf_winter in &state.props.ppf_winter,
 		){
 		*ppf = get_ppf(time, ppf_summer, ppf_winter);
 	});
@@ -366,19 +370,19 @@ pub fn get_output(state: &State, input: &Input) -> Output{
 		*V = get_v(V0, w_effect, slope_effect, t_effect);
 	});
 
-	Output {
-		temperature: input.temperature,
-		rain: input.rain,
-		humidity: input.humidity,
-		wind_dir: input.wind_dir,
-		wind_speed: input.wind_speed,
-		dffm: state.dffm,
-		snow_cover: state.snow_cover,
-		t_effect: t_effect,
-		W: w_effect,
-		V: V,
-		I: I,
-		PPF: PPF,
-		time: time.clone(),
-	}
+	Output::new(
+		time.clone(),
+		input.temperature.clone(),
+		input.rain.clone(),
+		input.humidity.clone(),
+		input.wind_dir.clone(),
+		input.wind_speed.clone(),
+		state.dffm.clone(),
+		// snow_cover: state.snow_cover,
+		t_effect,
+		w_effect,
+		V,
+		I,
+		PPF,		
+	)
 }
