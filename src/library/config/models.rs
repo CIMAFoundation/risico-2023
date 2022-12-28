@@ -275,15 +275,15 @@ impl Config {
         Ok(config)
     }
 
+    pub fn get_properties(&self) -> &Properties {
+        &self.properties
+    }
     
     pub fn new_state(&self, date: DateTime<Utc>) -> State {
         let dffm = Array1::from_vec(self.warm_state.iter().map(|w| w.dffm).collect());
 
         State {
-            props: &self.properties,
             dffm,
-
-
             time: date,
         }
     }
@@ -303,7 +303,7 @@ impl Config {
         let warm_state_name = format!("{}_{}", self.warm_state_path, date_string);
         let mut warm_state_file = File::create(&warm_state_name)
             .map_err(|error| format!("error creating {}, {}", &warm_state_name, error))?;
-        for idx in 0..state.props.lats.len() {
+        for idx in 0..state.dffm.len() {
             let dffm = state.dffm[idx];
             let NDSI = NODATAVAL; //cell.state.NDSI;
             let NDSI_TTL = NODATAVAL;  //cell.state.NDSI_TTL;

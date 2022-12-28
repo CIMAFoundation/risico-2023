@@ -176,19 +176,19 @@ pub struct Input {
 }
 
 #[derive(Debug)]
-pub struct State<'a> {
+pub struct State {
     pub time: DateTime<Utc>,
-    pub props: &'a Properties ,
+    // pub props: &'a Properties ,
 
     // state
     pub dffm: Array1<f32>,
     // pub snow_cover: Array1<f32>,
 }
 
-impl<'a> State<'a> {
+impl State {
     /// Create a new state.
     pub fn new(
-        props: &Properties,
+        // props: &Properties,
         // state
         dffm: Array1<f32>,
         snow_cover: Array1<f32>,
@@ -197,25 +197,22 @@ impl<'a> State<'a> {
     ) -> State {
         State {
             time,
-            props,            
+            // props,            
             dffm,
             // snow_cover,
         }
     }
 
     /// Update the state of the cells.
-    pub fn update(&mut self, input: &Input, new_time: &DateTime<Utc>) {
+    pub fn update(&mut self, props: &Properties, input: &Input, new_time: &DateTime<Utc>) {
         let dt = 3600.0;
-        let new_dffm = update_moisture(self, input, dt);
+        let new_dffm = update_moisture(self, props, input, dt);
 
         self.dffm = new_dffm;
     }
 
-    pub fn output(&self, input: &Input) -> Output {
-        get_output(self, input)
+    pub fn output(&self, props: &Properties, input: &Input) -> Output {
+        get_output(self, props, input)
     }
 
-    pub fn coords(&self) -> (&Array1<f32>, &Array1<f32>) {
-        (&self.props.lats, &self.props.lons)
-    }
 }

@@ -12,6 +12,7 @@ fn main() {
 
     let date = Utc.datetime_from_str("202102010000", "%Y%m%d%H%M").unwrap();
     let config = Config::new("/opt/risico/RISICOETHIOPIA/configuration.txt", Utc::now()).unwrap();
+    let props = config.get_properties();
     let mut state = config.new_state(date);
     let input_path = "/opt/risico/RISICOETHIOPIA/INPUT/input.txt";
 
@@ -67,9 +68,9 @@ fn main() {
             ndwi: Array1::from_elem(lats.len(), 1.0),
         };
 
-        state.update(&input, &time);
+        state.update(props, &input, &time);
         
-        let output = state.output(&input);
+        let output = state.output(props, &input);
 
         let elapsed = Utc::now().signed_duration_since(start_time).num_milliseconds();
         println!("state updated in {} msec\n", elapsed);

@@ -6,7 +6,7 @@ use ndarray::{azip};
 use chrono::{DateTime, Utc, Datelike};
 use itertools::izip;
 use ndarray::Array1;
-use super::{constants::*, models::{ Input, Output, State}};
+use super::{constants::*, models::{ Input, Output, State, Properties}};
 
 
 pub fn get_ffm(ffm: f32) -> f32 {
@@ -166,9 +166,9 @@ pub fn index_from_swi(dffm: f32, SWI: f32) -> f32{
 
 }
 
-pub fn update_moisture(state: &State, input: &Input, dt: f32 ) -> Array1<f32>{
+pub fn update_moisture(state: &State, props: &Properties, input: &Input, dt: f32 ) -> Array1<f32>{
 	let dffm = &state.dffm;
-	let vegs = &state.props.vegetations;
+	let vegs = &props.vegetations;
 	let snow_cover = 0.0; //state.snow_cover;
 	let temperature = &input.temperature;
 	let humidity = &input.humidity;
@@ -303,12 +303,12 @@ pub fn update_moisture(state: &State, input: &Input, dt: f32 ) -> Array1<f32>{
 // }
 
 
-pub fn get_output(state: &State, input: &Input) -> Output{
+pub fn get_output(state: &State, props:&Properties, input: &Input) -> Output{
 	let time = &state.time;
 	// if dffm == NODATAVAL || temperature == NODATAVAL	{
 	// 	// return NODATAVAL;
 	// }
-	let len = state.props.lats.len();
+	let len = props.lats.len();
 
 
 	let mut w_effect = Array1::<f32>::zeros(len);
@@ -319,7 +319,7 @@ pub fn get_output(state: &State, input: &Input) -> Output{
 	let mut PPF = Array1::<f32>::zeros(len);
 	let mut I = Array1::<f32>::ones(len) * NAN;
 	
-	let vegs = &state.props.vegetations;
+	let vegs = &props.vegetations;
 	let snow_cover = 0.0;
 
 	azip!(( 
@@ -336,8 +336,8 @@ pub fn get_output(state: &State, input: &Input) -> Output{
 			slope_effect in &mut slope_effect,
 			&wind_dir in &input.wind_dir, 
 			&wind_speed in &input.wind_speed, 
-			&slope in &state.props.slopes, 
-			&aspect in &state.props.aspects,
+			&slope in &props.slopes, 
+			&aspect in &props.aspects,
 		){
 		*w_effect = get_wind_effect(wind_speed, wind_dir, slope, aspect);
 		*slope_effect = get_slope_effect(slope);
@@ -354,8 +354,8 @@ pub fn get_output(state: &State, input: &Input) -> Output{
 	}
 	azip!((
 			ppf in &mut PPF,
-			&ppf_summer in &state.props.ppf_summer,
-			&ppf_winter in &state.props.ppf_winter,
+			&ppf_summer in &props.ppf_summer,
+			&ppf_winter in &props.ppf_winter,
 		){
 		*ppf = get_ppf(time, ppf_summer, ppf_winter);
 	});
