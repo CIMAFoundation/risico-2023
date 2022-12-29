@@ -13,7 +13,7 @@ use itertools::izip;
 
 use ndarray::Array1;
 
-use crate::library::{io::{readers::read_input_from_file, models::output::{OutputType, OutputVariable}}, state::{constants::NODATAVAL, models::{Properties, Output}}};
+use crate::library::{io::{readers::read_input_from_file, models::output::{OutputType, OutputVariable}}, state::models::{Output, Properties}};
 use crate::{
     library::{
         io::models::grid::{ClusterMode, Grid},
@@ -238,9 +238,11 @@ impl Config {
         let vegetations_dict = read_vegetation(&vegetation_file)
             .map_err(|error| format!("error reading {}, {error}", vegetation_file))?;
 
-        let warm_state =
+        let (warm_state, warm_state_time) =
             read_warm_state(&warm_state_path, date)
-                .unwrap_or(vec![WarmState::default(); n_cells]);
+                .unwrap_or(
+                    (vec![WarmState::default(); n_cells], date.clone() - Duration::days(1))
+                );
 
         let ppf = match ppf_file {
             Some(ppf_file) => read_ppf(&ppf_file)
@@ -267,6 +269,7 @@ impl Config {
             model_name: model_name,
             warm_state_path: warm_state_path,
             warm_state,
+            warm_state_time,
             properties: props,
             outputs: output_types,
             use_temperature_effect: use_temperature_effect,
@@ -280,15 +283,8 @@ impl Config {
         &self.properties
     }
     
-    pub fn new_state(&self, date: DateTime<Utc>) -> State {
-        let dffm = Array1::from_vec(self.warm_state.iter().map(|w| w.dffm).collect());
-        let snow_cover = Array1::zeros(dffm.len());
-
-        State {
-            dffm,
-            snow_cover,
-            time: date,
-        }
+    pub fn new_state(&self) -> State {
+        State::new(&self.warm_state, &self.warm_state_time)
     }
     
     pub fn write_output(&self, output: &Output, lats: &[f32], lons: &[f32]) -> Result<(), ConfigError> {
@@ -301,6 +297,7 @@ impl Config {
         Ok(())
     }
 
+    #[allow(non_snake_case)]
     pub fn write_warm_state(&self, state: &State) -> Result<(), ConfigError> {
         let date_string = state.time.format("%Y%m%d%H%M").to_string();
         let warm_state_name = format!("{}_{}", self.warm_state_path, date_string);
@@ -308,26 +305,19 @@ impl Config {
             .map_err(|error| format!("error creating {}, {}", &warm_state_name, error))?;
         for idx in 0..state.dffm.len() {
             let dffm = state.dffm[idx];
-            #[allow(non_snake_case)]
-            let NDSI = NODATAVAL; //cell.state.NDSI;
-            #[allow(non_snake_case)]
-            let NDSI_TTL = NODATAVAL;  //cell.state.NDSI_TTL;
-            #[allow(non_snake_case)]
-            let MSI = NODATAVAL;  //cell.state.MSI;
-            #[allow(non_snake_case)]
-            let MSI_TTL = NODATAVAL;  //cell.state.MSI_TTL;
-            #[allow(non_snake_case)]
-            let NDVI = NODATAVAL;  //cell.state.NDVI;
-            #[allow(non_snake_case)]
-            let NDVI_TIME = NODATAVAL;  //cell.state.NDVI_TIME;
-            #[allow(non_snake_case)]
-            let NDWI = NODATAVAL;  //cell.state.NDWI;
-            #[allow(non_snake_case)]
-            let NDWI_TTL = NODATAVAL;  //cell.state.NDWI_TTL;
+            
+            let NDSI = state.NDSI[idx]; //cell.state.NDSI;
+            let NDSI_TTL = state.NDSI_TTL[idx];  //cell.state.NDSI_TTL;
+            let MSI = state.MSI[idx];  //cell.state.MSI;
+            let MSI_TTL = state.MSI_TTL[idx];  //cell.state.MSI_TTL;
+            let NDVI = state.NDVI[idx];  //cell.state.NDVI;
+            let NDVI_TIME = state.NDVI_TIME[idx];  //cell.state.NDVI_TIME;
+            let NDWI = state.NDWI[idx];  //cell.state.NDWI;
+            let NDWI_TIME = state.NDWI_TIME[idx];  //cell.state.NDWI_TTL;
 
             let line = format!(
                 "{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}",
-                dffm, NDSI, NDSI_TTL, MSI, MSI_TTL, NDVI, NDVI_TIME, NDWI, NDWI_TTL
+                dffm, NDSI, NDSI_TTL, MSI, MSI_TTL, NDVI, NDVI_TIME, NDWI, NDWI_TIME
             );
             writeln!(warm_state_file, "{}", line).map_err(|error| {
                 format!(
@@ -346,6 +336,7 @@ pub struct Config {
     pub warm_state_path: String,
 
     pub warm_state: Vec<WarmState>,
+    pub warm_state_time: DateTime<Utc>,
     pub properties: Properties,
 
     pub outputs: Vec<OutputType>,
@@ -528,22 +519,29 @@ impl InputDataHandler {
             date: &DateTime<Utc>, 
             lats: &[f32], 
             lons: &[f32]) 
-            -> Array1<f32> {
-        let data_map = self
+            -> Option<Array1<f32>> {
+        let data_map = match self
             .data_map
-            .get(date)
-            .expect(&format!("No data for date {date}"));
-        let lazy_file = data_map
-            .get(var)
-            .expect(&format!("No data for variable {var}"));
+            .get(date){
+                Some(data_map) => data_map,
+                None => return None,
+            };
+            
+        let lazy_file = match data_map
+            .get(var) {
+                Some(lazy_file) => lazy_file,
+                None => return None,
+            };
+            
 
         let data = &lazy_file.data;
         let data = data.as_ref().unwrap();
 
         let grid = self.grid_registry.get(&lazy_file.grid_name).unwrap();
-        izip!(lats, lons)
+        let data = izip!(lats, lons)
             .map(|(lat, lon)| grid.index(lat, lon))
-            .map(|index| data[index]).collect()       
+            .map(|index| data[index]).collect();
+        Some(data)
     }
 
     /// Returns the timeline
@@ -583,20 +581,23 @@ pub struct WarmState {
     pub NDWI_TIME: f32,
 }
 
+#[allow(non_snake_case)]
 /// Reads the warm state from the file
 /// The warm state is stored in a file with the following structure:
 /// <base_warm_file>_<YYYYmmDDHHMM>
 /// where <base_warm_file> is the base name of the file and <YYYYmmDDHHMM> is the date of the warm state
 /// The warm state is stored in a text file with the following structure:
 /// dffm
-fn read_warm_state(base_warm_file: &str, date: DateTime<Utc>) -> Option<Vec<WarmState>> {
+fn read_warm_state(base_warm_file: &str, date: DateTime<Utc>) -> Option<(Vec<WarmState>, DateTime<Utc>)> {
     // for the last n days before date, try to read the warm state
     // compose the filename as <base_warm_file>_<YYYYmmDDHHMM>
     let mut file: Option<File> = None;
 
-    for days_before in 0..5 {
-        let mut current_date = date.clone();
-        current_date = current_date - Duration::days(days_before);
+    let mut current_date = date.clone();
+
+    for days_before in 0..5 {     
+        current_date = date.clone() - Duration::days(days_before);   
+        
         let filename = format!("{}_{}", base_warm_file, current_date.format("%Y%m%d%H%M"));
 
         let file_handle = File::open(filename);
@@ -618,7 +619,7 @@ fn read_warm_state(base_warm_file: &str, date: DateTime<Utc>) -> Option<Vec<Warm
     let mut warm_state: Vec<WarmState> = Vec::new();
     let file = file.unwrap();
     let reader = io::BufReader::new(file);
-    #[allow(non_snake_case)]
+    
     for line in reader.lines() {
         let line = line.unwrap();
         let components: Vec<&str> = line.split_whitespace().collect();
@@ -648,7 +649,7 @@ fn read_warm_state(base_warm_file: &str, date: DateTime<Utc>) -> Option<Vec<Warm
             NDWI_TIME,
         });
     }
-    Some(warm_state)
+    Some((warm_state, current_date))
 }
 
 /// Reads the PPF file and returns a vector of with (ppf_summer, ppf_winter) tuples

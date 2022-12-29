@@ -3,7 +3,7 @@ use std::{collections::HashMap, rc::Rc, f32::NAN};
 use chrono::prelude::*;
 use ndarray::{azip, Array1};
 
-use crate::library::state::{functions::{get_v0, get_wind_effect, get_slope_effect, get_t_effect, get_ppf, get_v, update_dffm_rain, update_dffm_dry, get_lhv_dff, get_lhv_l1, get_intensity}, constants::{NODATAVAL, SNOW_COVER_THRESHOLD, MAXRAIN}};
+use crate::library::{state::{functions::{get_v0, get_wind_effect, get_slope_effect, get_t_effect, get_ppf, get_v, update_dffm_rain, update_dffm_dry, get_lhv_dff, get_lhv_l1, get_intensity}, constants::{NODATAVAL, SNOW_COVER_THRESHOLD, MAXRAIN}}, config::models::WarmState};
 
 
 
@@ -176,11 +176,17 @@ pub struct Input {
     pub wind_dir: Array1<f32>,
     pub humidity: Array1<f32>,
     pub snow_cover: Array1<f32>,
+    // satellite variables
+    //[TODO] refactor this!!!
     pub ndvi: Array1<f32>,
     pub ndwi: Array1<f32>,
+    pub ndsi: Array1<f32>,
+    pub msi: Array1<f32>,
+    pub swi: Array1<f32>,
 }
 
 #[derive(Debug)]
+#[allow(non_snake_case)]
 pub struct State {
     pub time: DateTime<Utc>,
     // pub props: &'a Properties ,
@@ -188,28 +194,145 @@ pub struct State {
     // state
     pub dffm: Array1<f32>,
     pub snow_cover: Array1<f32>,
+
+    pub NDSI:  Array1<f32>,
+    pub NDSI_TTL: Array1<f32>,
+    pub MSI: Array1<f32>,
+    pub MSI_TTL: Array1<f32>,
+    pub NDVI: Array1<f32>,
+    pub NDVI_TIME: Array1<f32>,
+    pub NDWI: Array1<f32>,
+    pub NDWI_TIME: Array1<f32>,
+
 }
 
 impl State {
-    #[allow(dead_code)]
+    #[allow(dead_code, non_snake_case)]
     /// Create a new state.
     pub fn new(
-        // props: &Properties,
-        // state
-        dffm: Array1<f32>,
-        snow_cover: Array1<f32>,
-
-        time: DateTime<Utc>,
+        warm_state: &Vec<WarmState>,
+        time: &DateTime<Utc>,
     ) -> State {
+        let dffm = Array1::from_vec(warm_state.iter().map(|w| w.dffm).collect());
+        let NDSI = Array1::from_vec(warm_state.iter().map(|w| w.NDSI).collect());
+        let NDSI_TTL = Array1::from_vec(warm_state.iter().map(|w| w.NDSI_TTL).collect());
+        let MSI = Array1::from_vec(warm_state.iter().map(|w| w.MSI).collect());
+        let MSI_TTL = Array1::from_vec(warm_state.iter().map(|w| w.MSI_TTL).collect());
+        let NDVI = Array1::from_vec(warm_state.iter().map(|w| w.NDVI).collect());
+        let NDVI_TIME = Array1::from_vec(warm_state.iter().map(|w| w.NDVI_TIME).collect());
+        let NDWI = Array1::from_vec(warm_state.iter().map(|w| w.NDWI).collect());
+        let NDWI_TIME = Array1::from_vec(warm_state.iter().map(|w| w.NDWI_TIME).collect());
+        let snow_cover = Array1::zeros(warm_state.len());
         State {
-            time,
+            time: time.clone(),
             // props,
             dffm,
+            NDSI_TTL,
+            NDSI,
+            MSI_TTL,
+            MSI,
+            NDVI,
+            NDVI_TIME,
+            NDWI,
+            NDWI_TIME,
             snow_cover,
         }
     }
 
-    fn update_moisture(self: &mut State, props: &Properties, input: &Input, dt: f32) {
+    fn update_snow_cover(&mut self, input: &Input) {
+        azip!((
+            snow_cover in &mut self.snow_cover,
+            ndsi in &self.NDSI,
+            i_snow_cover in &input.snow_cover,
+        ){
+            *snow_cover = *i_snow_cover;
+            if *ndsi != NODATAVAL {
+                *snow_cover = 1.0;
+            }
+        });
+    }
+
+    fn update_satellite(&mut self, input: &Input) {
+        azip!((
+            ndsi in &mut self.NDSI,
+            ndsi_ttl in &mut self.NDSI_TTL,
+            i_ndsi in &input.ndsi,            
+        ){
+            if *i_ndsi < 0.0 {
+                if *ndsi_ttl > 0.0 {
+                    *ndsi_ttl -= 1.0;
+                } else {
+                    *ndsi = NODATAVAL;                    
+                }
+            } else {
+                *ndsi = *i_ndsi;
+                *ndsi_ttl = 56.0;
+            }
+        });
+        azip!((
+            msi in &mut self.MSI,
+            msi_ttl in &mut self.MSI_TTL,
+            i_msi in &input.msi,            
+        ){
+            if *i_msi < 0.0 || *i_msi > 1.0 {
+                if *msi_ttl > 0.0 {
+                    *msi_ttl -= 1.0;
+                } else {
+                    *msi = NODATAVAL;                    
+                }
+            } else {
+                *msi = *i_msi;
+                *msi_ttl = 56.0;
+            }
+        });
+        
+        azip!((
+            ndvi in &mut self.NDVI,
+            ndvi_time in &mut self.NDVI_TIME,
+            i_ndvi in &input.ndvi,            
+        ){
+            if *i_ndvi < 0.0 || *i_ndvi > 1.0 {
+                let time_diff = input.time.timestamp() - *ndvi_time as i64;
+                if time_diff > 240 * 3600 {
+                    *ndvi = NODATAVAL;                    
+                }
+            } else {
+                if *i_ndvi<0.0 || *i_ndvi>1.0 {
+                    *ndvi = NODATAVAL;
+                } else {                    
+                    *ndvi = *i_ndvi;
+                    *ndvi_time = input.time.timestamp() as f32;
+                }
+            }
+        });
+
+        
+        azip!((
+            ndwi in &mut self.NDWI,
+            ndwi_time in &mut self.NDWI_TIME,
+            i_ndwi in &input.ndwi,            
+        ){
+            if *i_ndwi < 0.0 || *i_ndwi > 1.0 {
+                let time_diff = input.time.timestamp() - *ndwi_time as i64;
+                if time_diff > 240 * 3600 {
+                    *ndwi = NODATAVAL;
+                }
+            } else {
+                if *i_ndwi<0.0 || *i_ndwi>1.0 {
+                    *ndwi = NODATAVAL;
+                } else {                    
+                    *ndwi = *i_ndwi;
+                    *ndwi_time = input.time.timestamp() as f32;
+                }
+            }
+        });
+
+    
+
+    }
+
+    #[allow(non_snake_case)]
+    fn update_moisture(&mut self, props: &Properties, input: &Input, dt: f32) {
         // let dffm = state.dffm;
         // let vegs = props.vegetations;
         let snow_cover = 0.0; //state.snow_cover;
@@ -228,7 +351,7 @@ impl State {
             ){
                 let d0 = veg.d0;
                 let sat = veg.sat;
-                #[allow(non_snake_case)]
+                
                 let T0 = veg.T0;
                 if d0 == NODATAVAL {
                     *dffm =	NODATAVAL;
@@ -331,6 +454,8 @@ impl State {
             I in &mut I,
             &V in &V,
             &dffm in &self.dffm,
+            &msi in &self.MSI,
+            &ndvi in &self.NDVI,
             veg in &props.vegetations,
             ){
 
@@ -339,11 +464,11 @@ impl State {
             }else{
 				let LHVdff = get_lhv_dff(veg.hhv, dffm);
 				// calcolo LHV per la vegetazione viva
-				let MSI = NODATAVAL;
-				let LHVl1 = get_lhv_l1(veg.umid, MSI, veg.hhv);
-				// Calcolo Intensità
-				let NDVI = NODATAVAL;
-				*I = get_intensity(veg.d0, veg.d1, V, NDVI, LHVdff, LHVl1);
+				
+				let LHVl1 = get_lhv_l1(veg.umid, msi, veg.hhv);
+                // Calcolo Intensità
+				
+				*I = get_intensity(veg.d0, veg.d1, V, ndvi, LHVdff, LHVl1);
 			}
 
         });
@@ -370,6 +495,8 @@ impl State {
     pub fn update(&mut self, props: &Properties, input: &Input, new_time: &DateTime<Utc>) {
         let dt = new_time.signed_duration_since(self.time).num_seconds() as f32 / 3600.0;
         self.time = new_time.clone();
+        self.update_satellite(input);
+        self.update_snow_cover(input);
         self.update_moisture(props, input, dt);
     }
 
