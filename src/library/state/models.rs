@@ -3,7 +3,7 @@ use std::{collections::HashMap, rc::Rc, f32::NAN};
 use chrono::prelude::*;
 use ndarray::{azip, Array1};
 
-use crate::library::state::{functions::{get_v0, get_wind_effect, get_slope_effect, get_t_effect, get_ppf, get_v, update_dffm_rain, update_dffm_dry}, constants::{NODATAVAL, SNOW_COVER_THRESHOLD, MAXRAIN}};
+use crate::library::state::{functions::{get_v0, get_wind_effect, get_slope_effect, get_t_effect, get_ppf, get_v, update_dffm_rain, update_dffm_dry, get_lhv_dff, get_lhv_l1, get_intensity}, constants::{NODATAVAL, SNOW_COVER_THRESHOLD, MAXRAIN}};
 
 
 
@@ -267,6 +267,7 @@ impl State {
         // }
         let len = props.lats.len();
 
+        
         let mut w_effect = Array1::<f32>::zeros(len);
         let mut V0 = Array1::<f32>::zeros(len);
         let mut t_effect = Array1::<f32>::ones(len);
@@ -325,6 +326,28 @@ impl State {
             ){
             *V = get_v(V0, w_effect, slope_effect, t_effect);
         });
+
+        azip!((
+            I in &mut I,
+            &V in &V,
+            &dffm in &self.dffm,
+            veg in &props.vegetations,
+            ){
+
+            if veg.hhv == NODATAVAL || dffm == NODATAVAL {
+                *I = NODATAVAL;
+            }else{
+				let LHVdff = get_lhv_dff(veg.hhv, dffm);
+				// calcolo LHV per la vegetazione viva
+				let MSI = NODATAVAL;
+				let LHVl1 = get_lhv_l1(veg.umid, MSI, veg.hhv);
+				// Calcolo Intensità
+				let NDVI = NODATAVAL;
+				*I = get_intensity(veg.d0, veg.d1, V, NDVI, LHVdff, LHVl1);
+			}
+
+        });
+
 
         Output::new(
             time.clone(),
