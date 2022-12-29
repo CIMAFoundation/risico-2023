@@ -140,8 +140,8 @@ impl RegularGrid {
 
 impl Grid for RegularGrid {
     fn index(&self, lat: &f32, lon: &f32) -> usize {
-        let i = ((lat - self.min_lat) / self.step_lat) as usize;
-        let j = ((lon - self.min_lon) / self.step_lon) as usize;
+        let i = ((lat - self.min_lat) / self.step_lat).round() as usize;
+        let j = ((lon - self.min_lon) / self.step_lon).round() as usize;
         i * self.ncols + j
     }
 
