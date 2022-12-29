@@ -11,16 +11,20 @@ use crate::library::{
     state::models::Input,
 };
 
-fn maybe_replace(dst: &mut Array1<f32>, src: &Option<Array1<f32>>) {   
-    match src {
-        Some(src) => azip!((
+fn replace(dst: &mut Array1<f32>, src: &Array1<f32>) {   
+    azip!((
             dst in dst,
             src in src,
         ) {
             if *src > -9998.0 {
                 *dst = *src;
             }
-        }),
+        })
+}
+
+fn maybe_replace(dst: &mut Array1<f32>, src: &Option<Array1<f32>>) {   
+    match src {
+        Some(src) => replace(dst, src),
         None => (),
     }
 }
@@ -43,9 +47,9 @@ fn get_input(
     let mut swi: Array1<f32> = Array1::ones(lats.len()) * NODATAVAL;
     let mut msi: Array1<f32> = Array1::ones(lats.len()) * NODATAVAL;
 
-    let maybe_snow = handler.get_values("SNOW", &time, lats, lons);
+    let snow = handler.get_values("SNOW", &time, lats, lons);
     
-    maybe_replace(&mut snow_cover, &maybe_snow);
+    maybe_replace(&mut snow_cover, &snow);
 
     // Observed relative humidity
     let h = handler.get_values("F", &time, lats, lons);
@@ -64,15 +68,6 @@ fn get_input(
     let t = handler.get_values("T", &time, lats, lons);
     maybe_replace(&mut temperature, &t);
 
-
-    // wind speed
-    let mut ws = handler.get_values("W", &time, lats, lons);
-    // wind direction
-    let wd = handler.get_values("D", &time, lats, lons);
-
-    let u = handler.get_values("U", &time, lats, lons);
-    let v = handler.get_values("V", &time, lats, lons);
-
     // Observed precipitation
     let op = handler.get_values("O", &time, lats, lons);
     maybe_replace(&mut precipitation, &op);
@@ -80,46 +75,70 @@ fn get_input(
     let fp = handler.get_values("P", &time, lats, lons);
     maybe_replace(&mut precipitation, &fp);
 
-    let wind_speed = match ws {
-        Some(ws) => ws.mapv(|_ws| {
-            if _ws > -9998.0 {
-                _ws * 3600.0
-            } else {
-                NODATAVAL
-            }
-        }),
-        None => {
-            let u = u.clone().unwrap();
-            let v = v.clone().unwrap();
-            (u.mapv(|_u| _u.powi(2)) + v.mapv(|_v| _v.powi(2))).mapv(f32::sqrt) * 3600.0
-        }
-    };
-    let wind_dir = match wd {
-        Some(wd) => wd.mapv(|_wd| {
+    // wind speed
+    let ws = handler.get_values("W", &time, lats, lons);
+    // wind direction
+    let wd = handler.get_values("D", &time, lats, lons);
+
+    let u = handler.get_values("U", &time, lats, lons);
+    let v = handler.get_values("V", &time, lats, lons);
+
+    if ws.is_some() {
+        let ws = ws
+            .expect("should be some")
+            .mapv(|_ws| if _ws > -9998.0 {_ws * 3600.0} else {NODATAVAL});
+        replace(&mut wind_speed, &ws);
+    }
+
+    if wd.is_some() {
+        let wd = wd
+            .expect("should be some")
+            .mapv(|_wd| {
             let mut _wd = _wd / 180.0 * PI;
             if _wd < 0.0 {
                 _wd += PI * 2.0;
             }
             _wd
-        }),
-        None => {
-            let u = u.unwrap();
-            let v = v.unwrap();
+        });
+        replace(&mut wind_dir, &wd);
+    }
+    
+    if u.is_some() && v.is_some() { 
+        let u = u.expect("should be some");
+        let v = v.expect("should be some");
 
-            izip!(u, v)
-                .map(|(_u, _v)| {
-                    if _u < -9998.0 || _v < -9998.0 {
-                        return NODATAVAL;
-                    }
-                    let mut wd = f32::atan2(_u, _v);
-                    if wd < 0.0 {
-                        wd = wd + PI * 2.0;
-                    }
-                    wd
-                })
-                .collect::<Array1<f32>>()
-        }
-    };
+        let wd = izip!(&u, &v)
+            .map(|(_u, _v)| {
+                if *_u < -9998.0 || *_v < -9998.0 {
+                    return NODATAVAL;
+                }
+                let mut wd = f32::atan2(*_u, *_v);
+                
+                if wd < 0.0 {
+                    wd = wd + PI * 2.0;
+                }
+                wd
+            })
+            .collect::<Array1<f32>>();
+
+        let ws = izip!(&u, &v)
+            .map(|(_u, _v)| {
+                if *_u < -9998.0 || *_v < -9998.0 {
+                    return NODATAVAL;
+                }
+                
+                let ws = f32::sqrt(_u * _u + _v * _v) * 3600.0;
+                ws
+            })
+            .collect::<Array1<f32>>();
+
+        replace(&mut wind_dir, &wd);
+        replace(&mut wind_speed, &ws);
+    
+    }
+
+    let _swi = handler.get_values("SWI", &time, lats, lons);
+    maybe_replace(&mut swi, &_swi);    
 
     let _ndsi = handler.get_values("N", &time, lats, lons);
     maybe_replace(&mut ndsi, &_ndsi);
