@@ -7,6 +7,33 @@ use ndarray::Array1;
 
 use crate::library::{config::models::{Config, InputDataHandler}, state::models::Input};
 
+fn get_input(handler: &InputDataHandler, lats: &[f32], lons: &[f32], time: &DateTime<Utc>) -> Input {
+        let t = handler.get_values("T", &time, lats, lons) -273.15;
+        let u = handler.get_values("U", &time, lats, lons);
+        let v = handler.get_values("V", &time, lats, lons);
+        let p = handler.get_values("P", &time, lats, lons);
+        let h = handler.get_values("H", &time, lats, lons);
+
+        let wind_speed = 
+            (u.mapv(|_u| _u.powi(2)) + v.mapv(|_v| _v.powi(2)))
+            .mapv(f32::sqrt) * 3600.0;
+        
+        let wind_dir = izip!(u,v).map(|(_u, _v)| f32::atan2(_u, _v)).collect::<Array1<f32>>();
+
+        Input {
+            time: time.to_owned(),
+            temperature: t,
+            wind_speed: wind_speed,
+            wind_dir: wind_dir,
+            humidity: h,
+            rain: p,
+            snow_cover: Array1::from_elem(lats.len(), 0.0),
+            ndvi: Array1::from_elem(lats.len(), 1.0),
+            ndwi: Array1::from_elem(lats.len(), 1.0),
+        }
+
+}
+
 fn main() {
     let start_time = Utc::now();
 
@@ -33,9 +60,6 @@ fn main() {
 
     let timeline = handler.get_timeline();
 
-    // let coords = state.coords();
-    // let lats = coords.0.as_slice().unwrap();
-    // let lons = coords.1.as_slice().unwrap();
     let lats = config.properties.lats.as_slice().unwrap();
     let lons = config.properties.lons.as_slice().unwrap();
 
@@ -44,29 +68,7 @@ fn main() {
         let start_time = Utc::now();
         handler.load_data(&time, lats, lons);
         
-        let t = handler.get_values("T", &time, lats, lons) -273.15;
-        let u = handler.get_values("U", &time, lats, lons);
-        let v = handler.get_values("V", &time, lats, lons);
-        let p = handler.get_values("P", &time, lats, lons);
-        let h = handler.get_values("H", &time, lats, lons);
-
-        let wind_speed = 
-            (u.mapv(|_u| _u.powi(2)) + v.mapv(|_v| _v.powi(2)))
-            .mapv(f32::sqrt) * 3600.0;
-        
-        let wind_dir = izip!(u,v).map(|(_u, _v)| f32::atan2(_u, _v)).collect::<Array1<f32>>();
-
-        let input = Input {
-            time: time,
-            temperature: t,
-            wind_speed: wind_speed,
-            wind_dir: wind_dir,
-            humidity: h,
-            rain: p,
-            snow_cover: Array1::from_elem(lats.len(), 0.0),
-            ndvi: Array1::from_elem(lats.len(), 1.0),
-            ndwi: Array1::from_elem(lats.len(), 1.0),
-        };
+        let input = get_input(&handler, lats, lons, &time);
 
         state.update(props, &input, &time);
         

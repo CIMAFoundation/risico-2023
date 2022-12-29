@@ -1,9 +1,11 @@
-use std::{collections::HashMap, hash::Hash, rc::Rc};
+use std::{collections::HashMap, rc::Rc, f32::NAN};
 
 use chrono::prelude::*;
-use ndarray::Array1;
+use ndarray::{azip, Array1};
 
-use super::functions::{get_output, update_moisture};
+use crate::library::state::{functions::{get_v0, get_wind_effect, get_slope_effect, get_t_effect, get_ppf, get_v, update_dffm_rain, update_dffm_dry}, constants::{NODATAVAL, SNOW_COVER_THRESHOLD, MAXRAIN}};
+
+
 
 const UPDATE_TIME: i64 = 100;
 
@@ -21,8 +23,8 @@ pub struct Properties {
     pub vegetations_dict: HashMap<String, Rc<Vegetation>>,
 }
 
-impl  Properties {
-    pub fn new (
+impl Properties {
+    pub fn new(
         lats: Vec<f32>,
         lons: Vec<f32>,
         slopes: Vec<f32>,
@@ -33,7 +35,7 @@ impl  Properties {
         ppf_winter: Vec<f32>,
     ) -> Self {
         // check if all vectors have the same length
-            
+
         let lats = Array1::from_vec(lats.clone());
         let lons = Array1::from_vec(lons.clone());
         let slopes = Array1::from_vec(slopes.clone());
@@ -41,10 +43,10 @@ impl  Properties {
         let ppf_summer = Array1::from_vec(ppf_summer.clone());
         let ppf_winter = Array1::from_vec(ppf_winter.clone());
 
-        let vegetations = vegetations.iter().map(
-            |v| vegetations_dict.get(v).unwrap().clone()
-        ).collect::<Array1<_>>();
-
+        let vegetations = vegetations
+            .iter()
+            .map(|v| vegetations_dict.get(v).unwrap().clone())
+            .collect::<Array1<_>>();
 
         Self {
             lons,
@@ -63,6 +65,7 @@ impl  Properties {
     }
 }
 
+#[allow(non_snake_case)]
 #[derive(Debug)]
 pub struct Vegetation {
     pub id: String,
@@ -76,6 +79,7 @@ pub struct Vegetation {
     pub name: String,
 }
 
+#[allow(non_snake_case)]
 pub struct Output {
     pub time: DateTime<Utc>,
 
@@ -97,6 +101,7 @@ pub struct Output {
     derived: HashMap<String, Array1<f32>>,
 }
 
+#[allow(non_snake_case)]
 impl Output {
     pub fn new(
         time: DateTime<Utc>,
@@ -113,7 +118,7 @@ impl Output {
         humidity: Array1<f32>,
     ) -> Self {
         Self {
-            time, 
+            time,
             dffm,
             W,
             V,
@@ -182,10 +187,11 @@ pub struct State {
 
     // state
     pub dffm: Array1<f32>,
-    // pub snow_cover: Array1<f32>,
+    pub snow_cover: Array1<f32>,
 }
 
 impl State {
+    #[allow(dead_code)]
     /// Create a new state.
     pub fn new(
         // props: &Properties,
@@ -197,22 +203,154 @@ impl State {
     ) -> State {
         State {
             time,
-            // props,            
+            // props,
             dffm,
-            // snow_cover,
+            snow_cover,
         }
+    }
+
+    fn update_moisture(self: &mut State, props: &Properties, input: &Input, dt: f32) {
+        // let dffm = state.dffm;
+        // let vegs = props.vegetations;
+        let snow_cover = 0.0; //state.snow_cover;
+                              // let temperature = input.temperature;
+                              // let humidity = input.humidity;
+                              // let wind_speed = input.wind_speed;
+                              // let rain = input.rain;
+
+        azip!((
+            dffm in &mut self.dffm,
+            veg in &props.vegetations,
+            temperature in &input.temperature,
+            humidity in &input.humidity,
+            wind_speed in &input.wind_speed,
+            rain in &input.rain
+            ){
+                let d0 = veg.d0;
+                let sat = veg.sat;
+                #[allow(non_snake_case)]
+                let T0 = veg.T0;
+                if d0 == NODATAVAL {
+                    *dffm =	NODATAVAL;
+                }
+                else if snow_cover > SNOW_COVER_THRESHOLD{
+                    *dffm = sat;
+                }
+
+                else if *dffm == NODATAVAL || *temperature == NODATAVAL || *humidity == NODATAVAL{
+                    *dffm = NODATAVAL;
+                }
+                else {
+                    let t = if *temperature > 0.0  { *temperature }  else  {0.0};
+
+                    let h = if *humidity < 100.0 { *humidity } else { 100.0 };
+                    let w = if *wind_speed != NODATAVAL { *wind_speed } else { 0.0 };
+                    let r = if *rain != NODATAVAL { *rain } else { 0.0 };
+
+                    //let dT = f32::max(1.0, f32::min(72.0, ((currentTime - previousTime) / 3600.0)));
+                    //		float pdffm = dffm;
+                    // modello per temperature superiori a 0 gradi Celsius
+                    if r > MAXRAIN {
+                        *dffm = update_dffm_rain(r, *dffm, sat);
+                    }
+
+                    *dffm = update_dffm_dry(*dffm, sat, t, w, h, T0, dt)
+                }
+        });
+    }
+
+    #[allow(non_snake_case)]
+    pub fn get_output(self: &State, props: &Properties, input: &Input) -> Output {
+        let time = &self.time;
+        // if dffm == NODATAVAL || temperature == NODATAVAL	{
+        // 	// return NODATAVAL;
+        // }
+        let len = props.lats.len();
+
+        let mut w_effect = Array1::<f32>::zeros(len);
+        let mut V0 = Array1::<f32>::zeros(len);
+        let mut t_effect = Array1::<f32>::ones(len);
+        let mut slope_effect = Array1::<f32>::ones(len);
+        let mut V = Array1::<f32>::zeros(len);
+        let mut PPF = Array1::<f32>::zeros(len);
+        let mut I = Array1::<f32>::ones(len) * NAN;
+
+        let vegs = &props.vegetations;
+        let snow_cover = 0.0;
+
+        azip!((
+                V0 in &mut V0,
+                &dffm in &self.dffm,
+                veg in vegs,
+                // &snow_cover in &state.snow_cover,
+            ){
+            *V0 = get_v0(veg.v0, veg.d0, veg.d1, dffm, snow_cover);
+        });
+
+        azip!((
+                w_effect in &mut w_effect,
+                slope_effect in &mut slope_effect,
+                &wind_dir in &input.wind_dir,
+                &wind_speed in &input.wind_speed,
+                &slope in &props.slopes,
+                &aspect in &props.aspects,
+            ){
+            *w_effect = get_wind_effect(wind_speed, wind_dir, slope, aspect);
+            *slope_effect = get_slope_effect(slope);
+        });
+
+        let use_t_effect = false;
+        if use_t_effect {
+            azip!((
+                t_effect in &mut t_effect,
+                &temperature in &input.temperature,
+            ){
+                *t_effect = get_t_effect(temperature);
+            });
+        }
+        azip!((
+                ppf in &mut PPF,
+                &ppf_summer in &props.ppf_summer,
+                &ppf_winter in &props.ppf_winter,
+            ){
+            *ppf = get_ppf(time, ppf_summer, ppf_winter);
+        });
+
+        azip!((
+            V in &mut V,
+            &V0 in &V0,
+            &w_effect in &w_effect,
+            &slope_effect in &slope_effect,
+            &t_effect in &t_effect,
+            ){
+            *V = get_v(V0, w_effect, slope_effect, t_effect);
+        });
+
+        Output::new(
+            time.clone(),
+            input.temperature.clone(),
+            input.rain.clone(),
+            input.humidity.clone(),
+            input.wind_dir.clone(),
+            input.wind_speed.clone(),
+            self.dffm.clone(),
+            // snow_cover: state.snow_cover,
+            t_effect,
+            w_effect,
+            V,
+            I,
+            PPF,
+        )
     }
 
     /// Update the state of the cells.
     pub fn update(&mut self, props: &Properties, input: &Input, new_time: &DateTime<Utc>) {
-        let dt = 3600.0;
-        let new_dffm = update_moisture(self, props, input, dt);
-
-        self.dffm = new_dffm;
+        let dt = new_time.signed_duration_since(self.time).num_seconds() as f32 / 3600.0;
+        self.time = new_time.clone();
+        self.update_moisture(props, input, dt);
     }
 
     pub fn output(&self, props: &Properties, input: &Input) -> Output {
-        get_output(self, props, input)
+        self.get_output(props, input)
     }
-
 }

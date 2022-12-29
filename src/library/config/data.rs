@@ -3,7 +3,7 @@ use std::{io::BufRead, collections::HashMap};
 use std::fs;
 use std::io::BufReader;
 
-use crate::library::state::models::{Vegetation, Properties};
+use crate::library::state::models::Vegetation;
 
 use super::models::ConfigError;
 
@@ -12,7 +12,7 @@ use super::models::ConfigError;
 /// :return: A list of cells.
 pub fn read_cells_properties(file_path: &str) 
     -> Result<(
-        (Vec<f32>, Vec<f32>, Vec<f32>, Vec<f32>, Vec<String>)
+        Vec<f32>, Vec<f32>, Vec<f32>, Vec<f32>, Vec<String>
     ), ConfigError> {
     let file = fs::File::open(file_path)
         .map_err(|err| format!("can't open file: {err}."))?;
@@ -94,6 +94,7 @@ pub fn read_vegetation(file_path: &str) ->
         let hhv = line_elements[3].parse::<f32>().unwrap();
         let umid = line_elements[4].parse::<f32>().unwrap();
         let v0 = line_elements[5].parse::<f32>().unwrap();
+        #[allow(non_snake_case)]
         let T0 = line_elements[6].parse::<f32>().unwrap();
         let sat = line_elements[7].parse::<f32>().unwrap();
         let name = line_elements[8].to_string();

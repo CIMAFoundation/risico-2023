@@ -1,4 +1,4 @@
-use crate::library::{state::models::{Output, State}, config::models::ConfigError, io::writers::write_to_zbin_file};
+use crate::library::{state::models::{Output}, config::models::ConfigError, io::writers::write_to_zbin_file};
 
 use super::grid::{ClusterMode, RegularGrid };
 

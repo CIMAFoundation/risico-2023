@@ -5,7 +5,6 @@ use crate::library::{
     state::constants::NODATAVAL,
 };
 use itertools::izip;
-use rayon::prelude::*;
 
 #[derive(Debug)]
 pub enum ClusterMode {
@@ -150,7 +149,7 @@ impl Grid for RegularGrid {
         (self.nrows, self.ncols)
     }
 
-    fn build_cache(&mut self, lats: &[f32], lons: &[f32]) {}
+    fn build_cache(&mut self, _lats: &[f32], _lons: &[f32]) {}
 
 }
 
@@ -192,13 +191,11 @@ impl IrregularGrid {
     }
 
     fn index_non_cached(&self, lat: &f32, lon: &f32) -> usize {
-        let mut minerr = f32::MAX; //confronto con maxfloat
-
         let mut min_i = self.nrows / 2;
         let mut min_j = self.ncols / 2;
 
         let mut minidx = min_i * self.ncols + min_j;
-        minerr = f32::powf(self.lons[minidx] - lon, 2.0) + f32::powf(self.lats[minidx] - lat, 2.0);
+        let mut minerr = f32::powf(self.lons[minidx] - lon, 2.0) + f32::powf(self.lats[minidx] - lat, 2.0);
 
         let mut dobreak = false;
         while !dobreak {

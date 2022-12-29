@@ -10,13 +10,14 @@ use std::{
 use chrono::*;
 use chrono::{DateTime, Utc};
 use itertools::izip;
+
 use ndarray::Array1;
 
 use crate::library::{io::{readers::read_input_from_file, models::output::{OutputType, OutputVariable}}, state::{constants::NODATAVAL, models::{Properties, Output}}};
 use crate::{
     library::{
         io::models::grid::{ClusterMode, Grid},
-        state::models::{self, State},
+        state::models::State,
     }
 };
 
@@ -131,7 +132,7 @@ impl Config {
             let (internal_name, name, path, grid_path, format) =
                 (parts[0], parts[1], parts[2], parts[3], parts[4]);
 
-            let mut output_type = OutputType::new(name, path, grid_path, format)
+            let output_type = OutputType::new(name, path, grid_path, format)
             .map_err(|_err| 
                 format!(
                     "Invalid output type definition: {out_type_def}",
@@ -157,7 +158,7 @@ impl Config {
                 "MIN" | "min" => ClusterMode::Min,
                 _ => return Err("Invalid cluster mode".into()),
             };
-            let mut variable = OutputVariable::new(internal_name, name, cluster_mode, precision);
+            let variable = OutputVariable::new(internal_name, name, cluster_mode, precision);
 
             let output_type = output_types_map
                 .get_mut(output_type)
@@ -190,9 +191,9 @@ impl Config {
             .first(VEGETATION_FILE_KEY)
             .ok_or(format!("Error: {VEGETATION_FILE_KEY} not found in config"))?;
 
-        let cache_path = config_map
-            .first(CACHE_PATH_KEY)
-            .ok_or(format!("Error: {CACHE_PATH_KEY} not found in config"))?;
+        // let cache_path = config_map
+        //     .first(CACHE_PATH_KEY)
+        //     .ok_or(format!("Error: {CACHE_PATH_KEY} not found in config"))?;
 
         let ppf_file = config_map.first(PPF_FILE_KEY);
 
@@ -281,9 +282,11 @@ impl Config {
     
     pub fn new_state(&self, date: DateTime<Utc>) -> State {
         let dffm = Array1::from_vec(self.warm_state.iter().map(|w| w.dffm).collect());
+        let snow_cover = Array1::zeros(dffm.len());
 
         State {
             dffm,
+            snow_cover,
             time: date,
         }
     }
@@ -305,13 +308,21 @@ impl Config {
             .map_err(|error| format!("error creating {}, {}", &warm_state_name, error))?;
         for idx in 0..state.dffm.len() {
             let dffm = state.dffm[idx];
+            #[allow(non_snake_case)]
             let NDSI = NODATAVAL; //cell.state.NDSI;
+            #[allow(non_snake_case)]
             let NDSI_TTL = NODATAVAL;  //cell.state.NDSI_TTL;
+            #[allow(non_snake_case)]
             let MSI = NODATAVAL;  //cell.state.MSI;
+            #[allow(non_snake_case)]
             let MSI_TTL = NODATAVAL;  //cell.state.MSI_TTL;
+            #[allow(non_snake_case)]
             let NDVI = NODATAVAL;  //cell.state.NDVI;
+            #[allow(non_snake_case)]
             let NDVI_TIME = NODATAVAL;  //cell.state.NDVI_TIME;
+            #[allow(non_snake_case)]
             let NDWI = NODATAVAL;  //cell.state.NDWI;
+            #[allow(non_snake_case)]
             let NDWI_TTL = NODATAVAL;  //cell.state.NDWI_TTL;
 
             let line = format!(
@@ -557,8 +568,10 @@ impl InputDataHandler {
     }
 }
 
+#[allow(non_snake_case)]
 #[derive(Default, Debug, Clone)]
 pub struct WarmState {
+    
     pub dffm: f32,
     pub NDSI: f32,
     pub NDSI_TTL: f32,
@@ -605,6 +618,7 @@ fn read_warm_state(base_warm_file: &str, date: DateTime<Utc>) -> Option<Vec<Warm
     let mut warm_state: Vec<WarmState> = Vec::new();
     let file = file.unwrap();
     let reader = io::BufReader::new(file);
+    #[allow(non_snake_case)]
     for line in reader.lines() {
         let line = line.unwrap();
         let components: Vec<&str> = line.split_whitespace().collect();
