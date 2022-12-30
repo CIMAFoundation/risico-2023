@@ -122,9 +122,9 @@ const PALETTE_KEY: &str = "PALETTE";
 impl Config {
     fn parse_output_types(
         run_date: &DateTime<Utc>,
-        output_types_defs: Vec<String>,
-        variables_defs: Vec<String>,
-        palettes: PaletteMap,
+        output_types_defs: &Vec<String>,
+        variables_defs: &Vec<String>,
+        palettes: &PaletteMap,
     ) -> Result<Vec<OutputType>, ConfigError> {
         let mut output_types_map: HashMap<String, OutputType> = HashMap::new();
 
@@ -249,8 +249,6 @@ impl Config {
             .all(VARIABLES_KEY)
             .ok_or(format!("KEY {VARIABLES_KEY} not found"))?;
 
-        let output_types = Self::parse_output_types(&date, output_types_defs, variables_defs,  palettes)?;
-
         let (lats, lons, slopes, aspects, vegetations) = read_cells_properties(&cells_file)
             .map_err(|error| format!("error reading {}, {error}", cells_file))?;
 
@@ -301,7 +299,9 @@ impl Config {
             warm_state,
             warm_state_time,
             properties: props,
-            outputs: output_types,
+            output_types_defs, 
+            variables_defs,
+            palettes,
             use_temperature_effect: use_temperature_effect,
             use_ndvi: use_ndvi,
         };
@@ -316,15 +316,10 @@ impl Config {
     pub fn new_state(&self) -> State {
         State::new(&self.warm_state, &self.warm_state_time)
     }
-    
-    pub fn write_output(&self, output: &Output, lats: &[f32], lons: &[f32]) -> Result<(), ConfigError> {
-        for output_type in &self.outputs {
-            match output_type.write_variables(output, lats, lons) {
-                Ok(_) => (),
-                Err(e) => println!("Error writing output: {}", e)
-            }
-        }
-        Ok(())
+
+    pub fn get_output_writer(&self) -> Result<OutputWriter, ConfigError> {
+        let outputs = Self::parse_output_types(&self.run_date, &self.output_types_defs, &self.variables_defs,  &self.palettes)?;
+        Ok(OutputWriter::new(outputs))
     }
 
     #[allow(non_snake_case)]
@@ -360,22 +355,43 @@ impl Config {
     }
 }
 
-#[derive(Debug)]
+
 pub struct Config {
     run_date: DateTime<Utc>,
 
-    pub model_name: String,
-    pub warm_state_path: String,
-
-    pub warm_state: Vec<WarmState>,
-    pub warm_state_time: DateTime<Utc>,
+    model_name: String,
+    warm_state_path: String,
+    warm_state: Vec<WarmState>,
+    warm_state_time: DateTime<Utc>,
     pub properties: Properties,
 
-    pub outputs: Vec<OutputType>,
-    pub use_temperature_effect: bool,
-    pub use_ndvi: bool,
+    output_types_defs: Vec<String>,
+    variables_defs: Vec<String>,
+    palettes: PaletteMap,
+    use_temperature_effect: bool,
+    use_ndvi: bool,   
+}
 
-    
+pub struct OutputWriter {
+    outputs: Vec<OutputType>,
+}
+
+impl OutputWriter {
+    pub fn new(outputs: Vec<OutputType>) -> Self {
+        Self {
+            outputs
+        }
+    }
+
+    pub fn write_output(&mut self, output: &Output, lats: &[f32], lons: &[f32]) -> Result<(), ConfigError> {
+        for output_type in &mut self.outputs {
+            match output_type.write_variables(output, lats, lons) {
+                Ok(_) => (),
+                Err(e) => println!("Error writing output: {}", e)
+            }
+        }
+        Ok(())
+    }
 }
 
 

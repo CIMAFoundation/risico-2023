@@ -175,6 +175,10 @@ fn main() {
 
     let date = Utc.datetime_from_str("202102010000", "%Y%m%d%H%M").unwrap();
     let config = Config::new("/opt/risico/RISICOETHIOPIA/configuration.txt", date).unwrap();
+    
+    let mut output_writer = config.get_output_writer()
+        .expect("Could not configure output writer");
+
     let props = config.get_properties();
     let mut state = config.new_state();
     let input_path = "/opt/risico/RISICOETHIOPIA/INPUT/input.txt";
@@ -215,7 +219,7 @@ fn main() {
             .num_milliseconds();
         println!("state updated in {} msec\n", elapsed);
 
-        match config.write_output(&output, lats, lons) {
+        match output_writer.write_output(&output, lats, lons) {
             Ok(_) => (),
             Err(err) => println!("Error writing output: {}", err),
         };
