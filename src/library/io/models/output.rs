@@ -1,4 +1,6 @@
-use crate::library::{state::models::{Output}, config::models::ConfigError, io::writers::write_to_zbin_file};
+use chrono::{DateTime, Utc};
+
+use crate::library::{state::models::{Output}, config::models::{ConfigError, PaletteMap}, io::writers::{write_to_zbin_file, write_to_pngwjson}};
 
 use super::grid::{ClusterMode, RegularGrid };
 
@@ -40,10 +42,12 @@ pub struct OutputType {
     grid: RegularGrid,
     format: String,
     variables: Vec<OutputVariable>,
+    palettes: PaletteMap,
+    run_date: DateTime<Utc>,
 }
 
 impl OutputType {
-    pub fn new(name: &str, path: &str, grid_path: &str, format: &str) -> Result<Self, ConfigError> {
+    pub fn new(name: &str, path: &str, grid_path: &str, format: &str, run_date: &DateTime<Utc>, palettes: PaletteMap) -> Result<Self, ConfigError> {
         let grid = RegularGrid::from_txt_file(grid_path).unwrap();
         Ok(Self {
             name: name.to_string(),
@@ -51,6 +55,8 @@ impl OutputType {
             grid: grid,
             format: format.to_string(),
             variables: Vec::new(),
+            palettes: palettes,
+            run_date: run_date.clone(),
         })
     }
 
@@ -63,7 +69,7 @@ impl OutputType {
         for variable in &self.variables {
             let date_string = output.time.format("%Y%m%d%H%M").to_string();
             //todo!("get run date from config");
-            let run_date = "202102010000";
+            let run_date = &self.run_date.format("%Y%m%d%H%M").to_string();
             let file = format!("{}/{}_{}_{}_{}.zbin", self.path, self.name, run_date, date_string, variable.name);
             let values = variable.get_variable_on_grid(&lats, &lons, &output, &grid);
             
@@ -73,9 +79,26 @@ impl OutputType {
         Ok(())
     }
 
+    fn write_pngwjson(&self, output: &Output, lats: &[f32], lons: &[f32]) -> Result<(), ConfigError> {
+        let grid = self.grid;
+        for variable in &self.variables {
+            let date_string = output.time.format("%Y%m%d%H%M").to_string();
+            //todo!("get run date from config");
+            let run_date = &self.run_date.format("%Y%m%d%H%M").to_string();
+            let file = format!("{}/{}_{}_{}_{}.png", self.path, self.name, run_date, date_string, variable.name);
+            let values = variable.get_variable_on_grid(&lats, &lons, &output, &grid);
+            let palette = self.palettes.get(&variable.name)
+                .ok_or(format!("No palette found for variable {}", variable.name))?;
+            write_to_pngwjson(&file, &grid, values, &palette)
+                .map_err(|err| format!("Cannot write file {}: error {err}", file))?;
+        }
+        Ok(())
+    }
+
     pub fn write_variables(&self, output: &Output, lats: &[f32], lons:&[f32]) -> Result<(), ConfigError>{
         match self.format.as_str() {
             "ZBIN" => self.write_zbin(output, lats, lons),
+            "PNGWJSON" => self.write_pngwjson(output, lats, lons),
             _ => Ok(())
         }
     }

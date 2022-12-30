@@ -97,8 +97,8 @@ pub struct Output {
     pub wind_speed: Array1<f32>,
     pub wind_dir: Array1<f32>,
     pub humidity: Array1<f32>,
-    // pub snow_cover: Array1<f32>,
-    derived: HashMap<String, Array1<f32>>,
+    pub snow_cover: Array1<f32>,
+    
 }
 
 #[allow(non_snake_case)]
@@ -116,6 +116,7 @@ impl Output {
         wind_speed: Array1<f32>,
         wind_dir: Array1<f32>,
         humidity: Array1<f32>,
+        snow_cover: Array1<f32>,
     ) -> Self {
         Self {
             time,
@@ -130,7 +131,8 @@ impl Output {
             wind_speed,
             wind_dir,
             humidity,
-            derived: HashMap::new(),
+            snow_cover,
+            
         }
     }
 
@@ -149,7 +151,7 @@ impl Output {
             "windSpeed" => self.wind_speed.clone(),
             "windDir" => self.wind_dir.clone(),
             "humidity" => self.humidity.clone(),
-            // "snowCover" => self.snow_cover.as_slice().unwrap(),
+            "snowCover" => self.snow_cover.clone(),
             // "NDVI" => self.NDVI,
             // "NDWI" => self.NDWI,
             // Derived variables
@@ -390,7 +392,7 @@ impl State {
         // }
         let len = props.lats.len();
 
-        
+        let snow_cover = &self.snow_cover;
         let mut w_effect = Array1::<f32>::zeros(len);
         let mut V0 = Array1::<f32>::zeros(len);
         let mut t_effect = Array1::<f32>::ones(len);
@@ -400,13 +402,13 @@ impl State {
         let mut I = Array1::<f32>::ones(len) * NAN;
 
         let vegs = &props.vegetations;
-        let snow_cover = 0.0;
+        
 
         azip!((
                 V0 in &mut V0,
                 &dffm in &self.dffm,
                 veg in vegs,
-                // &snow_cover in &state.snow_cover,
+                &snow_cover in snow_cover,
             ){
             *V0 = get_v0(veg.v0, veg.d0, veg.d1, dffm, snow_cover);
         });
@@ -482,12 +484,14 @@ impl State {
             input.wind_dir.clone(),
             input.wind_speed.clone(),
             self.dffm.clone(),
-            // snow_cover: state.snow_cover,
+            
             t_effect,
             w_effect,
             V,
             I,
+            
             PPF,
+            self.snow_cover.clone(),
         )
     }
 

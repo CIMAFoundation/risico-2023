@@ -4,12 +4,13 @@ use crate::library::config::models::ConfigError;
 
 #[derive(Debug, Clone, Copy)]
 pub struct Color {
-    r: u8,
-    g: u8,
-    b: u8,
-    a: u8,
+    pub r: u8,
+    pub g: u8,
+    pub b: u8,
+    pub a: u8,
 }
 
+#[derive(Debug, Clone)]
 pub struct Palette {
     bounds: Vec<f32>,
     colors: Vec<Color>,
@@ -58,7 +59,14 @@ impl Palette {
 
         let lines: Vec<&str> = contents.split('\n').collect();
         for line in lines {
-            let mut parts = line.split(' ');
+            let line = line.trim();
+            if line.starts_with('#') {
+                continue;
+            }
+            if line.is_empty() {
+                continue;
+            }
+            let mut parts = line.split_whitespace();
             let val: f32 = parts.next().unwrap().parse().unwrap();
             let r: u8 = parts.next().unwrap().parse().unwrap();
             let g: u8 = parts.next().unwrap().parse().unwrap();

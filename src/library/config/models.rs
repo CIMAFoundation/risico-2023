@@ -13,7 +13,7 @@ use itertools::izip;
 
 use ndarray::Array1;
 
-use crate::library::{io::{readers::read_input_from_file, models::output::{OutputType, OutputVariable}}, state::models::{Output, Properties}};
+use crate::library::{io::{readers::read_input_from_file, models::{output::{OutputType, OutputVariable}, palette::Palette}}, state::models::{Output, Properties}};
 use crate::{
     library::{
         io::models::grid::{ClusterMode, Grid},
@@ -23,7 +23,8 @@ use crate::{
 
 use super::data::{read_cells_properties, read_vegetation};
 
-type ConfigMap = HashMap<String, Vec<String>>;
+pub type PaletteMap = HashMap<String, Box<Palette>>;
+pub type ConfigMap = HashMap<String, Vec<String>>;
 
 trait ConfigMapExt {
     /// Get the first value of a key in the config map
@@ -116,11 +117,14 @@ const USE_TEMPERATURE_EFFECT_KEY: &str = "USETCONTR";
 const USE_NDVI_KEY: &str = "USENDVI";
 const OUTPUTS_KEY: &str = "MODEL";
 const VARIABLES_KEY: &str = "VARIABLE";
+const PALETTE_KEY: &str = "PALETTE";
 
 impl Config {
     fn parse_output_types(
+        run_date: &DateTime<Utc>,
         output_types_defs: Vec<String>,
         variables_defs: Vec<String>,
+        palettes: PaletteMap,
     ) -> Result<Vec<OutputType>, ConfigError> {
         let mut output_types_map: HashMap<String, OutputType> = HashMap::new();
 
@@ -132,13 +136,12 @@ impl Config {
             let (internal_name, name, path, grid_path, format) =
                 (parts[0], parts[1], parts[2], parts[3], parts[4]);
 
-            let output_type = OutputType::new(name, path, grid_path, format)
-            .map_err(|_err| 
-                format!(
-                    "Invalid output type definition: {out_type_def}",
-                    out_type_def = out_type_def
-                )
-            )?;
+            let output_type = OutputType::new(name, path, grid_path, format, run_date, palettes.clone())
+                .map_err(|_err| 
+                    format!(
+                        "Invalid output type definition: {out_type_def}",
+                        out_type_def = out_type_def
+                    ))?;
             output_types_map.insert(internal_name.to_string(), output_type);
         }
 
@@ -171,6 +174,30 @@ impl Config {
         Ok(output_types)
     }
 
+    fn load_palettes(config_map: &ConfigMap) -> HashMap<String, Box<Palette>> {
+        let mut palettes: HashMap<String, Box<Palette>> = HashMap::new();
+        let palettes_defs = config_map.all(PALETTE_KEY);
+        if palettes_defs.is_none() {
+            return palettes;
+        }
+        let palettes_defs = palettes_defs
+                                .expect("should be there");
+
+        for palette_def in palettes_defs {
+            let parts = palette_def.split(":").collect::<Vec<&str>>();
+            if parts.len() != 2 {
+                continue;
+            }
+            let (name, path) = (parts[0], parts[1]);
+            
+            if let Ok(palette) = Palette::load_palette(path){
+                palettes.insert(name.to_string(), Box::new(palette));
+            }
+        }
+        palettes
+        
+    }
+
     pub fn new(config_file: &str, date: DateTime<Utc>) -> Result<Config, ConfigError> {
         let config_map = read_config(config_file)?;
 
@@ -190,6 +217,8 @@ impl Config {
         let vegetation_file = config_map
             .first(VEGETATION_FILE_KEY)
             .ok_or(format!("Error: {VEGETATION_FILE_KEY} not found in config"))?;
+
+        let palettes = Config::load_palettes(&config_map);        
 
         // let cache_path = config_map
         //     .first(CACHE_PATH_KEY)
@@ -220,7 +249,7 @@ impl Config {
             .all(VARIABLES_KEY)
             .ok_or(format!("KEY {VARIABLES_KEY} not found"))?;
 
-        let output_types = Self::parse_output_types(output_types_defs, variables_defs)?;
+        let output_types = Self::parse_output_types(&date, output_types_defs, variables_defs,  palettes)?;
 
         let (lats, lons, slopes, aspects, vegetations) = read_cells_properties(&cells_file)
             .map_err(|error| format!("error reading {}, {error}", cells_file))?;
@@ -266,6 +295,7 @@ impl Config {
         
 
         let config = Config {
+            run_date: date,
             model_name: model_name,
             warm_state_path: warm_state_path,
             warm_state,
@@ -332,6 +362,8 @@ impl Config {
 
 #[derive(Debug)]
 pub struct Config {
+    run_date: DateTime<Utc>,
+
     pub model_name: String,
     pub warm_state_path: String,
 
@@ -342,6 +374,8 @@ pub struct Config {
     pub outputs: Vec<OutputType>,
     pub use_temperature_effect: bool,
     pub use_ndvi: bool,
+
+    
 }
 
 
