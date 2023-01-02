@@ -28,6 +28,11 @@ pub fn read_cells_properties(file_path: &str)
     for line in reader.lines(){
         let line = line
             .map_err(|err| format!("can't read from file: {err}."))?;
+        if line.starts_with("#") {
+            // skip header
+            continue;
+        }
+        
         let line_parts: Vec<&str> = line.trim().split(' ').collect();
         
         if line_parts.len() < 5 {

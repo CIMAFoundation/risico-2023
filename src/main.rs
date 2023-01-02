@@ -173,15 +173,15 @@ fn get_input(
 fn main() {
     let start_time = Utc::now();
 
-    let date = Utc.datetime_from_str("202102010000", "%Y%m%d%H%M").unwrap();
-    let config = Config::new("/opt/risico/RISICOETHIOPIA/configuration.txt", date).unwrap();
+    let date = Utc.datetime_from_str("202301020000", "%Y%m%d%H%M").unwrap();
+    let config = Config::new("/opt/risico/RISICO2015/configuration.txt", date).unwrap();
     
     let mut output_writer = config.get_output_writer()
         .expect("Could not configure output writer");
 
     let props = config.get_properties();
     let mut state = config.new_state();
-    let input_path = "/opt/risico/RISICOETHIOPIA/INPUT/input.txt";
+    let input_path = "/opt/risico/RISICO2015/INPUT/202301020842/input.txt";
 
     let elapsed = Utc::now()
         .signed_duration_since(start_time)

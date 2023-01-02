@@ -34,8 +34,15 @@ impl OutputVariable {
         lons: &[f32],
         output: &Output,
         grid: &RegularGrid,
-    ) -> Vec<f32> {
+    ) -> Option<Vec<f32>> {
         let values = output.get(&self.internal_name);
+
+        let values = if let Some(values) = values {
+            values
+        } else {
+            return None;
+        };
+
         let values = values.as_slice().unwrap();
         let values = grid.project_to_grid(&lats, &lons, values, &self.cluster_mode);
         // transform to desired number of decimal places precision
@@ -44,7 +51,7 @@ impl OutputVariable {
             .iter()
             .map(|val| f32::ceil(val / cutval - 0.5) * cutval)
             .collect();
-        values
+        Some(values)
     }
 
     pub fn new(internal_name: &str, name: &str, cluster_mode: ClusterMode, precision: i32) -> Self {
@@ -272,8 +279,14 @@ impl Writer for NetcdfWriter {
             
             let values = variable.get_variable_on_grid(&lats, &lons, &output, &grid);
             
-            variable_var.put_values(values.as_slice(), Some(&[len, 0, 0]), Some(&[1, n_lats, n_lons]) )
+            if let Some(values) = values {
+                variable_var.put_values(values.as_slice(), Some(&[len, 0, 0]), Some(&[1, n_lats, n_lons]) )
                    .unwrap_or_else(|err| panic!("Add variable failed: {err}"));
+            }else{
+                continue
+            }
+
+            
         
         }
         Ok(())
@@ -300,8 +313,11 @@ impl Writer for ZBinWriter {
             );
             let values = variable.get_variable_on_grid(&lats, &lons, &output, &grid);
 
-            write_to_zbin_file(&file, &grid, values)
-                .map_err(|err| format!("Cannot write file {}: error {err}", file))?;
+            if let Some(values) = values {
+                write_to_zbin_file(&file, &grid, values)
+                    .map_err(|err| format!("Cannot write file {}: error {err}", file))?;
+            }
+
         }
         Ok(())
     }
@@ -330,8 +346,12 @@ impl Writer for PngWriter {
                 .palettes
                 .get(&variable.name)
                 .ok_or(format!("No palette found for variable {}", variable.name))?;
-            write_to_pngwjson(&file, &grid, values, &palette)
-                .map_err(|err| format!("Cannot write file {}: error {err}", file))?;
+                
+            if let Some(values) = values {
+                write_to_pngwjson(&file, &grid, values, &palette)
+                    .map_err(|err| format!("Cannot write file {}: error {err}", file))?;
+            }
+            
         }
         Ok(())
     }

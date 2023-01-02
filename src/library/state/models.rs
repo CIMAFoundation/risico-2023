@@ -87,8 +87,8 @@ pub struct Output {
     pub W: Array1<f32>,
     pub V: Array1<f32>,
     pub I: Array1<f32>,
-    // pub NDVI: Array1<f32>,
-    // pub NDWI: Array1<f32>,
+    pub NDVI: Array1<f32>,
+    pub NDWI: Array1<f32>,
     pub PPF: Array1<f32>,
     pub t_effect: Array1<f32>,
     // pub SWI: Array1<f32>,
@@ -117,6 +117,8 @@ impl Output {
         wind_dir: Array1<f32>,
         humidity: Array1<f32>,
         snow_cover: Array1<f32>,
+        NDVI: Array1<f32>,
+        NDWI: Array1<f32>,
     ) -> Self {
         Self {
             time,
@@ -132,40 +134,42 @@ impl Output {
             wind_dir,
             humidity,
             snow_cover,
+            NDVI, 
+            NDWI,
             
         }
     }
 
-    pub fn get(&self, variable: &str) -> Array1<f32> {
+    pub fn get(&self, variable: &str) -> Option<Array1<f32>> {
         match variable {
             // Output variables
-            "dffm" => self.dffm.clone(),
-            "W" => self.W.clone(),
-            "V" => self.V.clone(),
-            "I" => self.I.clone(),
+            "dffm" => Some(self.dffm.clone()),
+            "W" => Some(self.W.clone()),
+            "V" => Some(self.V.clone()),
+            "I" => Some(self.I.clone()),
 
-            "contrT" => self.t_effect.clone(),
-            // "SWI" => self.SWI,
-            "temperature" => self.temperature.clone(),
-            "rain" => self.rain.clone(),
-            "windSpeed" => self.wind_speed.clone(),
-            "windDir" => self.wind_dir.clone(),
-            "humidity" => self.humidity.clone(),
-            "snowCover" => self.snow_cover.clone(),
-            // "NDVI" => self.NDVI,
-            // "NDWI" => self.NDWI,
-            // Derived variables
-            // "INDWI" => self.I * out.NDWI,
-            // "VNDWI" => self.V * out.NDWI,
-            // "VPPFNDWI" => self.V * out.PPF * out.NDWI,
-            // "IPPFNDWI" => self.I * out.PPF * out.NDWI,
-            "VPPF" => (&self.V * &self.PPF).clone(),
-            "IPPF" => (&self.I * &self.PPF).clone(),
-            // "INDVI" => self.I * out.NDVI,
-            // "VNDVI" => self.V * out.NDVI,
-            // "VPPFNDVI" => self.V * out.PPF * out.NDVI,
-            // "IPPFNDVI" => self.I * out.PPF * out.NDVI,
-            _ => panic!("Unknown variable: {}", variable),
+            "contrT" => Some(self.t_effect.clone()),
+            // "SWISome(" => self.SWI),
+            "temperature" => Some(self.temperature.clone()),
+            "rain" => Some(self.rain.clone()),
+            "windSpeed" => Some(self.wind_speed.clone()),
+            "windDir" => Some(self.wind_dir.clone()),
+            "humidity" => Some(self.humidity.clone()),
+            "snowCover" => Some(self.snow_cover.clone()),
+            "NDVI" => Some(self.NDVI.clone()),
+            "NDWI" => Some(self.NDWI.clone()),
+            //Derived variables
+            "INDWI" => Some((&self.I * &self.NDWI).clone()),
+            "VNDWI" => Some((&self.V * &self.NDWI).clone()),
+            "VPPFNDWI" => Some((&self.V * &self.PPF * &self.NDWI).clone()),
+            "IPPFNDWI" => Some((&self.I * &self.PPF * &self.NDWI).clone()),
+            "VPPF" => Some((&self.V * &self.PPF).clone()),
+            "IPPF" => Some((&self.I * &self.PPF).clone()),
+            "INDVI" => Some((&self.I * &self.NDVI).clone()),
+            "VNDVI" => Some((&self.V * &self.NDVI).clone()),
+            "VPPFNDVI" => Some((&self.V * &self.PPF * &self.NDVI).clone()),
+            "IPPFNDVI" => Some((&self.I * &self.PPF * &self.NDVI).clone()),
+            _ => None,
         }
     }
 }
@@ -478,20 +482,20 @@ impl State {
 
         Output::new(
             time.clone(),
-            input.temperature.clone(),
-            input.rain.clone(),
-            input.humidity.clone(),
-            input.wind_dir.clone(),
-            input.wind_speed.clone(),
             self.dffm.clone(),
-            
-            t_effect,
             w_effect,
             V,
             I,
-            
             PPF,
+            t_effect,
+            input.temperature.clone(),
+            input.rain.clone(),
+            input.wind_dir.clone(),
+            input.wind_speed.clone(),
+            input.humidity.clone(),
             self.snow_cover.clone(),
+            self.NDVI.clone(),
+            self.NDWI.clone(),
         )
     }
 

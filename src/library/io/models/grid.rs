@@ -99,36 +99,42 @@ impl RegularGrid {
             .get("GRIDNROWS")
             .and_then(|value| value.get(0))
             .unwrap()
+            .replace("f", "")
             .parse::<usize>()
             .unwrap();
         let ncols = config_map
             .get("GRIDNCOLS")
             .and_then(|value| value.get(0))
             .unwrap()
+            .replace("f", "")
             .parse::<usize>()
             .unwrap();
         let minlat = config_map
             .get("MINLAT")
             .and_then(|value| value.get(0))
             .unwrap()
+            .replace("f", "")
             .parse::<f32>()
             .unwrap();
         let minlon = config_map
             .get("MINLON")
             .and_then(|value| value.get(0))
             .unwrap()
+            .replace("f", "")
             .parse::<f32>()
             .unwrap();
         let maxlat = config_map
             .get("MAXLAT")
             .and_then(|value| value.get(0))
             .unwrap()
+            .replace("f", "")
             .parse::<f32>()
             .unwrap();
         let maxlon = config_map
             .get("MAXLON")
             .and_then(|value| value.get(0))
             .unwrap()
+            .replace("f", "")
             .parse::<f32>()
             .unwrap();
 
