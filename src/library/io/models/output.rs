@@ -1,6 +1,6 @@
 use std::{
     collections::HashMap,
-    path::{Path, PathBuf},
+    path::PathBuf,
 };
 
 use chrono::{DateTime, Utc};
@@ -193,7 +193,7 @@ impl Writer for NetcdfWriter {
 
             if !self.files.contains_key(&variable.name) {
                 let path = self.path.as_os_str().to_str().unwrap();
-                let run_date = &self.run_date.format("%Y%m%d%H%M").to_string();
+                //let run_date = &self.run_date.format("%Y%m%d%H%M").to_string();
                 let file_name = format!(
                     "{}/{}.nc",
                     path, variable.name
@@ -202,13 +202,13 @@ impl Writer for NetcdfWriter {
                 let options = netcdf::Options::NETCDF4;
 
                 let mut file = netcdf::create_with(&file_name, options)
-                    .map_err(|e| format!("can't create file {file_name}"))?;
+                    .map_err(|err| format!("can't create file {file_name}: {err}"))?;
 
                 // We must create a dimension which corresponds to our data
                 file.add_dimension("latitude", n_lats).unwrap();
                 file.add_dimension("longitude", n_lons).unwrap();
 
-                file.add_unlimited_dimension("time").map_err(|err| "Add time dimension failed")?;
+                file.add_unlimited_dimension("time").map_err(|err| format!("Add time dimension failed {err}"))?;
                 let lats: Vec<f32> = (0..n_lats)
                     .map(|i| {
                         grid.min_lat
@@ -254,7 +254,7 @@ impl Writer for NetcdfWriter {
 
             }
 
-            let mut file = self.files.get_mut(&variable.name).unwrap();
+            let file = self.files.get_mut(&variable.name).unwrap();
 
             
             let mut time_var = file
