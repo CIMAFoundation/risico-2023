@@ -16,7 +16,7 @@ fn replace(dst: &mut Array1<f32>, src: &Array1<f32>) {
             dst in dst,
             src in src,
         ) {
-            if *src > -9998.0 {
+            if *dst <= -9998.0 {
                 *dst = *src;
             }
         })
@@ -62,11 +62,20 @@ fn get_input(
 
     // Observed temperature
     let t = handler.get_values("K", &time, lats, lons);
-    maybe_replace(&mut temperature, &t);
+    
+    if let Some(t) = t  { 
+        let t = t.mapv(|_t| if _t > 200.0 {_t - 273.15} else { _t });
+        replace(&mut temperature, &t);
+    }
+
 
     // Forecasted temperature
     let t = handler.get_values("T", &time, lats, lons);
-    maybe_replace(&mut temperature, &t);
+
+    if let Some(t) = t  { 
+        let t = t.mapv(|_t| if _t > 200.0 {_t - 273.15} else { _t });
+        replace(&mut temperature, &t);
+    }
 
     // Observed precipitation
     let op = handler.get_values("O", &time, lats, lons);
@@ -83,16 +92,14 @@ fn get_input(
     let u = handler.get_values("U", &time, lats, lons);
     let v = handler.get_values("V", &time, lats, lons);
 
-    if ws.is_some() {
+    if let Some(ws) = ws{
         let ws = ws
-            .expect("should be some")
             .mapv(|_ws| if _ws > -9998.0 {_ws * 3600.0} else {NODATAVAL});
         replace(&mut wind_speed, &ws);
     }
 
-    if wd.is_some() {
-        let wd = wd
-            .expect("should be some")
+    if let Some(wd) = wd {
+        let wd = wd 
             .mapv(|_wd| {
             let mut _wd = _wd / 180.0 * PI;
             if _wd < 0.0 {
@@ -103,10 +110,7 @@ fn get_input(
         replace(&mut wind_dir, &wd);
     }
     
-    if u.is_some() && v.is_some() { 
-        let u = u.expect("should be some");
-        let v = v.expect("should be some");
-
+    if let (Some(u), Some(v)) =  (u, v) { 
         let wd = izip!(&u, &v)
             .map(|(_u, _v)| {
                 if *_u < -9998.0 || *_v < -9998.0 {
@@ -210,14 +214,10 @@ fn main() {
 
         let input = get_input(&handler, lats, lons, &time);
 
-        state.update(props, &input, &time);
+        state.update(props, &input);
 
         let output = state.output(props, &input);
 
-        let elapsed = Utc::now()
-            .signed_duration_since(start_time)
-            .num_milliseconds();
-        println!("state updated in {} msec\n", elapsed);
 
         match output_writer.write_output(&output, lats, lons) {
             Ok(_) => (),
@@ -230,5 +230,11 @@ fn main() {
                 Err(err) => println!("Error writing warm state: {}", err),
             };
         }
+
+        let elapsed = Utc::now()
+            .signed_duration_since(start_time)
+            .num_milliseconds();
+        println!("elapsed {} msec\n", elapsed);
+
     }
 }

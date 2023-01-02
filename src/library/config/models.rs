@@ -617,9 +617,8 @@ impl InputDataHandler {
 }
 
 #[allow(non_snake_case)]
-#[derive(Default, Debug, Clone)]
-pub struct WarmState {
-    
+#[derive(Debug, Clone)]
+pub struct WarmState {    
     pub dffm: f32,
     pub NDSI: f32,
     pub NDSI_TTL: f32,
@@ -629,6 +628,22 @@ pub struct WarmState {
     pub NDVI_TIME: f32,
     pub NDWI: f32,
     pub NDWI_TIME: f32,
+}
+
+impl Default for WarmState {
+    fn default() -> Self {
+        WarmState {
+            dffm: 40.0,
+            NDSI: 0.0,
+            NDSI_TTL: 0.0,
+            MSI: 0.0,
+            MSI_TTL: 0.0,
+            NDVI: 0.0,
+            NDVI_TIME: 0.0,
+            NDWI: 0.0,
+            NDWI_TIME: 0.0,
+        }
+    }
 }
 
 #[allow(non_snake_case)]
@@ -645,10 +660,10 @@ fn read_warm_state(base_warm_file: &str, date: DateTime<Utc>) -> Option<(Vec<War
 
     let mut current_date = date.clone();
 
-    for days_before in 0..5 {     
+    for days_before in 1..5 {     
         current_date = date.clone() - Duration::days(days_before);   
         
-        let filename = format!("{}_{}", base_warm_file, current_date.format("%Y%m%d%H%M"));
+        let filename = format!("{}{}", base_warm_file, current_date.format("%Y%m%d%H%M"));
 
         let file_handle = File::open(filename);
         if file_handle.is_err() {
@@ -661,9 +676,8 @@ fn read_warm_state(base_warm_file: &str, date: DateTime<Utc>) -> Option<(Vec<War
         file = Some(file_handle.expect("Should unwrap"));
         break;
     }
-    if file.is_none() {
-        println!("Warning warm file not found");
-        return None;
+    if file.is_some() {
+        println!("Loading warm state from {}",current_date.format("%Y%m%d%H%M"));
     }
 
     let mut warm_state: Vec<WarmState> = Vec::new();
@@ -699,6 +713,8 @@ fn read_warm_state(base_warm_file: &str, date: DateTime<Utc>) -> Option<(Vec<War
             NDWI_TIME,
         });
     }
+    
+
     Some((warm_state, current_date))
 }
 

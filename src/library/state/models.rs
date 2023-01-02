@@ -1,7 +1,8 @@
-use std::{collections::HashMap, rc::Rc, f32::NAN};
+use std::{collections::HashMap, rc::Rc, f32::NAN, sync::Arc};
 
 use chrono::prelude::*;
 use ndarray::{azip, Array1};
+use rayon::prelude::{IntoParallelIterator, ParallelIterator};
 
 use crate::library::{state::{functions::{get_v0, get_wind_effect, get_slope_effect, get_t_effect, get_ppf, get_v, update_dffm_rain, update_dffm_dry, get_lhv_dff, get_lhv_l1, get_intensity}, constants::{NODATAVAL, SNOW_COVER_THRESHOLD, MAXRAIN}}, config::models::WarmState};
 
@@ -19,8 +20,8 @@ pub struct Properties {
     pub ppf_summer: Array1<f32>,
     pub ppf_winter: Array1<f32>,
 
-    pub vegetations: Array1<Rc<Vegetation>>,
-    pub vegetations_dict: HashMap<String, Rc<Vegetation>>,
+    pub vegetations: Array1<Arc<Vegetation>>,
+    pub vegetations_dict: HashMap<String, Arc<Vegetation>>,
 }
 
 impl Properties {
@@ -30,7 +31,7 @@ impl Properties {
         slopes: Vec<f32>,
         aspects: Vec<f32>,
         vegetations: Vec<String>,
-        vegetations_dict: HashMap<String, Rc<Vegetation>>,
+        vegetations_dict: HashMap<String, Arc<Vegetation>>,
         ppf_summer: Vec<f32>,
         ppf_winter: Vec<f32>,
     ) -> Self {
@@ -129,14 +130,13 @@ impl Output {
             PPF,
             t_effect,
             temperature,
-            rain,
-            wind_speed,
+            rain,            
             wind_dir,
+            wind_speed,
             humidity,
             snow_cover,
             NDVI, 
-            NDWI,
-            
+            NDWI,            
         }
     }
 
@@ -149,7 +149,7 @@ impl Output {
             "I" => Some(self.I.clone()),
 
             "contrT" => Some(self.t_effect.clone()),
-            // "SWISome(" => self.SWI),
+            // "SWI" => self.SWI,
             "temperature" => Some(self.temperature.clone()),
             "rain" => Some(self.rain.clone()),
             "windSpeed" => Some(self.wind_speed.clone()),
@@ -339,53 +339,51 @@ impl State {
 
     #[allow(non_snake_case)]
     fn update_moisture(&mut self, props: &Properties, input: &Input, dt: f32) {
-        // let dffm = state.dffm;
-        // let vegs = props.vegetations;
-        let snow_cover = 0.0; //state.snow_cover;
-                              // let temperature = input.temperature;
-                              // let humidity = input.humidity;
-                              // let wind_speed = input.wind_speed;
-                              // let rain = input.rain;
+        let dt = f32::max(1.0, f32::min(72.0, dt));
+        
+        let dffm = (0..self.dffm.len()).into_par_iter().map(|i| {
+            let mut dffm = self.dffm[i];
 
-        azip!((
-            dffm in &mut self.dffm,
-            veg in &props.vegetations,
-            temperature in &input.temperature,
-            humidity in &input.humidity,
-            wind_speed in &input.wind_speed,
-            rain in &input.rain
-            ){
-                let d0 = veg.d0;
-                let sat = veg.sat;
+            let snow_cover  = self.snow_cover[i];            
+            let veg = &props.vegetations[i];
+            let temperature = input.temperature[i];
+            let humidity = input.humidity[i];
+            let wind_speed = input.wind_speed[i];
+            let rain = input.rain[i];
+            
+            let d0 = veg.d0;
+            let sat = veg.sat;
+            
+            let T0 = veg.T0;
+            if d0 == NODATAVAL {
+                return NODATAVAL;
+            }
+            else if snow_cover > SNOW_COVER_THRESHOLD{
+                return sat
+            }
+
+            else if dffm == NODATAVAL || temperature == NODATAVAL || humidity == NODATAVAL{
                 
-                let T0 = veg.T0;
-                if d0 == NODATAVAL {
-                    *dffm =	NODATAVAL;
-                }
-                else if snow_cover > SNOW_COVER_THRESHOLD{
-                    *dffm = sat;
-                }
+                return NODATAVAL;
+            }
+            
+            let t = if temperature > 0.0  { temperature }  else  {0.0};
 
-                else if *dffm == NODATAVAL || *temperature == NODATAVAL || *humidity == NODATAVAL{
-                    *dffm = NODATAVAL;
-                }
-                else {
-                    let t = if *temperature > 0.0  { *temperature }  else  {0.0};
+            let h = if humidity < 100.0 { humidity } else { 100.0 };
+            let w = if wind_speed != NODATAVAL { wind_speed } else { 0.0 };
+            let r = if rain != NODATAVAL { rain } else { 0.0 };
 
-                    let h = if *humidity < 100.0 { *humidity } else { 100.0 };
-                    let w = if *wind_speed != NODATAVAL { *wind_speed } else { 0.0 };
-                    let r = if *rain != NODATAVAL { *rain } else { 0.0 };
+            
+            
+            if r > MAXRAIN {
+                dffm = update_dffm_rain(r, dffm, sat);
+            }else{
+                dffm = update_dffm_dry(dffm, sat, t, w, h, T0, dt)
+            }
+            dffm
+        }).collect::<Vec<f32>>();
+        self.dffm = Array1::from(dffm);
 
-                    //let dT = f32::max(1.0, f32::min(72.0, ((currentTime - previousTime) / 3600.0)));
-                    //		float pdffm = dffm;
-                    // modello per temperature superiori a 0 gradi Celsius
-                    if r > MAXRAIN {
-                        *dffm = update_dffm_rain(r, *dffm, sat);
-                    }
-
-                    *dffm = update_dffm_dry(*dffm, sat, t, w, h, T0, dt)
-                }
-        });
     }
 
     #[allow(non_snake_case)]
@@ -500,7 +498,8 @@ impl State {
     }
 
     /// Update the state of the cells.
-    pub fn update(&mut self, props: &Properties, input: &Input, new_time: &DateTime<Utc>) {
+    pub fn update(&mut self, props: &Properties, input: &Input) {
+        let new_time = &input.time;
         let dt = new_time.signed_duration_since(self.time).num_seconds() as f32 / 3600.0;
         self.time = new_time.clone();
         self.update_satellite(input);

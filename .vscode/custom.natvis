@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<AutoVisualizer xmlns="http://schemas.microsoft.com/vstudio/debugger/natvis/2010">
+<Type Name="ndarray::ArrayBase&lt;*,*&gt;">
+      <DisplayString>{{Modified by Selva}}</DisplayString>
+      <Expand HideRawView="false">  
+            <ArrayItems>  
+                  <Direction>Forward</Direction>  
+                  <Rank>2</Rank>  
+                  <Size>$i==0?(int)dim.index[0]:(int)dim.index[1]</Size>  
+                  <ValuePointer>data.ptr.pointer</ValuePointer>  
+            </ArrayItems>  
+      </Expand>
+</Type>
+</AutoVisualizer>

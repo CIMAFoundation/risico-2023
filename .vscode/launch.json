@@ -7,39 +7,17 @@
         {
             "type": "lldb",
             "request": "launch",
-            "name": "Debug executable 'risico-2023'",
+            "name": "Cargo launch",
             "cargo": {
                 "args": [
                     "build",
-                    "--bin=risico-2023",
-                    "--package=risico-2023"
-                ],
-                "filter": {
-                    "name": "risico-2023",
-                    "kind": "bin"
-                }
+                    "--bin",
+                    "risico-2023"
+                ]
             },
             "args": [],
-            "cwd": "${workspaceFolder}"
-        },
-        {
-            "type": "lldb",
-            "request": "launch",
-            "name": "Debug unit tests in executable 'risico-2023'",
-            "cargo": {
-                "args": [
-                    "test",
-                    "--no-run",
-                    "--bin=risico-2023",
-                    "--package=risico-2023"
-                ],
-                "filter": {
-                    "name": "risico-2023",
-                    "kind": "bin"
-                }
-            },
-            "args": [],
-            "cwd": "${workspaceFolder}"
+            "visualizerFile": "${workspaceFolder}/.vscode/custom.natvis"
         }
+        
     ]
 }

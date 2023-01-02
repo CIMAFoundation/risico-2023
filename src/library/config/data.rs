@@ -1,4 +1,5 @@
 use std::rc::Rc;
+use std::sync::Arc;
 use std::{io::BufRead, collections::HashMap};
 use std::fs;
 use std::io::BufReader;
@@ -32,7 +33,7 @@ pub fn read_cells_properties(file_path: &str)
             // skip header
             continue;
         }
-        
+
         let line_parts: Vec<&str> = line.trim().split(' ').collect();
         
         if line_parts.len() < 5 {
@@ -66,12 +67,12 @@ pub fn read_cells_properties(file_path: &str)
 /// :return: A list of cells.
 pub fn read_vegetation(file_path: &str) -> 
     Result<
-        HashMap<String, Rc<Vegetation>>,
+        HashMap<String, Arc<Vegetation>>,
         std::io::Error
     > {
      
     let file = fs::File::open(file_path)?;        
-    let mut vegetations: HashMap<String, Rc<Vegetation>> = HashMap::new();
+    let mut vegetations: HashMap<String, Arc<Vegetation>> = HashMap::new();
 
     let reader = BufReader::new(file);
     
@@ -106,7 +107,7 @@ pub fn read_vegetation(file_path: &str) ->
         
         let veg_id = id.clone();
         
-        let veg = Rc::new(Vegetation {
+        let veg = Arc::new(Vegetation {
             id,
             d0,
             d1,
