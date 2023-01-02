@@ -197,26 +197,37 @@ fn get_input(
     }
 }
 
+fn pt(label: &str, start_time: DateTime<Utc>){
+    let elapsed = Utc::now()
+        .signed_duration_since(start_time)
+        .num_milliseconds();
+    println!("{label}: {} msec\n", elapsed);
+}
+
 fn main() {
     let the_start_time = Utc::now();
 
     let date = Utc.datetime_from_str("202301020000", "%Y%m%d%H%M").unwrap();
     let config = Config::new("/opt/risico/RISICO2015/configuration.txt", date).unwrap();
+    let config = Config::new("/opt/risico/RISICOMEDSTAR/configuration.txt", date).unwrap();
     
     let mut output_writer = config.get_output_writer()
         .expect("Could not configure output writer");
+    
 
     let props = config.get_properties();
     let mut state = config.new_state();
     let input_path = "/opt/risico/RISICO2015/INPUT/202301020842/input.txt";
+    let input_path = "/opt/risico/RISICOMEDSTAR/INPUT/202301021408/input.txt";
+// 
 
     let mut handler = InputDataHandler::new(&input_path);
 
     for time in handler.get_timeline() {
-        print!("Time: {}\n", time);
+        println!("Time: {}", time);
         let variables = handler.get_variables(&time);
         for name in variables {
-            print!("Variable: {}\n", name);
+            println!("Variable: {}", name);
         }
     }
 
@@ -224,41 +235,48 @@ fn main() {
 
     let lats = config.properties.lats.as_slice().unwrap();
     let lons = config.properties.lons.as_slice().unwrap();
-
+    
     for time in timeline {
-        print!("{} ", time);
+        println!("{} ", time);
+        let step_time = Utc::now();
+
         let start_time = Utc::now();
-        handler.load_data(&time, lats, lons);
+        handler.load_data(&time, lats, lons);        
+        
 
-        let input = get_input(&handler, lats, lons, &time);
-
-        state.update(props, &input);
-
-        let output = state.output(props, &input);
+        let start_time = Utc::now();
+            let input = get_input(&handler, lats, lons, &time);
+        pt("input time", start_time);
 
 
-        match output_writer.write_output(&output, lats, lons) {
+        let start_time = Utc::now();
+            state.update(props, &input);
+        pt("update time", start_time);
+
+        let start_time = Utc::now();
+            let output = state.output(props, &input);
+        pt("output time", start_time);
+
+
+        let start_time = Utc::now();
+        match output_writer.write_output(lats, lons, &output) {
             Ok(_) => (),
             Err(err) => println!("Error writing output: {}", err),
         };
+        pt("write time", start_time);
 
+        
         if time.hour() == 0 {
-            match config.write_warm_state(&state) {
-                Ok(_) => (),
-                Err(err) => println!("Error writing warm state: {}", err),
-            };
+            let start_time = Utc::now();
+                match config.write_warm_state(&state) {
+                    Ok(_) => (),
+                    Err(err) => println!("Error writing warm state: {}", err),
+                };
+            pt("warm state time", start_time);
         }
 
-        let elapsed = Utc::now()
-            .signed_duration_since(start_time)
-            .num_milliseconds();
-        println!("step elapsed time: {} msec\n", elapsed);
-
+        pt("step time", step_time);
     }
-    let elapsed = Utc::now()
-        .signed_duration_since(the_start_time)
-        .num_milliseconds();
-    println!("total elapsed time: {} msec\n", elapsed);
-
+    pt("total time", the_start_time);
     
 }

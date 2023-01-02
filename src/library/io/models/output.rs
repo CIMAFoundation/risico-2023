@@ -1,19 +1,18 @@
-use std::{
-    collections::HashMap,
-    path::PathBuf,
-};
+use std::{collections::HashMap, path::PathBuf};
 
 use chrono::{DateTime, Utc};
+use itertools::izip;
+use ndarray::Array1;
+use ndarray_stats::{QuantileExt, SummaryStatisticsExt, MaybeNanExt};
 use netcdf::MutableFile;
 
 use crate::library::{
     config::models::{ConfigError, PaletteMap},
     io::writers::{write_to_pngwjson, write_to_zbin_file},
-    state::{models::Output, constants::NODATAVAL},
+    state::{constants::NODATAVAL, models::Output},
 };
 
-use super::grid::{ClusterMode, RegularGrid};
-
+use super::grid::{ClusterMode, RegularGrid, Grid};
 
 const COMPRESSION_RATE: i32 = 4;
 
@@ -25,35 +24,7 @@ pub struct OutputVariable {
     precision: i32,
 }
 
-
-
 impl OutputVariable {
-    pub fn get_variable_on_grid(
-        &self,
-        lats: &[f32],
-        lons: &[f32],
-        output: &Output,
-        grid: &RegularGrid,
-    ) -> Option<Vec<f32>> {
-        let values = output.get(&self.internal_name);
-
-        let values = if let Some(values) = values {
-            values
-        } else {
-            return None;
-        };
-
-        let values = values.as_slice().unwrap();
-        let values = grid.project_to_grid(&lats, &lons, values, &self.cluster_mode);
-        // transform to desired number of decimal places precision
-        let cutval = f32::powi(10.0, self.precision);
-        let values = values
-            .iter()
-            .map(|val| f32::ceil(val / cutval - 0.5) * cutval)
-            .collect();
-        Some(values)
-    }
-
     pub fn new(internal_name: &str, name: &str, cluster_mode: ClusterMode, precision: i32) -> Self {
         Self {
             internal_name: internal_name.to_string(),
@@ -61,6 +32,50 @@ impl OutputVariable {
             cluster_mode,
             precision,
         }
+    }
+
+
+    pub fn get_variable_on_grid(&self, output: &Output, lats:&[f32], lons:&[f32], grid: &RegularGrid) -> Option<Array1<f32>> {
+        let values = output.get(&self.internal_name);
+
+        let values = if let Some(values) = values {
+            values
+        } else {
+            return None;
+        };
+        let cutval = f32::powi(10.0, self.precision);
+        
+        let n_pixels = grid.nrows * grid.ncols as usize;
+        let mut grid_values: Array1<f32> = Array1::ones(n_pixels) * NODATAVAL;
+        let mut grid_count: Array1<f32> = Array1::ones(n_pixels);
+
+        izip!(lats, lons, values).for_each(|(lat, lon, value)| {
+            if let Some(idx) = grid.index(&lat, &lon) {    
+                if value == NODATAVAL { return; }
+                
+                let prev_value = grid_values[idx];
+
+                if prev_value == NODATAVAL {
+                    grid_values[idx] = value;
+                } else {
+                    match self.cluster_mode {
+                        ClusterMode::Mean => {
+                            grid_values[idx] += value;
+                            grid_count[idx] += 1.0;
+                        },
+                        ClusterMode::Min => grid_values[idx] = f32::min(prev_value, value),
+                        ClusterMode::Max => grid_values[idx] = f32::max(prev_value, value),
+                        _ => unimplemented!("Median mode not implemented yet"),
+                    }
+                }
+                }
+        });
+
+        let grid_values = grid_values / grid_count;
+        // apply cutval
+        let grid_values = grid_values.mapv(|v| if v == NODATAVAL {NODATAVAL} else { (v / cutval).round() * cutval});
+        
+        Some(grid_values)
     }
 }
 
@@ -109,14 +124,8 @@ impl OutputType {
         self.variables.push(variable);
     }
 
-    pub fn write_variables(
-        &mut self,
-        output: &Output,
-        lats: &[f32],
-        lons: &[f32],
-    ) -> Result<(), ConfigError> {
-        self.writer
-            .write(output, &self.grid, lats, lons, &self.variables)
+    pub fn write_variables(&mut self, lats: &[f32], lons: &[f32], output: &Output) -> Result<(), ConfigError> {
+        self.writer.write(output, lats, lons, &self.grid, &self.variables)
     }
 }
 
@@ -138,7 +147,6 @@ impl NetcdfWriter {
         }
     }
 }
-        
 
 struct ZBinWriter {
     path: PathBuf,
@@ -178,9 +186,9 @@ trait Writer {
     fn write(
         &mut self,
         output: &Output,
-        grid: &RegularGrid,
         lats: &[f32],
         lons: &[f32],
+        grid: &RegularGrid,
         variables: &[OutputVariable],
     ) -> Result<(), ConfigError>;
 }
@@ -189,9 +197,9 @@ impl Writer for NetcdfWriter {
     fn write(
         &mut self,
         output: &Output,
-        grid: &RegularGrid,
         lats: &[f32],
         lons: &[f32],
+        grid: &RegularGrid,
         variables: &[OutputVariable],
     ) -> Result<(), ConfigError> {
         for variable in variables {
@@ -201,10 +209,7 @@ impl Writer for NetcdfWriter {
             if !self.files.contains_key(&variable.name) {
                 let path = self.path.as_os_str().to_str().unwrap();
                 //let run_date = &self.run_date.format("%Y%m%d%H%M").to_string();
-                let file_name = format!(
-                    "{}/{}.nc",
-                    path, variable.name
-                );
+                let file_name = format!("{}/{}.nc", path, variable.name);
 
                 let options = netcdf::Options::NETCDF4;
 
@@ -218,7 +223,8 @@ impl Writer for NetcdfWriter {
                 file.add_dimension("latitude", n_lats).unwrap();
                 file.add_dimension("longitude", n_lons).unwrap();
 
-                file.add_unlimited_dimension("time").map_err(|err| format!("Add time dimension failed {err}"))?;
+                file.add_unlimited_dimension("time")
+                    .map_err(|err| format!("Add time dimension failed {err}"))?;
                 let lats: Vec<f32> = (0..n_lats)
                     .map(|i| {
                         grid.min_lat
@@ -245,57 +251,58 @@ impl Writer for NetcdfWriter {
 
                 var.put_values(&lons, None, None)
                     .expect("Add longitude failed");
-        
+
                 let mut time_var = file
                     .add_variable::<u32>("time", &["time"])
                     .expect("Add time failed");
-        
-                time_var.add_attribute("units", "seconds since 1970-01-01 00:00:00")
+
+                time_var
+                    .add_attribute("units", "seconds since 1970-01-01 00:00:00")
                     .unwrap_or_else(|_| panic!("Add time units failed"));
 
                 let mut variable_var = file
-                            .add_variable::<f32>(&variable.name, &["time", "latitude", "longitude"])
-                            .unwrap_or_else(|_| panic!("Add {} failed", variable.name));
+                    .add_variable::<f32>(&variable.name, &["time", "latitude", "longitude"])
+                    .unwrap_or_else(|_| panic!("Add {} failed", variable.name));
 
-                variable_var.compression(COMPRESSION_RATE)
-                            .expect("Set compression failed");
+                variable_var
+                    .compression(COMPRESSION_RATE)
+                    .expect("Set compression failed");
 
-                variable_var.add_attribute("missing_value", NODATAVAL)
+                variable_var
+                    .add_attribute("missing_value", NODATAVAL)
                     .expect("Should add attribute");
-                
-                
 
                 self.files.insert(variable.name.clone(), file);
-
             }
 
             let file = self.files.get_mut(&variable.name).unwrap();
 
-            
             let mut time_var = file
                 .variable_mut("time")
                 .ok_or_else(|| format!("variable not found: time"))?;
             let time: u32 = output.time.timestamp() as u32;
             let len = time_var.len();
-            time_var.put_values(&[time], Some(&[len]), Some(&[1 as usize]))
-                .unwrap_or_else(|_| panic!("Add time failed"));                    
+            time_var
+                .put_values(&[time], Some(&[len]), Some(&[1 as usize]))
+                .unwrap_or_else(|_| panic!("Add time failed"));
 
             let mut variable_var = file
                 .variable_mut(&variable.name)
                 .ok_or_else(|| format!("variable not found: {}", variable.name))?;
-            
-            
-            let values = variable.get_variable_on_grid(&lats, &lons, &output, &grid);
-            
-            if let Some(values) = values {
-                variable_var.put_values(values.as_slice(), Some(&[len, 0, 0]), Some(&[1, n_lats, n_lons]) )
-                   .unwrap_or_else(|err| panic!("Add variable failed: {err}"));
-            }else{
-                continue
-            }
 
-            
-        
+            let values = variable.get_variable_on_grid(&output, lats, lons, &grid);
+
+            if let Some(values) = values {
+                variable_var
+                    .put_values(
+                        values.as_slice().unwrap(),
+                        Some(&[len, 0, 0]),
+                        Some(&[1, n_lats, n_lons]),
+                    )
+                    .unwrap_or_else(|err| panic!("Add variable failed: {err}"));
+            } else {
+                continue;
+            }
         }
         Ok(())
     }
@@ -305,9 +312,9 @@ impl Writer for ZBinWriter {
     fn write(
         &mut self,
         output: &Output,
-        grid: &RegularGrid,
         lats: &[f32],
         lons: &[f32],
+        grid: &RegularGrid,
         variables: &[OutputVariable],
     ) -> Result<(), ConfigError> {
         let path = self.path.as_os_str().to_str().unwrap();
@@ -319,13 +326,12 @@ impl Writer for ZBinWriter {
                 "{}/{}_{}_{}_{}.zbin",
                 path, self.name, run_date, date_string, variable.name
             );
-            let values = variable.get_variable_on_grid(&lats, &lons, &output, &grid);
+            let values = variable.get_variable_on_grid(&output, lats, lons, grid);
 
             if let Some(values) = values {
-                write_to_zbin_file(&file, &grid, values)
+                write_to_zbin_file(&file, &grid, values.as_slice().unwrap())
                     .map_err(|err| format!("Cannot write file {}: error {err}", file))?;
             }
-
         }
         Ok(())
     }
@@ -335,9 +341,9 @@ impl Writer for PngWriter {
     fn write(
         &mut self,
         output: &Output,
-        grid: &RegularGrid,
         lats: &[f32],
         lons: &[f32],
+        grid: &RegularGrid,
         variables: &[OutputVariable],
     ) -> Result<(), ConfigError> {
         let path = self.path.as_os_str().to_str().unwrap();
@@ -349,17 +355,16 @@ impl Writer for PngWriter {
                 "{}/{}_{}_{}_{}.png",
                 path, self.name, run_date, date_string, variable.name
             );
-            let values = variable.get_variable_on_grid(&lats, &lons, &output, &grid);
+            let values = variable.get_variable_on_grid(&output, lats, lons, grid);
             let palette = self
                 .palettes
                 .get(&variable.name)
                 .ok_or(format!("No palette found for variable {}", variable.name))?;
 
             if let Some(values) = values {
-                write_to_pngwjson(&file, &grid, values, &palette)
+                write_to_pngwjson(&file, &grid, values.as_slice().unwrap(), &palette)
                     .map_err(|err| format!("Cannot write file {}: error {err}", file))?;
             }
-            
         }
         Ok(())
     }

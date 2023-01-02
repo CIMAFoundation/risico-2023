@@ -8,7 +8,7 @@ use std::io::BufWriter;
 use super::models::{grid::{RegularGrid }, palette::Palette};
 
 
-pub fn write_to_zbin_file(file: &str, grid: &RegularGrid, values: Vec<f32>) -> Result<(), io::Error> {
+pub fn write_to_zbin_file(file: &str, grid: &RegularGrid, values: &[f32]) -> Result<(), io::Error> {
     let output = File::create(file).expect(&format!("Can't create file: {}", file));
     
     let output = io::BufWriter::new(output);
@@ -35,13 +35,16 @@ pub fn write_to_zbin_file(file: &str, grid: &RegularGrid, values: Vec<f32>) -> R
     let buf = grid.max_lon.to_le_bytes();
     encoder.write(&buf)?;
 
+    let mut buf = Vec::<u8>::new();
 
     for index in 0..nrows*ncols{
         let index = index as usize;
         let val = values[index] as f32;
-        let buf = val.to_le_bytes();
-        encoder.write(&buf)?;        
+        
+        buf.extend(val.to_le_bytes());
+        
     }
+    encoder.write(&buf)?;        
 
     encoder.finish();
     
@@ -50,7 +53,7 @@ pub fn write_to_zbin_file(file: &str, grid: &RegularGrid, values: Vec<f32>) -> R
 
 
 
-pub fn write_to_pngwjson(file: &str, grid: &RegularGrid, values: Vec<f32>, palette: &Palette) -> Result<(), io::Error> {
+pub fn write_to_pngwjson(file: &str, grid: &RegularGrid, values: &[f32], palette: &Palette) -> Result<(), io::Error> {
     let output = File::create(file)?;
                 
     let output = io::BufWriter::new(output);

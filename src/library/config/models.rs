@@ -12,8 +12,10 @@ use chrono::{DateTime, Utc};
 use itertools::izip;
 
 use ndarray::Array1;
+use rayon::prelude::IntoParallelIterator;
+//use rayon::prelude::IntoParallelRefIterator;
 
-use crate::library::{io::{readers::read_input_from_file, models::{output::{OutputType, OutputVariable}, palette::Palette}}, state::models::{Output, Properties}};
+use crate::library::{io::{readers::read_input_from_file, models::{output::{OutputType, OutputVariable}, palette::Palette}}, state::{models::{Output, Properties}, constants::NODATAVAL}};
 use crate::{
     library::{
         io::models::grid::{ClusterMode, Grid},
@@ -383,13 +385,14 @@ impl OutputWriter {
         }
     }
 
-    pub fn write_output(&mut self, output: &Output, lats: &[f32], lons: &[f32]) -> Result<(), ConfigError> {
-        for output_type in &mut self.outputs {
-            match output_type.write_variables(output, lats, lons) {
+
+    pub fn write_output(&mut self, lats: &[f32], lons: &[f32], output: &Output) -> Result<(), ConfigError> {
+        self.outputs.iter_mut().for_each(|output_type| {
+            match output_type.write_variables(lats, lons, output) {
                 Ok(_) => (),
                 Err(e) => println!("Error writing output: {}", e)
             }
-        }
+        });
         Ok(())
     }
 }
@@ -590,7 +593,12 @@ impl InputDataHandler {
         let grid = self.grid_registry.get(&lazy_file.grid_name).unwrap();
         let data = izip!(lats, lons)
             .map(|(lat, lon)| grid.index(lat, lon))
-            .map(|index| data[index]).collect();
+            .map(|index| 
+                match index {
+                    Some(index) => data[index],
+                    None => NODATAVAL
+                }
+            ).collect();
         Some(data)
     }
 

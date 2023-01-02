@@ -77,8 +77,8 @@ pub fn read_vegetation(file_path: &str) ->
     
     for (i, line) in reader.lines().enumerate(){
         let line = line?;
-        if i == 0 && line.starts_with("#") {
-            // skip header
+        if i == 0 && line.starts_with("#") || line.is_empty(){
+            // skip header and empty lines
             continue;
         }
         let line_elements: Vec<&str> = line.trim()
@@ -86,11 +86,14 @@ pub fn read_vegetation(file_path: &str) ->
                         .collect::<Vec<&str>>();
         
 
-        if line_elements.len() < 5 {
+        let n_elements = line_elements.len();
+        if n_elements < 9 {
             let error_message = format!("Invalid line in file: {}", line);
             let error = std::io::Error::new(std::io::ErrorKind::InvalidData, error_message);
             return Err(error);
         }
+        
+        
 
         //  [TODO] refactor this for using error handling
         let id = line_elements[0].to_string();
@@ -102,8 +105,13 @@ pub fn read_vegetation(file_path: &str) ->
         #[allow(non_snake_case)]
         let T0 = line_elements[6].parse::<f32>().unwrap();
         let sat = line_elements[7].parse::<f32>().unwrap();
-        let name = line_elements[8].to_string();
         
+        let use_ndvi = match n_elements {
+            10.. => line_elements[8].parse::<bool>().unwrap(),
+            _ => false
+        };
+        let name = line_elements[n_elements-1].to_string();
+
         let veg_id = id.clone();
         
         let veg = Arc::new(Vegetation {
@@ -115,7 +123,8 @@ pub fn read_vegetation(file_path: &str) ->
             v0,
             T0,
             sat,
-            name
+            name,
+            use_ndvi
         });
         
         vegetations.insert(veg_id, veg);

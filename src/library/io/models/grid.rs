@@ -5,6 +5,7 @@ use crate::library::{
     state::constants::NODATAVAL,
 };
 use itertools::izip;
+use ndarray::Array1;
 
 #[derive(Debug)]
 pub enum ClusterMode {
@@ -15,7 +16,7 @@ pub enum ClusterMode {
 }
 
 pub trait Grid {
-    fn index(&self, lat: &f32, lon: &f32) -> usize;
+    fn index(&self, lat: &f32, lon: &f32) -> Option<usize>;
     fn shape(&self) -> (usize, usize);
     fn build_cache(&mut self, lats: &[f32], lons: &[f32]);
 }
@@ -65,32 +66,20 @@ impl RegularGrid {
         &self,
         lats: &[f32],
         lons: &[f32],
-        values: &[f32],
-        mode: &ClusterMode,
-    ) -> Vec<f32> {
+    ) -> Vec<Array1<usize>> {
         let (nrows, ncols) = self.shape();
 
-        let mut grid_values = vec![0.0; nrows * ncols];
-        let mut count = vec![0; nrows * ncols];
-        izip!(lats, lons, values).for_each(|(lat, lon, value)| {
-            let idx = self.index(&lat, &lon);
-            if *value != NODATAVAL  {
-                grid_values[idx] += value;
-                count[idx] += 1;
-            }            
-        });
-        match mode {
-            _ => {
-                for i in 0..grid_values.len() {
-                    if count[i] > 0 {
-                        grid_values[i] /= count[i] as f32;
-                    } else {
-                        grid_values[i] = NODATAVAL as f32;
-                    }
-                }
+        let mut grid_indexes = vec![vec![]; nrows * ncols];
+        
+        izip!(lats, lons).enumerate().for_each(|(index, (lat, lon))| {
+            if let Some(idx) = self.index(&lat, &lon) {
+                grid_indexes[idx].push(index);               
             }
-        }
-        grid_values
+        });
+
+        let indexes = grid_indexes.iter().map(|v| Array1::from(v.to_owned())).collect();
+        indexes
+
     }
 
     pub fn from_txt_file(grid_file: &str) -> Result<RegularGrid, ConfigError> {
@@ -147,10 +136,16 @@ impl RegularGrid {
 }
 
 impl Grid for RegularGrid {
-    fn index(&self, lat: &f32, lon: &f32) -> usize {
+    fn index(&self, lat: &f32, lon: &f32) -> Option<usize> {
+        if lat < &(self.min_lat - self.step_lat/2.0) ||
+        lat > &(self.max_lat + self.step_lat/2.0) || 
+        lon < &(self.min_lon - self.step_lon/2.0) ||
+        lon > &(self.max_lon + self.step_lon/2.0) {
+            return None;
+        }
         let i = ((lat - self.min_lat) / self.step_lat).round() as usize;
         let j = ((lon - self.min_lon) / self.step_lon).round() as usize;
-        i * self.ncols + j
+        Some(i * self.ncols + j)
     }
 
     fn shape(&self) -> (usize, usize) {
@@ -237,12 +232,12 @@ impl IrregularGrid {
 }
 
 impl Grid for IrregularGrid {
-    fn index(&self, lat: &f32, lon: &f32) -> usize {
+    fn index(&self, lat: &f32, lon: &f32) -> Option<usize> {
         let maybe_index = self.get_cached_index(lat, lon);
         if let Some(index) = maybe_index {
-            return index;
+            return Some(index);
         };
-        self.index_non_cached(lat, lon)
+        Some(self.index_non_cached(lat, lon))
     }
 
     fn shape(&self) -> (usize, usize) {

@@ -36,18 +36,28 @@ impl Properties {
         ppf_winter: Vec<f32>,
     ) -> Self {
         // check if all vectors have the same length
+        // let n_elements = lats.len();
 
-        let lats = Array1::from_vec(lats.clone());
-        let lons = Array1::from_vec(lons.clone());
-        let slopes = Array1::from_vec(slopes.clone());
-        let aspects = Array1::from_vec(aspects.clone());
-        let ppf_summer = Array1::from_vec(ppf_summer.clone());
-        let ppf_winter = Array1::from_vec(ppf_winter.clone());
+        // if ppf_summer.len() < n_elements {
+        //     println!("Warning: PPF is not consistent with cell file. Overriding missing elements.");
+        //     println!("PPF: {} elements ", ppf_summer.len());
+        //     println!("Cells: {} elements ", n_elements);
+            
+        // }
+            
+
+
+        let lats = Array1::from_vec(lats);
+        let lons = Array1::from_vec(lons);
+        let slopes = Array1::from_vec(slopes);
+        let aspects = Array1::from_vec(aspects);
+        let ppf_summer = Array1::from_vec(ppf_summer);
+        let ppf_winter = Array1::from_vec(ppf_winter);
 
         let vegetations = vegetations
             .iter()
             .map(|v| vegetations_dict.get(v).unwrap().clone())
-            .collect::<Array1<_>>();
+            .collect();
 
         Self {
             lons,
@@ -78,6 +88,7 @@ pub struct Vegetation {
     pub T0: f32,
     pub sat: f32,
     pub name: String,
+    pub use_ndvi: bool,
 }
 
 #[allow(non_snake_case)]
@@ -382,7 +393,7 @@ impl State {
             }
 
             if dffm != NODATAVAL && dffm <= 0.0 {
-                println!("{i}, {dffm}");
+                // println!("{i}, {dffm}");
             }
 
             // limit dffm to [0, sat]
