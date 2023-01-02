@@ -1,4 +1,4 @@
-use std::{collections::HashMap, rc::Rc, f32::NAN, sync::Arc};
+use std::{collections::HashMap, f32::NAN, sync::Arc};
 
 use chrono::prelude::*;
 use ndarray::{azip, Array1};
@@ -380,6 +380,14 @@ impl State {
             }else{
                 dffm = update_dffm_dry(dffm, sat, t, w, h, T0, dt)
             }
+
+            if dffm != NODATAVAL && dffm <= 0.0 {
+                println!("{i}, {dffm}");
+            }
+
+            // limit dffm to [0, sat]
+            dffm = f32::max(0.0, f32::min(sat, dffm));
+
             dffm
         }).collect::<Vec<f32>>();
         self.dffm = Array1::from(dffm);

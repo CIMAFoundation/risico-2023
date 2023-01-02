@@ -74,8 +74,10 @@ impl RegularGrid {
         let mut count = vec![0; nrows * ncols];
         izip!(lats, lons, values).for_each(|(lat, lon, value)| {
             let idx = self.index(&lat, &lon);
-            grid_values[idx] += value;
-            count[idx] += 1;
+            if *value != NODATAVAL  {
+                grid_values[idx] += value;
+                count[idx] += 1;
+            }            
         });
         match mode {
             _ => {

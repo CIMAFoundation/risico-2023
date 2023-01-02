@@ -9,7 +9,7 @@ use netcdf::MutableFile;
 use crate::library::{
     config::models::{ConfigError, PaletteMap},
     io::writers::{write_to_pngwjson, write_to_zbin_file},
-    state::models::Output,
+    state::{models::Output, constants::NODATAVAL},
 };
 
 use super::grid::{ClusterMode, RegularGrid};
@@ -211,6 +211,9 @@ impl Writer for NetcdfWriter {
                 let mut file = netcdf::create_with(&file_name, options)
                     .map_err(|err| format!("can't create file {file_name}: {err}"))?;
 
+                file.add_attribute("missing_value", NODATAVAL)
+                    .expect("Should add attribute");
+
                 // We must create a dimension which corresponds to our data
                 file.add_dimension("latitude", n_lats).unwrap();
                 file.add_dimension("longitude", n_lons).unwrap();
@@ -256,6 +259,11 @@ impl Writer for NetcdfWriter {
 
                 variable_var.compression(COMPRESSION_RATE)
                             .expect("Set compression failed");
+
+                variable_var.add_attribute("missing_value", NODATAVAL)
+                    .expect("Should add attribute");
+                
+                
 
                 self.files.insert(variable.name.clone(), file);
 
@@ -346,7 +354,7 @@ impl Writer for PngWriter {
                 .palettes
                 .get(&variable.name)
                 .ok_or(format!("No palette found for variable {}", variable.name))?;
-                
+
             if let Some(values) = values {
                 write_to_pngwjson(&file, &grid, values, &palette)
                     .map_err(|err| format!("Cannot write file {}: error {err}", file))?;

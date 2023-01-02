@@ -16,7 +16,7 @@ fn replace(dst: &mut Array1<f32>, src: &Array1<f32>) {
             dst in dst,
             src in src,
         ) {
-            if *dst <= -9998.0 {
+            if *dst <= (NODATAVAL+1.0) {
                 *dst = *src;
             }
         })
@@ -71,11 +71,34 @@ fn get_input(
 
     // Forecasted temperature
     let t = handler.get_values("T", &time, lats, lons);
-
+    
+    
     if let Some(t) = t  { 
         let t = t.mapv(|_t| if _t > 200.0 {_t - 273.15} else { _t });
         replace(&mut temperature, &t);
+        // Forecasted dew point temperature
+        let r = handler.get_values("R", &time, lats, lons);
+        if let Some(r) = r {
+            let mut h: Array1<f32> = Array1::ones(lats.len()) * NODATAVAL;
+            azip!((
+                h in &mut h,
+                r in &r, 
+                t in &t
+            ){
+                if *r > NODATAVAL && *t > NODATAVAL {
+                    let mut r = *r;
+                    if r > 200.0 {
+                        r = r - 273.15;
+                    }
+                    *h = 100.0*(f32::exp((17.67 * r)/(r + 243.5))/f32::exp((17.67 * t)/(t + 243.5)));
+                }
+            });
+            replace(&mut humidity, &h);
+        }
     }
+    
+
+    
 
     // Observed precipitation
     let op = handler.get_values("O", &time, lats, lons);
@@ -175,7 +198,7 @@ fn get_input(
 }
 
 fn main() {
-    let start_time = Utc::now();
+    let the_start_time = Utc::now();
 
     let date = Utc.datetime_from_str("202301020000", "%Y%m%d%H%M").unwrap();
     let config = Config::new("/opt/risico/RISICO2015/configuration.txt", date).unwrap();
@@ -186,11 +209,6 @@ fn main() {
     let props = config.get_properties();
     let mut state = config.new_state();
     let input_path = "/opt/risico/RISICO2015/INPUT/202301020842/input.txt";
-
-    let elapsed = Utc::now()
-        .signed_duration_since(start_time)
-        .num_milliseconds();
-    println!("state created in {} msec\n", elapsed);
 
     let mut handler = InputDataHandler::new(&input_path);
 
@@ -234,7 +252,13 @@ fn main() {
         let elapsed = Utc::now()
             .signed_duration_since(start_time)
             .num_milliseconds();
-        println!("elapsed {} msec\n", elapsed);
+        println!("step elapsed time: {} msec\n", elapsed);
 
     }
+    let elapsed = Utc::now()
+        .signed_duration_since(the_start_time)
+        .num_milliseconds();
+    println!("total elapsed time: {} msec\n", elapsed);
+
+    
 }
