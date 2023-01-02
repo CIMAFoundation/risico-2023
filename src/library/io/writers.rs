@@ -70,13 +70,15 @@ pub fn write_to_pngwjson(file: &str, grid: &RegularGrid, values: Vec<f32>, palet
 
 
     let mut data:Vec<u8> = Vec::new();
-    for index in 0..nrows*ncols{
-        let index = index as usize;
-        let val = values[index] as f32;
-        let color = palette.get_color(val);
-        let pixel_data = [color.r, color.g, color.b, color.a];
-        for i in 0..4{
-            data.push(pixel_data[i]);
+    for row in (0..nrows).rev() {
+        for col in 0..ncols {
+            let index = (row*ncols + col) as usize;
+            let val = values[index] as f32;
+            let color = palette.get_color(val);
+            let pixel_data = [color.r, color.g, color.b, color.a];
+            for i in 0..4{
+                data.push(pixel_data[i]);
+            }
         }
     }
     writer.write_image_data(&data)?;
