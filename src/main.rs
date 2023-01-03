@@ -85,7 +85,7 @@ fn get_input(
                 r in &r, 
                 t in &t
             ){
-                if *r > NODATAVAL && *t > NODATAVAL {
+                if *r > (NODATAVAL+1.0) && *t > (NODATAVAL+1.0) {
                     let mut r = *r;
                     if r > 200.0 {
                         r = r - 273.15;
@@ -150,7 +150,7 @@ fn get_input(
 
         let ws = izip!(&u, &v)
             .map(|(_u, _v)| {
-                if *_u < -9998.0 || *_v < -9998.0 {
+                if *_u < (NODATAVAL+1.0) || *_v < (NODATAVAL+1.0) {
                     return NODATAVAL;
                 }
                 
@@ -198,10 +198,10 @@ fn get_input(
 }
 
 fn pt(label: &str, start_time: DateTime<Utc>){
-    let elapsed = Utc::now()
-        .signed_duration_since(start_time)
-        .num_milliseconds();
-    println!("{label}: {} msec\n", elapsed);
+    // let elapsed = Utc::now()
+    //     .signed_duration_since(start_time)
+    //     .num_milliseconds();
+    // println!("{label}: {} msec\n", elapsed);
 }
 
 fn main() {
@@ -209,7 +209,7 @@ fn main() {
 
     let date = Utc.datetime_from_str("202301020000", "%Y%m%d%H%M").unwrap();
     let config = Config::new("/opt/risico/RISICO2015/configuration.txt", date).unwrap();
-    let config = Config::new("/opt/risico/RISICOMEDSTAR/configuration.txt", date).unwrap();
+    // let config = Config::new("/opt/risico/RISICOMEDSTAR/configuration.txt", date).unwrap();
     
     let mut output_writer = config.get_output_writer()
         .expect("Could not configure output writer");
@@ -218,7 +218,7 @@ fn main() {
     let props = config.get_properties();
     let mut state = config.new_state();
     let input_path = "/opt/risico/RISICO2015/INPUT/202301020842/input.txt";
-    let input_path = "/opt/risico/RISICOMEDSTAR/INPUT/202301021408/input.txt";
+    // let input_path = "/opt/risico/RISICOMEDSTAR/INPUT/202301021408/input.txt";
 // 
 
     let mut handler = InputDataHandler::new(&input_path);
