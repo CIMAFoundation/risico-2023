@@ -1,6 +1,6 @@
 
 use std::{io::{self, Write}, fs::File};
-use libflate::gzip;
+use libflate::{gzip, finish::Complete};
 use std::path::Path;
 use std::io::BufWriter;
 
@@ -40,12 +40,10 @@ pub fn write_to_zbin_file(file: &str, grid: &RegularGrid, values: &[f32]) -> Res
     for index in 0..nrows*ncols{
         let index = index as usize;
         let val = values[index] as f32;
-        
         buf.extend(val.to_le_bytes());
         
     }
-    encoder.write(&buf)?;        
-
+    encoder.write(&buf)?;
     encoder.finish();
     
     Ok(())
