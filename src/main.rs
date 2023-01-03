@@ -1,9 +1,11 @@
 #![allow(dead_code)]
 // import state from lib
 mod library;
+use std::f32::consts::PI;
+
 use chrono::prelude::*;
 use itertools::izip;
-use library::state::constants::{NODATAVAL, PI};
+use library::state::constants::NODATAVAL;
 use ndarray::{azip, Array1};
 
 use crate::library::{
@@ -197,7 +199,7 @@ fn get_input(
     }
 }
 
-fn pt(label: &str, start_time: DateTime<Utc>){
+fn pt(_label: &str, _start_time: DateTime<Utc>){
     // let elapsed = Utc::now()
     //     .signed_duration_since(start_time)
     //     .num_milliseconds();
@@ -240,10 +242,8 @@ fn main() {
         println!("{} ", time);
         let step_time = Utc::now();
 
-        let start_time = Utc::now();
         handler.load_data(&time, lats, lons);        
         
-
         let start_time = Utc::now();
             let input = get_input(&handler, lats, lons, &time);
         pt("input time", start_time);

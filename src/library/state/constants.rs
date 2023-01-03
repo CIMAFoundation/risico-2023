@@ -36,8 +36,6 @@ pub const  R1:f32 = 12.119;
 pub const  R2:f32 = 20.77;
 pub const  R3:f32 = 3.2;
 
-pub const  PI:f32 = 3.14159;
-pub const  PIX2:f32 = 6.28318;
 
 pub const  CLOUDCOVER:f32 = 1.0;
 

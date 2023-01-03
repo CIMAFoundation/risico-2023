@@ -1,8 +1,7 @@
 use std::{collections::HashMap, fmt::Debug};
 
 use crate::library::{
-    config::models::{read_config, ConfigError},
-    state::constants::NODATAVAL,
+    config::models::{read_config, ConfigError}
 };
 use itertools::izip;
 use ndarray::Array1;

@@ -1,3 +1,4 @@
+use std::f32::consts::PI;
 use std::sync::Arc;
 use std::{io::BufRead, collections::HashMap};
 use std::fs;
@@ -47,6 +48,10 @@ pub fn read_cells_properties(file_path: &str)
         let slope = line_parts[2].parse::<f32>().unwrap();
         let aspect = line_parts[3].parse::<f32>().unwrap();
         let vegetation = line_parts[4].to_string();
+
+        let slope = slope * PI / 180.0;
+        let aspect = aspect * PI / 180.0;
+
         lons.push(lon);
         lats.push(lat);
         slopes.push(slope);

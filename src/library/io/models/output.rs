@@ -3,7 +3,6 @@ use std::{collections::HashMap, path::PathBuf};
 use chrono::{DateTime, Utc};
 use itertools::izip;
 use ndarray::Array1;
-use ndarray_stats::{QuantileExt, SummaryStatisticsExt, MaybeNanExt};
 use netcdf::MutableFile;
 
 use crate::library::{

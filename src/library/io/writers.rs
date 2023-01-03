@@ -1,6 +1,6 @@
 
 use std::{io::{self, Write}, fs::File};
-use libflate::{gzip, finish::Complete};
+use libflate::{gzip};
 use std::path::Path;
 use std::io::BufWriter;
 

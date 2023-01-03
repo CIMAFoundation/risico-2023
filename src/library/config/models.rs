@@ -12,8 +12,6 @@ use chrono::{DateTime, Utc};
 use itertools::izip;
 
 use ndarray::Array1;
-use rayon::prelude::IntoParallelIterator;
-//use rayon::prelude::IntoParallelRefIterator;
 
 use crate::library::{io::{readers::read_input_from_file, models::{output::{OutputType, OutputVariable}, palette::Palette}}, state::{models::{Output, Properties}, constants::NODATAVAL}};
 use crate::{
