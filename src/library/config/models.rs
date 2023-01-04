@@ -326,7 +326,7 @@ impl Config {
     pub fn write_warm_state(&self, state: &State) -> Result<(), ConfigError> {
         let warm_state_time = state.time.clone() + Duration::days(1);
         let date_string = warm_state_time.format("%Y%m%d%H%M").to_string();
-        let warm_state_name = format!("{}_{}", self.warm_state_path, date_string);
+        let warm_state_name = format!("{}{}", self.warm_state_path, date_string);
         let mut warm_state_file = File::create(&warm_state_name)
             .map_err(|error| format!("error creating {}, {}", &warm_state_name, error))?;
         for idx in 0..state.dffm.len() {
@@ -450,7 +450,7 @@ fn parse_line(line: &str) -> Result<(String, String, DateTime<Utc>), InputFilePa
     let variable = components[2].to_string();
 
     // parse the date
-    println!("Parsing date: {}", date);
+    
     let date = NaiveDateTime::parse_from_str(date, "%Y%m%d%H%M")
         .map_err(|error| format!("Error parsing date: {error}"))?;
 
