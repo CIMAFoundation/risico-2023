@@ -324,7 +324,8 @@ impl Config {
 
     #[allow(non_snake_case)]
     pub fn write_warm_state(&self, state: &State) -> Result<(), ConfigError> {
-        let date_string = state.time.format("%Y%m%d%H%M").to_string();
+        let warm_state_time = state.time.clone() + Duration::days(1);
+        let date_string = warm_state_time.format("%Y%m%d%H%M").to_string();
         let warm_state_name = format!("{}_{}", self.warm_state_path, date_string);
         let mut warm_state_file = File::create(&warm_state_name)
             .map_err(|error| format!("error creating {}, {}", &warm_state_name, error))?;
@@ -666,7 +667,7 @@ fn read_warm_state(base_warm_file: &str, date: DateTime<Utc>) -> Option<(Vec<War
 
     let mut current_date = date.clone();
 
-    for days_before in 1..5 {     
+    for days_before in 0..4 {     
         current_date = date.clone() - Duration::days(days_before);   
         
         let filename = format!("{}{}", base_warm_file, current_date.format("%Y%m%d%H%M"));
@@ -682,16 +683,23 @@ fn read_warm_state(base_warm_file: &str, date: DateTime<Utc>) -> Option<(Vec<War
         file = Some(file_handle.expect("Should unwrap"));
         break;
     }
-    if file.is_some() {
-        println!("Loading warm state from {}",current_date.format("%Y%m%d%H%M"));
-    }
+    let file = match file {
+        Some(file) => file,
+        None => {
+            println!("Loading warm state from {}",current_date.format("%Y%m%d%H%M"));
+            return None;
+        }
+    };
+    
 
+    println!("Loading warm state from {}",current_date.format("%Y%m%d%H%M"));
     let mut warm_state: Vec<WarmState> = Vec::new();
-    let file = file.unwrap();
+    
     let reader = io::BufReader::new(file);
     
     for line in reader.lines() {
         let line = line.unwrap();
+
         let components: Vec<&str> = line.split_whitespace().collect();
         let dffm = components[0].parse::<f32>().unwrap();
 
@@ -720,7 +728,7 @@ fn read_warm_state(base_warm_file: &str, date: DateTime<Utc>) -> Option<(Vec<War
         });
     }
     
-
+    let current_date = current_date - Duration::days(1);
     Some((warm_state, current_date))
 }
 

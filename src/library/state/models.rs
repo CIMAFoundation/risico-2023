@@ -77,9 +77,11 @@ impl Properties {
         let ppf_summer = Array1::from_vec(ppf_summer);
         let ppf_winter = Array1::from_vec(ppf_winter);
 
+        let default_veg = Arc::new(Vegetation::default());
+
         let vegetations = vegetations
             .iter()
-            .map(|v| vegetations_dict.get(v).unwrap().clone())
+            .map(|v| vegetations_dict.get(v).unwrap_or(&default_veg).clone())
             .collect();
 
         Self {
@@ -112,6 +114,23 @@ pub struct Vegetation {
     pub sat: f32,
     pub name: String,
     pub use_ndvi: bool,
+}
+
+impl Default for Vegetation {
+    fn default() -> Self {
+        Self {
+            id: "default".to_string(),
+            d0: 0.5,
+            d1: NODATAVAL,
+            hhv: 18000.0,
+            umid: NODATAVAL,
+            v0: 120.0,
+            T0: 30.0,
+            sat: 40.0,
+            name: "default".to_string(),
+            use_ndvi: false,
+        }
+    }
 }
 
 #[allow(non_snake_case)]
@@ -300,69 +319,79 @@ impl State {
 
     fn update_satellite(&mut self, input: &Input) {
         for idx in 0..self.len() {
-            let ndsi = &mut self.NDSI[idx];
-            let ndsi_ttl = &mut self.NDSI_TTL[idx];
-            let i_ndsi = input.ndsi[idx];
+            {
+                let ndsi = &mut self.NDSI[idx];
+                let ndsi_ttl = &mut self.NDSI_TTL[idx];
+                let i_ndsi = input.ndsi[idx];
 
-            if i_ndsi < 0.0 {
-                if *ndsi_ttl > 0.0 {
-                    *ndsi_ttl -= 1.0;
+                if i_ndsi < 0.0 {
+                    if *ndsi_ttl > 0.0 {
+                        *ndsi_ttl -= 1.0;
+                    } else {
+                        *ndsi = NODATAVAL;
+                    }
                 } else {
-                    *ndsi = NODATAVAL;
+                    *ndsi = i_ndsi;
+                    *ndsi_ttl = 56.0;
                 }
-            } else {
-                *ndsi = i_ndsi;
-                *ndsi_ttl = 56.0;
             }
+            {
+                let msi = &mut self.MSI[idx];
+                let msi_ttl = &mut self.MSI_TTL[idx];
+                let i_msi = input.msi[idx];
 
-            let msi = &mut self.MSI[idx];
-            let msi_ttl = &mut self.MSI_TTL[idx];
-            let i_msi = input.msi[idx];
-
-            if i_msi < 0.0 || i_msi > 1.0 {
-                if *msi_ttl > 0.0 {
-                    *msi_ttl -= 1.0;
+                if i_msi < 0.0 || i_msi > 1.0 {
+                    if *msi_ttl > 0.0 {
+                        *msi_ttl -= 1.0;
+                    } else {
+                        *msi = NODATAVAL;
+                    }
                 } else {
-                    *msi = NODATAVAL;
+                    *msi = i_msi;
+                    *msi_ttl = 56.0;
                 }
-            } else {
-                *msi = i_msi;
-                *msi_ttl = 56.0;
             }
+            {
+                let ndvi = &mut self.NDVI[idx];
+                let ndvi_time = &mut self.NDVI_TIME[idx];
+                let i_ndvi = input.ndvi[idx];
 
-            let ndvi = &mut self.NDVI[idx];
-            let ndvi_time = &mut self.NDVI_TIME[idx];
-            let i_ndvi = input.ndvi[idx];
-
-            if i_ndvi < 0.0 || i_ndvi > 1.0 {
-                let time_diff = input.time.timestamp() - *ndvi_time as i64;
-                if time_diff > 240 * 3600 {
+                if self.time.timestamp() - *ndvi_time as i64 > 240 * 3600 {
                     *ndvi = NODATAVAL;
                 }
-            } else {
-                if i_ndvi < 0.0 || i_ndvi > 1.0 {
-                    *ndvi = NODATAVAL;
-                } else {
-                    *ndvi = i_ndvi;
+
+                if i_ndvi != NODATAVAL {
+                    if i_ndvi >= 0.0 && i_ndvi <= 1.0 {
+                        *ndvi = i_ndvi;
+                    } else {
+                        *ndvi = NODATAVAL;
+                    }
+
                     *ndvi_time = input.time.timestamp() as f32;
                 }
             }
+            {
+                let ndwi = &mut self.NDWI[idx];
+                let ndwi_time = &mut self.NDWI_TIME[idx];
+                let i_ndwi = input.ndwi[idx];
 
-            let ndwi = &mut self.NDWI[idx];
-            let ndwi_time = &mut self.NDWI_TIME[idx];
-            let i_ndwi = input.ndwi[idx];
-
-            if i_ndwi < 0.0 || i_ndwi > 1.0 {
-                let time_diff = input.time.timestamp() - *ndwi_time as i64;
-                if time_diff > 240 * 3600 {
+                if self.time.timestamp() - *ndwi_time as i64 > 240 * 3600 {
                     *ndwi = NODATAVAL;
                 }
-            } else {
-                if i_ndwi < 0.0 || i_ndwi > 1.0 {
+
+
+                if self.time.timestamp() - *ndwi_time as i64 > 240 * 3600 {
                     *ndwi = NODATAVAL;
-                } else {
-                    *ndwi = i_ndwi;
-                    *ndwi_time = input.time.timestamp() as f32;
+                }
+
+                if i_ndwi != NODATAVAL {
+                    if i_ndwi >= 0.0 && i_ndwi <= 1.0 {
+                        *ndwi = i_ndwi;
+                        
+                    } else {
+                        *ndwi = NODATAVAL;
+                    }
+                    *ndwi_time = input.time.timestamp() as f32;                 
                 }
             }
         }
@@ -372,15 +401,15 @@ impl State {
     fn update_moisture(&mut self, props: &Properties, input: &Input, dt: f32) {
         let dt = f32::max(1.0, f32::min(72.0, dt));
 
-        for i in 0..self.len() {
-            let dffm = &mut self.dffm[i];
+        for idx in 0..self.len() {
+            let dffm = &mut self.dffm[idx];
 
-            let snow_cover = self.snow_cover[i];
-            let veg = &props.vegetations[i];
-            let temperature = input.temperature[i];
-            let humidity = input.humidity[i];
-            let wind_speed = input.wind_speed[i];
-            let rain = input.rain[i];
+            let snow_cover = self.snow_cover[idx];
+            let veg = &props.vegetations[idx];
+            let temperature = input.temperature[idx];
+            let humidity = input.humidity[idx];
+            let wind_speed = input.wind_speed[idx];
+            let rain = input.rain[idx];
 
             let d0 = veg.d0;
             let sat = veg.sat;
@@ -400,7 +429,7 @@ impl State {
 
             let t = if temperature > 0.0 { temperature } else { 0.0 };
 
-            let h = if humidity < 100.0 { humidity } else { 100.0 };
+            let h = if humidity <= 100.0 { humidity } else { 100.0 };
             let w = if wind_speed != NODATAVAL {
                 wind_speed
             } else {
@@ -415,6 +444,7 @@ impl State {
             }
 
             // limit dffm to [0, sat]
+
             *dffm = f32::max(0.0, f32::min(sat, *dffm));
         }
     }
@@ -428,6 +458,8 @@ impl State {
         let mut V = Array1::<f32>::ones(self.len) * NODATAVAL;
         let mut PPF = Array1::<f32>::ones(self.len) * NODATAVAL;
         let mut I = Array1::<f32>::ones(self.len) * NODATAVAL;
+        let mut NDVI = Array1::<f32>::ones(self.len) * NODATAVAL;
+        let mut NDWI = Array1::<f32>::ones(self.len) * NODATAVAL;
 
         let use_t_effect = false;
 
@@ -436,12 +468,11 @@ impl State {
 
             let t_effect = &mut t_effect[idx];
             let w_effect = &mut w_effect[idx];
-            
+
             let ppf = &mut PPF[idx];
             let V = &mut V[idx];
             let I = &mut I[idx];
 
-            
             let veg = &props.vegetations[idx];
 
             let wind_dir = input.wind_dir[idx];
@@ -455,13 +486,22 @@ impl State {
             let ppf_summer = props.ppf_summer[idx];
             let ppf_winter = props.ppf_winter[idx];
             let msi = self.MSI[idx];
-            let ndvi = self.NDVI[idx];
+            let ndvi = &mut NDVI[idx];
+            let ndwi = &mut NDWI[idx];
 
+            *ndvi = 1.0;
+            if veg.use_ndvi && self.NDVI[idx] != NODATAVAL {
+                *ndvi = f32::max(f32::min(1.0 - self.NDVI[idx], 1.0), 0.0);
+            }
             
-            
+            *ndwi = 1.0;
+            if self.NDWI[idx] != NODATAVAL {
+                *ndwi = f32::max(f32::min(1.0 - self.NDWI[idx], 1.0), 0.0);
+            }
+
             *w_effect = get_wind_effect(wind_speed, wind_dir, slope, aspect);
             let slope_effect = get_slope_effect(slope);
-            
+
             *t_effect = 1.0;
             if use_t_effect {
                 *t_effect = get_t_effect(temperature);
@@ -484,7 +524,7 @@ impl State {
             let LHVl1 = get_lhv_l1(veg.umid, msi, veg.hhv);
             // Calcolo Intensità
 
-            *I = get_intensity(veg.d0, veg.d1, *V, ndvi, LHVdff, LHVl1);
+            *I = get_intensity(veg.d0, veg.d1, *V, self.NDVI[idx], LHVdff, LHVl1);
         }
 
         Output::new(
@@ -501,8 +541,8 @@ impl State {
             input.wind_dir.clone(),
             input.humidity.clone(),
             self.snow_cover.clone(),
-            self.NDVI.clone(),
-            self.NDWI.clone(),
+            NDVI,
+            NDWI,
         )
     }
 
