@@ -2,7 +2,7 @@ use std::{
     collections::HashMap,
     fmt::Display,
     fs::File,
-    io::{self, BufRead, Write},
+    io::{self, BufRead, Write, BufWriter},
     path::Path,
     
 };
@@ -329,6 +329,8 @@ impl Config {
         let warm_state_name = format!("{}{}", self.warm_state_path, date_string);
         let mut warm_state_file = File::create(&warm_state_name)
             .map_err(|error| format!("error creating {}, {}", &warm_state_name, error))?;
+        
+        let mut warm_state_writer = BufWriter::new(&mut warm_state_file);
         for idx in 0..state.dffm.len() {
             let dffm = state.dffm[idx];
             
@@ -345,7 +347,7 @@ impl Config {
                 "{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}",
                 dffm, NDSI, NDSI_TTL, MSI, MSI_TTL, NDVI, NDVI_TIME, NDWI, NDWI_TIME
             );
-            writeln!(warm_state_file, "{}", line).map_err(|error| {
+            writeln!(warm_state_writer, "{}", line).map_err(|error| {
                 format!(
                     "error writing to {}, {}",
                     &warm_state_name, error
