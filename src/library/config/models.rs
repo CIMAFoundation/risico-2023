@@ -331,6 +331,7 @@ impl Config {
             .map_err(|error| format!("error creating {}, {}", &warm_state_name, error))?;
         
         let mut warm_state_writer = BufWriter::new(&mut warm_state_file);
+        
         for idx in 0..state.dffm.len() {
             let dffm = state.dffm[idx];
             

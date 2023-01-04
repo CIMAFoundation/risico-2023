@@ -10,12 +10,12 @@ use crate::library::{
     helpers::get_input,
 };
 
+use git_version::git_version;
+const GIT_VERSION: &str = git_version!();
+
 // parse command line arguments: first argument is model date in the form YYYYMMDDHHMM, second is configuration path, third is input path
-
-
-
-
 fn main() {
+    println!("RISICO.rs version 1.0.0v{}", GIT_VERSION);
     let args: Vec<String> = args().collect();
     if args.len() != 4 {
         panic!("Usage: {} YYYYMMDDHHMM config_path input_path", args[0]);
@@ -59,11 +59,12 @@ fn main() {
         };
 
         if time.hour() == 0 {
-            
+            let time = Utc::now();
             match config.write_warm_state(&state) {
                 Ok(_) => (),
                 Err(err) => println!("Error writing warm state: {}", err),
             };
+            println!("Warm state written in {} ms", (Utc::now() - time).num_milliseconds());
         }
     }
     let elapsed_time = Utc::now() - start_time;
