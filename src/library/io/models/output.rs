@@ -7,13 +7,13 @@ use netcdf::MutableFile;
 
 use crate::library::{
     config::models::{ConfigError, PaletteMap},
-    io::writers::{write_to_pngwjson, write_to_zbin_file, write_to_geotiff},
+    io::writers::{write_to_pngwjson, write_to_zbin_file, write_to_geotiff, create_nc_file},
     state::{constants::NODATAVAL, models::Output},
 };
 
 use super::grid::{ClusterMode, Grid, RegularGrid};
 
-const COMPRESSION_RATE: i32 = 4;
+
 
 #[derive(Debug)]
 pub struct OutputVariable {
@@ -229,68 +229,7 @@ impl Writer for NetcdfWriter {
                 let path = self.path.as_os_str().to_str().unwrap();
                 //let run_date = &self.run_date.format("%Y%m%d%H%M").to_string();
                 let file_name = format!("{}/{}.nc", path, variable.name);
-
-                let options = netcdf::Options::NETCDF4;
-
-                let mut file = netcdf::create_with(&file_name, options)
-                    .map_err(|err| format!("can't create file {file_name}: {err}"))?;
-
-                file.add_attribute("missing_value", NODATAVAL)
-                    .expect("Should add attribute");
-
-                // We must create a dimension which corresponds to our data
-                file.add_dimension("latitude", n_lats).unwrap();
-                file.add_dimension("longitude", n_lons).unwrap();
-
-                file.add_unlimited_dimension("time")
-                    .map_err(|err| format!("Add time dimension failed {err}"))?;
-                let lats: Vec<f32> = (0..n_lats)
-                    .map(|i| {
-                        grid.min_lat
-                            + (grid.max_lat - grid.min_lat) * (i as f32) / (grid.nrows as f32)
-                    })
-                    .collect();
-                let lons: Vec<f32> = (0..n_lons)
-                    .map(|i| {
-                        grid.min_lon
-                            + (grid.max_lon - grid.min_lon) * (i as f32) / (grid.ncols as f32)
-                    })
-                    .collect();
-
-                let mut var = file
-                    .add_variable::<f32>("latitude", &["latitude"])
-                    .expect("Add latitude failed");
-
-                var.put_values(&lats, None, None)
-                    .expect("Add longitude failed");
-
-                let mut var = file
-                    .add_variable::<f32>("longitude", &["longitude"])
-                    .expect("Add longitude failed");
-
-                var.put_values(&lons, None, None)
-                    .expect("Add longitude failed");
-
-                let mut time_var = file
-                    .add_variable::<u32>("time", &["time"])
-                    .expect("Add time failed");
-
-                time_var
-                    .add_attribute("units", "seconds since 1970-01-01 00:00:00")
-                    .unwrap_or_else(|_| panic!("Add time units failed"));
-
-                let mut variable_var = file
-                    .add_variable::<f32>(&variable.name, &["time", "latitude", "longitude"])
-                    .unwrap_or_else(|_| panic!("Add {} failed", variable.name));
-
-                variable_var
-                    .compression(COMPRESSION_RATE)
-                    .expect("Set compression failed");
-
-                variable_var
-                    .add_attribute("missing_value", NODATAVAL)
-                    .expect("Should add attribute");
-
+                let file = create_nc_file(&file_name, grid, &variable.name)?;
                 self.files.insert(variable.name.clone(), file);
             }
 
