@@ -223,11 +223,17 @@ pub fn create_nc_file(file_name: &str, grid: &RegularGrid, variable_name: &str) 
         .expect("Add longitude failed");
 
     let mut time_var = file
-        .add_variable::<u32>("time", &["time"])
+        .add_variable::<i64>("time", &["time"])
         .expect("Add time failed");
 
     time_var
-        .add_attribute("units", "seconds since 1970-01-01 00:00:00")
+        .add_attribute("units", "seconds since 1970-01-01 00:00:00.0")
+        .unwrap_or_else(|_| panic!("Add time units failed"));
+    time_var
+        .add_attribute("long_name", "time")
+        .unwrap_or_else(|_| panic!("Add time units failed"));
+    time_var
+        .add_attribute("calendar", "proleptic_gregorian")
         .unwrap_or_else(|_| panic!("Add time units failed"));
 
     let mut variable_var = file

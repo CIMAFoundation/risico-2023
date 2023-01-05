@@ -241,7 +241,7 @@ impl Writer for NetcdfWriter {
             let mut time_var = file
                 .variable_mut("time")
                 .ok_or_else(|| format!("variable not found: time"))?;
-            let time: u32 = output.time.timestamp() as u32;
+            let time: i64 = output.time.timestamp() as i64;
             let len = time_var.len();
             time_var
                 .put_values(&[time], Some(&[len]), Some(&[1 as usize]))
