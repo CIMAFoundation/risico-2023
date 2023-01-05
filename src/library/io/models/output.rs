@@ -92,6 +92,7 @@ impl OutputVariable {
 }
 
 pub struct OutputType {
+    pub internal_name: String,
     name: String,
     path: String,
     grid: RegularGrid,
@@ -104,6 +105,7 @@ pub struct OutputType {
 
 impl OutputType {
     pub fn new(
+        internal_name: &str,
         name: &str,
         path: &str,
         grid_path: &str,
@@ -122,6 +124,7 @@ impl OutputType {
         };
 
         Ok(Self {
+            internal_name: internal_name.to_string(),
             name: name.to_string(),
             path: path.to_string(),
             grid: grid,

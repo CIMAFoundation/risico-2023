@@ -13,6 +13,16 @@ pub enum ClusterMode {
     Min,
     Max,
 }
+impl From<&str> for ClusterMode {
+    fn from(s: &str) -> Self {
+        match s {
+            "MEAN" | "mean" => ClusterMode::Mean,
+            "MAX" | "max" => ClusterMode::Max,
+            "MIN" | "min" => ClusterMode::Min,
+            _ => panic!("Invalid cluster mode"),
+        }
+    }
+}
 
 pub trait Grid {
     fn index(&self, lat: &f32, lon: &f32) -> Option<usize>;

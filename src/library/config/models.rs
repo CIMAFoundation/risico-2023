@@ -129,7 +129,7 @@ impl Config {
         variables_defs: &Vec<String>,
         palettes: &PaletteMap,
     ) -> Result<Vec<OutputType>, ConfigError> {
-        let mut output_types_map: HashMap<String, OutputType> = HashMap::new();
+        let mut output_types_vec: Vec<OutputType> = Vec::new();
 
         for out_type_def in output_types_defs {
             let parts = out_type_def.split(":").collect::<Vec<&str>>();
@@ -139,13 +139,13 @@ impl Config {
             let (internal_name, name, path, grid_path, format) =
                 (parts[0], parts[1], parts[2], parts[3], parts[4]);
 
-            let output_type = OutputType::new(name, path, grid_path, format, run_date, palettes.clone())
+            let output_type = OutputType::new(internal_name, name, path, grid_path, format, run_date, palettes.clone())
                 .map_err(|_err| 
                     format!(
                         "Invalid output type definition: {out_type_def}",
                         out_type_def = out_type_def
                     ))?;
-            output_types_map.insert(internal_name.to_string(), output_type);
+            output_types_vec.push(output_type);
         }
 
         for variable_def in variables_defs {
@@ -158,23 +158,17 @@ impl Config {
 
             let precision = precision.parse::<i32>().map_err(|_| "Invalid precision")?;
 
-            let cluster_mode = match cluster_mode {
-                "MEAN" | "mean" => ClusterMode::Mean,
-                "MAX" | "max" => ClusterMode::Max,
-                "MIN" | "min" => ClusterMode::Min,
-                _ => return Err("Invalid cluster mode".into()),
-            };
-            let variable = OutputVariable::new(internal_name, name, cluster_mode, precision);
-
-            let output_type = output_types_map
-                .get_mut(output_type)
-                .ok_or(format!("Output type not found {output_type}"))?;
-            output_type.add_variable(variable);
+            output_types_vec.iter_mut()
+                .filter(|_type| _type.internal_name == output_type)
+                .for_each(|_type| 
+                    _type.add_variable(OutputVariable::new(
+                        internal_name, name, ClusterMode::from(cluster_mode), precision
+                    ))
+                );            
         }
 
-        let output_types = output_types_map.into_values().collect();
 
-        Ok(output_types)
+        Ok(output_types_vec)
     }
 
     fn load_palettes(config_map: &ConfigMap) -> HashMap<String, Box<Palette>> {
