@@ -7,11 +7,11 @@ use netcdf::MutableFile;
 
 use crate::library::{
     config::models::{ConfigError, PaletteMap},
-    io::writers::{write_to_pngwjson, write_to_zbin_file},
+    io::writers::{write_to_pngwjson, write_to_zbin_file, write_to_geotiff},
     state::{constants::NODATAVAL, models::Output},
 };
 
-use super::grid::{ClusterMode, RegularGrid, Grid};
+use super::grid::{ClusterMode, Grid, RegularGrid};
 
 const COMPRESSION_RATE: i32 = 4;
 
@@ -33,8 +33,13 @@ impl OutputVariable {
         }
     }
 
-
-    pub fn get_variable_on_grid(&self, output: &Output, lats:&[f32], lons:&[f32], grid: &RegularGrid) -> Option<Array1<f32>> {
+    pub fn get_variable_on_grid(
+        &self,
+        output: &Output,
+        lats: &[f32],
+        lons: &[f32],
+        grid: &RegularGrid,
+    ) -> Option<Array1<f32>> {
         let values = output.get(&self.internal_name);
 
         let values = if let Some(values) = values {
@@ -43,15 +48,17 @@ impl OutputVariable {
             return None;
         };
         let cutval = f32::powi(10.0, self.precision);
-        
+
         let n_pixels = grid.nrows * grid.ncols as usize;
         let mut grid_values: Array1<f32> = Array1::ones(n_pixels) * NODATAVAL;
         let mut grid_count: Array1<f32> = Array1::ones(n_pixels);
 
         izip!(lats, lons, values).for_each(|(lat, lon, value)| {
-            if let Some(idx) = grid.index(&lat, &lon) {    
-                if value == NODATAVAL { return; }
-                
+            if let Some(idx) = grid.index(&lat, &lon) {
+                if value == NODATAVAL {
+                    return;
+                }
+
                 let prev_value = grid_values[idx];
 
                 if prev_value == NODATAVAL {
@@ -61,19 +68,25 @@ impl OutputVariable {
                         ClusterMode::Mean => {
                             grid_values[idx] += value;
                             grid_count[idx] += 1.0;
-                        },
+                        }
                         ClusterMode::Min => grid_values[idx] = f32::min(prev_value, value),
                         ClusterMode::Max => grid_values[idx] = f32::max(prev_value, value),
                         _ => unimplemented!("Median mode not implemented yet"),
                     }
                 }
-                }
+            }
         });
 
         let grid_values = grid_values / grid_count;
         // apply cutval
-        let grid_values = grid_values.mapv(|v| if v == NODATAVAL {NODATAVAL} else { (v / cutval).round() * cutval});
-        
+        let grid_values = grid_values.mapv(|v| {
+            if v == NODATAVAL {
+                NODATAVAL
+            } else {
+                (v / cutval).round() * cutval
+            }
+        });
+
         Some(grid_values)
     }
 }
@@ -104,6 +117,7 @@ impl OutputType {
             "ZBIN" => Box::new(ZBinWriter::new(path, name, run_date)),
             "PNGWJSON" => Box::new(PngWriter::new(path, name, &palettes, run_date)),
             "NETCDF" => Box::new(NetcdfWriter::new(path, name, run_date)),
+            "GEOTIFF" => Box::new(GeotiffWriter::new(path, name, run_date)),
             _ => Box::new(ZBinWriter::new(path, name, run_date)),
         };
 
@@ -123,8 +137,14 @@ impl OutputType {
         self.variables.push(variable);
     }
 
-    pub fn write_variables(&mut self, lats: &[f32], lons: &[f32], output: &Output) -> Result<(), ConfigError> {
-        self.writer.write(output, lats, lons, &self.grid, &self.variables)
+    pub fn write_variables(
+        &mut self,
+        lats: &[f32],
+        lons: &[f32],
+        output: &Output,
+    ) -> Result<(), ConfigError> {
+        self.writer
+            .write(output, lats, lons, &self.grid, &self.variables)
     }
 }
 
@@ -362,6 +382,51 @@ impl Writer for PngWriter {
 
             if let Some(values) = values {
                 write_to_pngwjson(&file, &grid, values.as_slice().unwrap(), &palette)
+                    .map_err(|err| format!("Cannot write file {}: error {err}", file))?;
+            }
+        }
+        Ok(())
+    }
+}
+
+pub struct GeotiffWriter {
+    path: PathBuf,
+    name: String,
+    run_date: DateTime<Utc>,
+}
+
+impl GeotiffWriter {
+    pub fn new(path: &str, name: &str, run_date: &DateTime<Utc>) -> Self {
+        GeotiffWriter {
+            path: PathBuf::from(path),
+            name: name.to_string(),
+            run_date: run_date.clone(),
+        }
+    }
+}
+
+impl Writer for GeotiffWriter {
+    fn write(
+        &mut self,
+        output: &Output,
+        lats: &[f32],
+        lons: &[f32],
+        grid: &RegularGrid,
+        variables: &[OutputVariable],
+    ) -> Result<(), ConfigError> {
+        let path = self.path.as_os_str().to_str().unwrap();
+        for variable in variables {
+            let date_string = output.time.format("%Y%m%d%H%M").to_string();
+            //todo!("get run date from config");
+            let run_date = &self.run_date.format("%Y%m%d%H%M").to_string();
+            let file = format!(
+                "{}/{}_{}_{}_{}.tif",
+                path, self.name, run_date, date_string, variable.name
+            );
+            let values = variable.get_variable_on_grid(&output, lats, lons, grid);
+
+            if let Some(values) = values {
+                write_to_geotiff(&file, &grid, values.as_slice().unwrap())
                     .map_err(|err| format!("Cannot write file {}: error {err}", file))?;
             }
         }
