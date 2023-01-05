@@ -53,10 +53,12 @@ fn main() {
 
         let output = state.output(props, &input);
 
-        match output_writer.write_output(lats, lons, &output) {
-            Ok(_) => (),
-            Err(err) => println!("Error writing output: {}", err),
-        };
+        if config.should_write_output(&state.time) {
+            match output_writer.write_output(lats, lons, &output) {
+                Ok(_) => (),
+                Err(err) => println!("Error writing output: {}", err),
+            };
+        }
 
         if time.hour() == 0 {
             let time = Utc::now();

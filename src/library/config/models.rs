@@ -26,6 +26,20 @@ use super::data::{read_cells_properties, read_vegetation};
 pub type PaletteMap = HashMap<String, Box<Palette>>;
 pub type ConfigMap = HashMap<String, Vec<String>>;
 
+const MODEL_NAME_KEY: &str = "MODELNAME";
+const WARM_STATE_PATH_KEY: &str = "STATO0";
+const CELLS_FILE_KEY: &str = "CELLE";
+const VEGETATION_FILE_KEY: &str = "VEG";
+const PPF_FILE_KEY: &str = "PPF";
+const CACHE_PATH_KEY: &str = "BUFFERS";
+const USE_TEMPERATURE_EFFECT_KEY: &str = "USETCONTR";
+const USE_NDVI_KEY: &str = "USENDVI";
+const OUTPUTS_KEY: &str = "MODEL";
+const VARIABLES_KEY: &str = "VARIABLE";
+const PALETTE_KEY: &str = "PALETTE";
+const KEY_HOURSRESOLUTION: &str = "OUTPUTHRES";
+
+
 trait ConfigMapExt {
     /// Get the first value of a key in the config map
     fn first(&self, key: &str) -> Option<String>;
@@ -107,17 +121,6 @@ pub fn read_config(file_name: impl Into<String>) -> Result<ConfigMap, ConfigErro
     Ok(config_map)
 }
 
-const MODEL_NAME_KEY: &str = "MODELNAME";
-const WARM_STATE_PATH_KEY: &str = "STATO0";
-const CELLS_FILE_KEY: &str = "CELLE";
-const VEGETATION_FILE_KEY: &str = "VEG";
-const PPF_FILE_KEY: &str = "PPF";
-const CACHE_PATH_KEY: &str = "BUFFERS";
-const USE_TEMPERATURE_EFFECT_KEY: &str = "USETCONTR";
-const USE_NDVI_KEY: &str = "USENDVI";
-const OUTPUTS_KEY: &str = "MODEL";
-const VARIABLES_KEY: &str = "VARIABLE";
-const PALETTE_KEY: &str = "PALETTE";
 
 impl Config {
     fn parse_output_types(
@@ -241,6 +244,10 @@ impl Config {
             },
             None => false,
         };
+        let output_time_res = match config_map.first(KEY_HOURSRESOLUTION) {
+            Some(value) => value.parse::<u32>().unwrap_or(3),
+            None => 3,
+        };
 
         let output_types_defs = config_map
             .all(OUTPUTS_KEY)
@@ -304,6 +311,7 @@ impl Config {
             palettes,
             use_temperature_effect: use_temperature_effect,
             use_ndvi: use_ndvi,
+            output_time_resolution: output_time_res
         };
 
         Ok(config)
@@ -320,6 +328,12 @@ impl Config {
     pub fn get_output_writer(&self) -> Result<OutputWriter, ConfigError> {
         let outputs = Self::parse_output_types(&self.run_date, &self.output_types_defs, &self.variables_defs,  &self.palettes)?;
         Ok(OutputWriter::new(outputs))
+    }
+
+    pub fn should_write_output(&self, time: &DateTime<Utc>) -> bool {
+        let time_diff = time.signed_duration_since(self.run_date);
+        let hours = time_diff.num_hours();
+        hours % self.output_time_resolution as i64 == 0
     }
 
     #[allow(non_snake_case)]
@@ -373,7 +387,8 @@ pub struct Config {
     variables_defs: Vec<String>,
     palettes: PaletteMap,
     use_temperature_effect: bool,
-    use_ndvi: bool,   
+    use_ndvi: bool,
+    output_time_resolution: u32,
 }
 
 pub struct OutputWriter {
