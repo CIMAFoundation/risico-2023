@@ -20,7 +20,7 @@ fn main() {
     if args.len() != 4 {
         panic!("Usage: {} YYYYMMDDHHMM config_path input_path", args[0]);
     }
-    
+
     let start_time = Utc::now();
 
     let date = &args[1];
@@ -36,7 +36,7 @@ fn main() {
         .expect("Could not configure output writer");
 
     let props = config.get_properties();
-    let mut state = config.new_state();    
+    let mut state = config.new_state();
 
     let timeline = handler.get_timeline();
     let lats = config.properties.lats.as_slice().unwrap();
@@ -46,14 +46,12 @@ fn main() {
         println!("{}", time.format("%Y%m%d%H%M"));
 
         handler.load_data(&time, lats, lons);
-
+        
         let input = get_input(&handler, lats, lons, &time);
-
         state.update(props, &input);
 
-        let output = state.output(props, &input);
-
         if config.should_write_output(&state.time) {
+            let output = state.output(props, &input);
             match output_writer.write_output(lats, lons, &output) {
                 Ok(_) => (),
                 Err(err) => println!("Error writing output: {}", err),
@@ -61,12 +59,10 @@ fn main() {
         }
 
         if time.hour() == 0 {
-            let time = Utc::now();
             match config.write_warm_state(&state) {
                 Ok(_) => (),
                 Err(err) => println!("Error writing warm state: {}", err),
             };
-            println!("Warm state written in {} ms", (Utc::now() - time).num_milliseconds());
         }
     }
     let elapsed_time = Utc::now() - start_time;

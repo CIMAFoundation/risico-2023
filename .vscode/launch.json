@@ -15,7 +15,11 @@
                     "risico-2023"
                 ]
             },
-            "args": [],
+            "args": [                
+                "202301040000",
+                "/opt/risico/RISICOSARDEGNA/configuration.txt",
+                "/opt/risico/RISICOSARDEGNA/INPUT/202301041927/input.txt",
+            ],
             "visualizerFile": "${workspaceFolder}/.vscode/custom.natvis"
         }
         

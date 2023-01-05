@@ -1,10 +1,22 @@
 
 use std::{io::{self, Read}, fs::File};
-use libflate::gzip;
+use libflate::gzip::{self, Decoder};
 
 use crate::library::io::models::grid::Grid;
 
 use super::models::grid::{RegularGrid, IrregularGrid};
+
+fn read_array_from_file<T>(decoder: &mut Decoder<T>, len: u32) -> Result<Vec<f32>, io::Error> where T: Read{
+    let mut buffer: Vec<u8> = vec![0; (len*4) as usize];
+    decoder.read_exact(&mut buffer)?;
+
+    const CHUNK_SIZE: usize = 4;
+    let values = buffer
+        .chunks_exact(CHUNK_SIZE)
+        .map(|chunk| f32::from_le_bytes(chunk.try_into().unwrap()))
+        .collect::<Vec<f32>>();
+    Ok(values)
+}
 
 /// read a file and returns Grid and Vector of data
 /// Grid is a struct with the following fields:
@@ -30,24 +42,12 @@ pub fn read_input_from_file(file: &str) -> Result<(Box<dyn Grid>, Vec<f32>), io:
     decoder.read_exact(&mut ncols).unwrap();
     let ncols = u32::from_le_bytes(ncols);
     
+    let len = nrows*ncols;
     
     let grid: Box<dyn Grid> = match is_regular {
         0 => {
-            let mut lats: Vec<f32> = Vec::new();
-            for _ in 0..nrows*ncols {
-                let mut lat: [u8; 4] = [0; 4];
-                decoder.read_exact(&mut lat).unwrap();
-                let lat = f32::from_le_bytes(lat);
-                lats.push(lat);
-            }
-
-            let mut lons: Vec<f32> = Vec::new();
-            for _ in 0..nrows*ncols {
-                let mut lon: [u8; 4] = [0; 4];
-                decoder.read_exact(&mut lon).unwrap();
-                let lon = f32::from_le_bytes(lon);
-                lons.push(lon);
-            }
+            let lats = read_array_from_file(&mut decoder, len)?;
+            let lons = read_array_from_file(&mut decoder, len)?;
             Box::new(IrregularGrid::new(nrows as usize, ncols as usize, lats, lons))
         },
         1 => {
@@ -65,30 +65,11 @@ pub fn read_input_from_file(file: &str) -> Result<(Box<dyn Grid>, Vec<f32>), io:
             let min_lon = f32::from_le_bytes(min_lon);
             let max_lon = f32::from_le_bytes(max_lon);
 
-            let mut lats: Vec<f32> = Vec::new();
-            for i in 0..nrows {
-                let lat = min_lat + (max_lat - min_lat) * (i as f32) / (nrows as f32);
-                lats.push(lat);
-            }
-            let mut lons: Vec<f32> = Vec::new();
-            for i in 0..ncols {
-                let lon = min_lon + (max_lon - min_lon) * (i as f32) / (ncols as f32);
-                lons.push(lon);
-            }
             Box::new(RegularGrid::new(nrows as usize, ncols as usize,  min_lat, min_lon, max_lat, max_lon))
         },
         _ => panic!("Unknown grid type"),
     };
-
-    
-
-    let mut values: Vec<f32> = Vec::new();
-    for _ in 0..nrows*ncols {
-        let mut value: [u8; 4] = [0; 4];
-        decoder.read_exact(&mut value).unwrap();
-        let value = f32::from_le_bytes(value);
-        values.push(value);
-    }
+    let values = read_array_from_file(&mut decoder, len)?;
 
     Ok((grid, values))
 }

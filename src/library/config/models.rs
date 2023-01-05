@@ -497,7 +497,7 @@ impl LazyInputFile {
 
         let (grid, data) = read_input_from_file(&self.path)
             .map_err(|error| format!("Error reading input file {}: {error}", self.path))?;
-
+        
         self.data = Some(data);
 
         // insert the grid in the registry if not already present
@@ -571,9 +571,9 @@ impl InputDataHandler {
                     .expect(&format!("Error loading file {}", lazy_file.path));
             }
             // build cache
-            let _ = lazy_file.data.as_ref().unwrap();
             let grid = self.grid_registry.get_mut(&lazy_file.grid_name).unwrap();
-            grid.build_cache(lats, lons);
+            
+            grid.build_cache(lats, lons);    
         }
     }
 

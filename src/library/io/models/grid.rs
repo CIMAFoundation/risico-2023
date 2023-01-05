@@ -5,6 +5,8 @@ use crate::library::{
 };
 use itertools::izip;
 use ndarray::Array1;
+use rstar::{RTree, primitives::GeomWithData};
+
 
 #[derive(Debug)]
 pub enum ClusterMode {
@@ -207,7 +209,7 @@ impl IrregularGrid {
         let mut min_j = self.ncols / 2;
 
         let mut minidx = min_i * self.ncols + min_j;
-        let mut minerr = f32::powf(self.lons[minidx] - lon, 2.0) + f32::powf(self.lats[minidx] - lat, 2.0);
+        let mut minerr = f32::abs(self.lons[minidx] - lon) + f32::abs(self.lats[minidx] - lat);
 
         let mut dobreak = false;
         while !dobreak {
@@ -219,8 +221,8 @@ impl IrregularGrid {
                     let p_i = usize::min(ii, self.nrows - 1);
                     let p_j = usize::min(jj, self.ncols - 1);
                     let idx2 = p_i * self.ncols + (p_j);
-                    let err = f32::powf(self.lons[idx2] - lon, 2.0)
-                        + f32::powf(self.lats[idx2] - lat, 2.0);
+                    let err = f32::abs(self.lons[idx2] - lon)
+                        + f32::abs(self.lats[idx2] - lat);
 
                     if err < minerr {
                         minerr = err;
@@ -240,6 +242,8 @@ impl IrregularGrid {
     }
 }
 
+type PointWithIndex = GeomWithData<[f32; 2], usize>;
+
 impl Grid for IrregularGrid {
     fn index(&self, lat: &f32, lon: &f32) -> Option<usize> {
         let maybe_index = self.get_cached_index(lat, lon);
@@ -258,8 +262,19 @@ impl Grid for IrregularGrid {
             return;
         }
 
+        let tree = RTree::bulk_load(
+            izip!(&self.lats, &self.lons)
+                .enumerate()
+                .map(|(index, (lat, lon))| PointWithIndex::new([*lat, *lon], index))
+                .collect::<Vec<_>>()
+        );
+
         izip!(lats, lons)
-            .map(|(lat, lon)| (self.get_key(lat, lon), self.index_non_cached(lat, lon)))
+            .map(|(lat, lon)| {
+                let point = tree.nearest_neighbor(&[*lat, *lon]).unwrap();
+                
+                (self.get_key(lat, lon), point.data)
+            })
             .collect::<Vec<_>>()
             .iter()
             .for_each(|(key, index)| {
@@ -269,3 +284,8 @@ impl Grid for IrregularGrid {
     }
 
 }
+
+
+
+
+
