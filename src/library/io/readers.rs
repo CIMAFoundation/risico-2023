@@ -14,11 +14,11 @@ fn read_header_from_file<T>(decoder: &mut Decoder<T>) -> Result<(u32, u32, u32),
     let is_regular = u32::from_le_bytes(is_regular);
     
     let mut nrows: [u8; 4] = [0; 4];
-    decoder.read_exact(&mut nrows).expect("Read nrows failed");
+    decoder.read_exact(&mut nrows)?;
     let nrows = u32::from_le_bytes(nrows);
     
     let mut ncols: [u8; 4] = [0; 4];
-    decoder.read_exact(&mut ncols).unwrap();
+    decoder.read_exact(&mut ncols)?;
     let ncols = u32::from_le_bytes(ncols);
 
     Ok((is_regular, nrows, ncols))
@@ -32,7 +32,10 @@ fn read_array_from_file<T>(decoder: &mut Decoder<T>, len: u32) -> Result<Array1<
     const CHUNK_SIZE: usize = 4;
     let values = buffer
         .chunks_exact(CHUNK_SIZE)
-        .map(|chunk| f32::from_le_bytes(chunk.try_into().unwrap()))
+        .map(|chunk| 
+            f32::from_le_bytes(chunk.try_into()
+            .expect(&format!("error loading data"))
+        ))
         .collect::<Array1<f32>>();
     Ok(values)
 }
@@ -57,15 +60,15 @@ pub fn read_grid_from_file(file: &str) -> Result<Box<dyn Grid>, io::Error> {
         1 => {
             let mut min_lat: [u8; 4] = [0; 4];
             let mut max_lat: [u8; 4] = [0; 4];
-            decoder.read_exact(&mut min_lat).unwrap();
-            decoder.read_exact(&mut max_lat).unwrap();
+            decoder.read_exact(&mut min_lat)?;
+            decoder.read_exact(&mut max_lat)?;
             let min_lat = f32::from_le_bytes(min_lat);
             let max_lat = f32::from_le_bytes(max_lat);
             
             let mut min_lon: [u8; 4] = [0; 4];
             let mut max_lon: [u8; 4] = [0; 4];
-            decoder.read_exact(&mut min_lon).unwrap();
-            decoder.read_exact(&mut max_lon).unwrap();
+            decoder.read_exact(&mut min_lon)?;
+            decoder.read_exact(&mut max_lon)?;
             let min_lon = f32::from_le_bytes(min_lon);
             let max_lon = f32::from_le_bytes(max_lon);
 

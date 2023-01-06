@@ -27,8 +27,10 @@ fn main() {
     let config_path = &args[2];
     let input_path = &args[3];
 
-    let date = Utc.datetime_from_str(date, "%Y%m%d%H%M").unwrap();
-    let config = Config::new(&config_path, date).unwrap();
+    let date = Utc.datetime_from_str(date, "%Y%m%d%H%M")
+        .expect("Could not parse date");
+    let config = Config::new(&config_path, date)
+        .expect("Could not configure model");
 
 
     let mut output_writer = config
@@ -38,8 +40,10 @@ fn main() {
     let props = config.get_properties();
     let mut state = config.new_state();
 
-    let lats = config.properties.lats.as_slice().unwrap();
-    let lons = config.properties.lons.as_slice().unwrap();
+    let lats = config.properties.lats.as_slice()
+        .expect("should unwrap");
+    let lons = config.properties.lons.as_slice()
+        .expect("should unwrap");
     
     let handler = InputDataHandler::new(input_path, lats, lons);
     let len = lats.len();

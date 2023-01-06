@@ -7,6 +7,7 @@ use std::{
     io::{self, Write},
 };
 
+use crate::library::config::models::RISICOError;
 use crate::library::state::constants::NODATAVAL;
 
 use super::models::{grid::RegularGrid, palette::Palette};
@@ -94,8 +95,8 @@ pub fn write_to_pngwjson(
     let file_name = path.file_stem().expect("should have a file name");
     let json_file = format!(
         "{}/{}.json",
-        base_path.to_str().unwrap(),
-        file_name.to_str().unwrap()
+        base_path.to_str().expect("should have a path"),
+        file_name.to_str().expect("should have a file name")
     );
 
     //convert last comment to valid rust
@@ -183,7 +184,7 @@ pub fn write_to_geotiff(
 
 const COMPRESSION_RATE: i32 = 4;
 
-pub fn create_nc_file(file_name: &str, grid: &RegularGrid, variable_name: &str) -> Result<netcdf::MutableFile, String> {
+pub fn create_nc_file(file_name: &str, grid: &RegularGrid, variable_name: &str) -> Result<netcdf::MutableFile, RISICOError> {
     let n_lats = grid.nrows;
     let n_lons = grid.ncols;
 
@@ -196,8 +197,10 @@ pub fn create_nc_file(file_name: &str, grid: &RegularGrid, variable_name: &str) 
         .expect("Should add attribute");
 
     // We must create a dimension which corresponds to our data
-    file.add_dimension("latitude", n_lats).unwrap();
-    file.add_dimension("longitude", n_lons).unwrap();
+    file.add_dimension("latitude", n_lats)
+        .map_err(|err| format!("Add latitude dimension failed {err}"))?;
+    file.add_dimension("longitude", n_lons)
+        .map_err(|err| format!("Add longitude dimension failed {err}"))?;
 
     file.add_unlimited_dimension("time")
         .map_err(|err| format!("Add time dimension failed {err}"))?;

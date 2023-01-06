@@ -1,6 +1,6 @@
 use std::io::Read;
 
-use crate::library::config::models::ConfigError;
+use crate::library::config::models::RISICOError;
 
 #[derive(Debug, Clone, Copy)]
 pub struct Color {
@@ -43,7 +43,7 @@ impl Palette {
         palette
     }
 
-    pub fn load_palette(s_palette_file: &str) -> Result<Self, ConfigError> {
+    pub fn load_palette(s_palette_file: &str) -> Result<Self, RISICOError> {
         let ifs = std::fs::File::open(s_palette_file)
             .map_err(|err| format!("cannot open palette file {s_palette_file}: {err}."))?;
 
@@ -66,12 +66,22 @@ impl Palette {
             if line.is_empty() {
                 continue;
             }
-            let mut parts = line.split_whitespace();
-            let val: f32 = parts.next().unwrap().parse().unwrap();
-            let r: u8 = parts.next().unwrap().parse().unwrap();
-            let g: u8 = parts.next().unwrap().parse().unwrap();
-            let b: u8 = parts.next().unwrap().parse().unwrap();
-            let a: u8 = parts.next().unwrap().parse().unwrap();
+            let parts: Vec<&str> = line.split_whitespace().collect();
+            if line.len() < 5 {
+                println!("warning skipping line: {}", line);
+                continue;
+            }
+            let val: f32 = parts[0].parse()
+                .map_err(|err| format!("Cannot parse {line} {err}"))?;
+
+            let r: u8 = parts[1].parse()
+                .map_err(|err| format!("Cannot parse {line} {err}"))?;
+            let g: u8 = parts[2].parse()
+                .map_err(|err| format!("Cannot parse {line} {err}"))?;
+            let b: u8 = parts[3].parse()
+                .map_err(|err| format!("Cannot parse {line} {err}"))?;
+            let a: u8 = parts[4].parse()
+                .map_err(|err| format!("Cannot parse {line} {err}"))?;
 
             let c = Color { r, g, b, a };
             bounds.push(val);

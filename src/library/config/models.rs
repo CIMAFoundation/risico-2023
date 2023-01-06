@@ -38,7 +38,7 @@ const PALETTE_KEY: &str = "PALETTE";
 const KEY_HOURSRESOLUTION: &str = "OUTPUTHRES";
 
 
-trait ConfigMapExt {
+pub trait ConfigMapExt {
     /// Get the first value of a key in the config map
     fn first(&self, key: &str) -> Option<String>;
     fn all(&self, key: &str) -> Option<Vec<String>>;
@@ -55,30 +55,30 @@ impl ConfigMapExt for ConfigMap {
 }
 
 #[derive(Debug)]
-pub struct ConfigError {
+pub struct RISICOError {
     msg: String,
 }
 
-impl From<String> for ConfigError {
+impl From<String> for RISICOError {
     fn from(msg: String) -> Self {
-        ConfigError { msg }
+        RISICOError { msg }
     }
 }
 
-impl From<&str> for ConfigError {
+impl From<&str> for RISICOError {
     fn from(msg: &str) -> Self {
-        ConfigError { msg: msg.into() }
+        RISICOError { msg: msg.into() }
     }
 }
 
-impl Display for ConfigError {
+impl Display for RISICOError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "{}", self.msg)
     }
 }
 
 /// Read the config file and return a map of key-value pairs
-pub fn read_config(file_name: impl Into<String>) -> Result<ConfigMap, ConfigError> {
+pub fn read_config(file_name: impl Into<String>) -> Result<ConfigMap, RISICOError> {
     let file_name = file_name.into();
     // open file as text and read it using a buffered reader
     let file =
@@ -126,7 +126,7 @@ impl Config {
         output_types_defs: &Vec<String>,
         variables_defs: &Vec<String>,
         palettes: &PaletteMap,
-    ) -> Result<Vec<OutputType>, ConfigError> {
+    ) -> Result<Vec<OutputType>, RISICOError> {
         let mut output_types_vec: Vec<OutputType> = Vec::new();
 
         for out_type_def in output_types_defs {
@@ -193,7 +193,7 @@ impl Config {
         
     }
 
-    pub fn new(config_file: &str, date: DateTime<Utc>) -> Result<Config, ConfigError> {
+    pub fn new(config_file: &str, date: DateTime<Utc>) -> Result<Config, RISICOError> {
         let config_map = read_config(config_file)?;
 
         // try to get the model name, expect it to be there
@@ -317,7 +317,7 @@ impl Config {
         State::new(&self.warm_state, &self.warm_state_time)
     }
 
-    pub fn get_output_writer(&self) -> Result<OutputWriter, ConfigError> {
+    pub fn get_output_writer(&self) -> Result<OutputWriter, RISICOError> {
         let outputs = Self::parse_output_types(&self.run_date, &self.output_types_defs, &self.variables_defs,  &self.palettes)?;
         Ok(OutputWriter::new(outputs))
     }
@@ -329,7 +329,7 @@ impl Config {
     }
 
     #[allow(non_snake_case)]
-    pub fn write_warm_state(&self, state: &State) -> Result<(), ConfigError> {
+    pub fn write_warm_state(&self, state: &State) -> Result<(), RISICOError> {
         let warm_state_time = state.time.clone() + Duration::days(1);
         let date_string = warm_state_time.format("%Y%m%d%H%M").to_string();
         let warm_state_name = format!("{}{}", self.warm_state_path, date_string);
@@ -395,7 +395,7 @@ impl OutputWriter {
     }
 
 
-    pub fn write_output(&mut self, lats: &[f32], lons: &[f32], output: &Output) -> Result<(), ConfigError> {
+    pub fn write_output(&mut self, lats: &[f32], lons: &[f32], output: &Output) -> Result<(), RISICOError> {
         self.outputs.iter_mut().for_each(|output_type| {
             match output_type.write_variables(lats, lons, output) {
                 Ok(_) => (),
@@ -515,15 +515,11 @@ impl InputDataHandler {
                 }
             };
 
-            //let (grid_name, variable, date) = maybe_parsed.unwrap();
-
             let date = date.with_timezone(&Utc);
-
             let input_file = InputFile {
                 grid_name, 
                 path: line
             };
-
             
             if !grid_registry.contains_key(&input_file.grid_name) {
                 let mut grid = match read_grid_from_file(input_file.path.as_str()){
@@ -542,8 +538,10 @@ impl InputDataHandler {
             if !data_map.contains_key(&date) {
                 data_map.insert(date, HashMap::new());
             }
-            let data_map_for_date = data_map.get_mut(&date).unwrap();
-            data_map_for_date.insert(variable.to_string(), input_file);
+            
+            if let Some(data_map_for_date) = data_map.get_mut(&date){
+                data_map_for_date.insert(variable.to_string(), input_file);
+            }
         }
 
         InputDataHandler { grid_registry, data_map }
@@ -597,9 +595,12 @@ impl InputDataHandler {
     }
 
     // returns the variables at given time
-    pub fn get_variables(&self, time: &DateTime<Utc>) -> Vec<String> {
+    fn get_variables(&self, time: &DateTime<Utc>) -> Vec<String> {
         let mut variables: Vec<String> = Vec::new();
-        let data_map = self.data_map.get(time).unwrap();
+        
+        let data_map = self.data_map.get(time)
+            .expect("there should be data for this time");
+
         for var in data_map.keys() {
             variables.push(var.to_string());
         }
@@ -682,22 +683,31 @@ fn read_warm_state(base_warm_file: &str, date: DateTime<Utc>) -> Option<(Vec<War
     let reader = io::BufReader::new(file);
     
     for line in reader.lines() {
-        let line = line.unwrap();
+        if let Err(line) = line {
+            println!("Error reading warm state file: {}", line);
+            return None;
+        }
+        let line = line.expect("Should unwrap line");
 
         let components: Vec<&str> = line.split_whitespace().collect();
-        let dffm = components[0].parse::<f32>().unwrap();
-
-        let NDSI = components[1].parse::<f32>().unwrap();
-        let NDSI_TTL = components[2].parse::<f32>().unwrap();
-
-        let MSI = components[3].parse::<f32>().unwrap();
-        let MSI_TTL = components[4].parse::<f32>().unwrap();
-
-        let NDVI = components[5].parse::<f32>().unwrap();
-        let NDVI_TIME = components[6].parse::<f32>().unwrap();
-
-        let NDWI = components[7].parse::<f32>().unwrap();
-        let NDWI_TIME = components[8].parse::<f32>().unwrap();
+        let dffm = components[0].parse::<f32>()
+            .expect(&format!("Could not parse dffm from {}", line));
+        let NDSI = components[1].parse::<f32>()
+            .expect(&format!("Could not parse NDSI from {}", line));
+        let NDSI_TTL = components[2].parse::<f32>()
+            .expect(&format!("Could not parse NDSI_TTL from {}", line));
+        let MSI = components[3].parse::<f32>()
+            .expect(&format!("Could not parse MSI from {}", line));
+        let MSI_TTL = components[4].parse::<f32>()
+            .expect(&format!("Could not parse MSI_TTL from {}", line));
+        let NDVI = components[5].parse::<f32>()
+            .expect(&format!("Could not parse NDVI from {}", line));
+        let NDVI_TIME = components[6].parse::<f32>()
+            .expect(&format!("Could not parse NDVI_TIME from {}", line));
+        let NDWI = components[7].parse::<f32>()
+            .expect(&format!("Could not parse NDWI from {}", line));
+        let NDWI_TIME = components[8].parse::<f32>()
+            .expect(&format!("Could not parse NDWI_TIME from {}", line));
 
         warm_state.push(WarmState {
             dffm,
@@ -720,17 +730,25 @@ fn read_warm_state(base_warm_file: &str, date: DateTime<Utc>) -> Option<(Vec<War
 /// The PPF file is a text file with the following structure:
 /// ppf_summer ppf_winter
 /// where ppf_summer and ppf_winter are floats
-pub fn read_ppf(ppf_file: &str) -> Result<Vec<(f32, f32)>, ConfigError> {
+pub fn read_ppf(ppf_file: &str) -> Result<Vec<(f32, f32)>, RISICOError> {
     let file = File::open(ppf_file)
         .map_err(|error| format!("Could not open file {}: {}", ppf_file, error))?;
 
     let reader = io::BufReader::new(file);
     let mut ppf: Vec<(f32, f32)> = Vec::new();
     for line in reader.lines() {
-        let line = line.unwrap();
+        let line = match line {
+            Ok(line) => line,
+            Err(error) => {
+                return Err(format!("Error reading PPF file {}: {}", ppf_file, error).into());
+            }
+        };
         let components: Vec<&str> = line.split_whitespace().collect();
-        let lat = components[0].parse::<f32>().unwrap();
-        let lon = components[1].parse::<f32>().unwrap();
+        let lat = components[0].parse::<f32>()
+            .map_err(|err| format!("Could not parse value from PPF file {}: {}", ppf_file, err))?;
+
+        let lon = components[1].parse::<f32>()
+            .map_err(|err| format!("Could not parse value from PPF file {}: {}", ppf_file, err))?;
         ppf.push((lat, lon));
     }
     Ok(ppf)

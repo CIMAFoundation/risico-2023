@@ -6,7 +6,7 @@ use ndarray::Array1;
 use netcdf::MutableFile;
 
 use crate::library::{
-    config::models::{ConfigError, PaletteMap},
+    config::models::{RISICOError, PaletteMap},
     io::writers::{write_to_pngwjson, write_to_zbin_file, write_to_geotiff, create_nc_file},
     state::{constants::NODATAVAL, models::Output},
 };
@@ -112,8 +112,8 @@ impl OutputType {
         format: &str,
         run_date: &DateTime<Utc>,
         palettes: PaletteMap,
-    ) -> Result<Self, ConfigError> {
-        let grid = RegularGrid::from_txt_file(grid_path).unwrap();
+    ) -> Result<Self, RISICOError> {
+        let grid = RegularGrid::from_txt_file(grid_path)?;
 
         let writer: Box<dyn Writer> = match format {
             "ZBIN" => Box::new(ZBinWriter::new(path, name, run_date)),
@@ -145,7 +145,7 @@ impl OutputType {
         lats: &[f32],
         lons: &[f32],
         output: &Output,
-    ) -> Result<(), ConfigError> {
+    ) -> Result<(), RISICOError> {
         self.writer
             .write(output, lats, lons, &self.grid, &self.variables)
     }
@@ -212,7 +212,7 @@ trait Writer {
         lons: &[f32],
         grid: &RegularGrid,
         variables: &[OutputVariable],
-    ) -> Result<(), ConfigError>;
+    ) -> Result<(), RISICOError>;
 }
 
 impl Writer for NetcdfWriter {
@@ -223,20 +223,22 @@ impl Writer for NetcdfWriter {
         lons: &[f32],
         grid: &RegularGrid,
         variables: &[OutputVariable],
-    ) -> Result<(), ConfigError> {
+    ) -> Result<(), RISICOError> {
         for variable in variables {
             let n_lats = grid.nrows;
             let n_lons = grid.ncols;
 
             if !self.files.contains_key(&variable.name) {
-                let path = self.path.as_os_str().to_str().unwrap();
-                //let run_date = &self.run_date.format("%Y%m%d%H%M").to_string();
+                let path = self.path.as_os_str()
+                    .to_str().expect("Invalid path");
+                
                 let file_name = format!("{}/{}.nc", path, variable.name);
                 let file = create_nc_file(&file_name, grid, &variable.name)?;
                 self.files.insert(variable.name.clone(), file);
             }
 
-            let file = self.files.get_mut(&variable.name).unwrap();
+            let file = self.files.get_mut(&variable.name)
+                .expect("there should be file");
 
             let mut time_var = file
                 .variable_mut("time")
@@ -256,7 +258,7 @@ impl Writer for NetcdfWriter {
             if let Some(values) = values {
                 variable_var
                     .put_values(
-                        values.as_slice().unwrap(),
+                        values.as_slice().expect("Should unwrap"),
                         Some(&[len, 0, 0]),
                         Some(&[1, n_lats, n_lons]),
                     )
@@ -277,8 +279,9 @@ impl Writer for ZBinWriter {
         lons: &[f32],
         grid: &RegularGrid,
         variables: &[OutputVariable],
-    ) -> Result<(), ConfigError> {
-        let path = self.path.as_os_str().to_str().unwrap();
+    ) -> Result<(), RISICOError> {
+        let path = self.path.as_os_str().to_str()
+            .expect("Should be a valid path");
         for variable in variables {
             let date_string = output.time.format("%Y%m%d%H%M").to_string();
             //todo!("get run date from config");
@@ -290,8 +293,12 @@ impl Writer for ZBinWriter {
             let values = variable.get_variable_on_grid(&output, lats, lons, grid);
 
             if let Some(values) = values {
-                write_to_zbin_file(&file, &grid, values.as_slice().unwrap())
-                    .map_err(|err| format!("Cannot write file {}: error {err}", file))?;
+                write_to_zbin_file(
+                    &file, 
+                    &grid, 
+                    values.as_slice().expect("Should unwrap")
+                )
+                .map_err(|err| format!("Cannot write file {}: error {err}", file))?;
             }
         }
         Ok(())
@@ -306,8 +313,10 @@ impl Writer for PngWriter {
         lons: &[f32],
         grid: &RegularGrid,
         variables: &[OutputVariable],
-    ) -> Result<(), ConfigError> {
-        let path = self.path.as_os_str().to_str().unwrap();
+    ) -> Result<(), RISICOError> {
+        let path = self.path.as_os_str()
+            .to_str()
+            .expect("Should be a valid path");
         for variable in variables {
             let date_string = output.time.format("%Y%m%d%H%M").to_string();
             //todo!("get run date from config");
@@ -323,8 +332,13 @@ impl Writer for PngWriter {
                 .ok_or(format!("No palette found for variable {}", variable.name))?;
 
             if let Some(values) = values {
-                write_to_pngwjson(&file, &grid, values.as_slice().unwrap(), &palette)
-                    .map_err(|err| format!("Cannot write file {}: error {err}", file))?;
+                write_to_pngwjson(
+                    &file, 
+                    &grid, 
+                    values.as_slice().expect("Should unwrap"), 
+                    &palette
+                )
+                .map_err(|err| format!("Cannot write file {}: error {err}", file))?;
             }
         }
         Ok(())
@@ -355,8 +369,9 @@ impl Writer for GeotiffWriter {
         lons: &[f32],
         grid: &RegularGrid,
         variables: &[OutputVariable],
-    ) -> Result<(), ConfigError> {
-        let path = self.path.as_os_str().to_str().unwrap();
+    ) -> Result<(), RISICOError> {
+        let path = self.path.as_os_str().to_str()
+            .expect("Should be a valid path");
         for variable in variables {
             let date_string = output.time.format("%Y%m%d%H%M").to_string();
             //todo!("get run date from config");
@@ -368,8 +383,12 @@ impl Writer for GeotiffWriter {
             let values = variable.get_variable_on_grid(&output, lats, lons, grid);
 
             if let Some(values) = values {
-                write_to_geotiff(&file, &grid, values.as_slice().unwrap())
-                    .map_err(|err| format!("Cannot write file {}: error {err}", file))?;
+                write_to_geotiff(
+                    &file, 
+                    &grid, 
+                    values.as_slice().expect("Should unwrap")
+                )
+                .map_err(|err| format!("Cannot write file {}: error {err}", file))?;
             }
         }
         Ok(())
