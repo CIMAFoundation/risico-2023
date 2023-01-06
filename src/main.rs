@@ -10,12 +10,14 @@ use crate::library::{
     helpers::get_input,
 };
 
+const VERSION: &str = env!("CARGO_PKG_VERSION");
+
 use git_version::git_version;
 const GIT_VERSION: &str = git_version!();
 
 // parse command line arguments: first argument is model date in the form YYYYMMDDHHMM, second is configuration path, third is input path
 fn main() {
-    println!("RISICO.rs version v1.0.0.{}", GIT_VERSION);
+    println!("RISICO.rs {VERSION}.{GIT_VERSION}");
     let args: Vec<String> = args().collect();
     if args.len() != 4 {
         panic!("Usage: {} YYYYMMDDHHMM config_path input_path", args[0]);
@@ -45,12 +47,13 @@ fn main() {
     let lons = config.properties.lons.as_slice()
         .expect("should unwrap");
     
+    println!("Loading input data from {}", input_path);
     let handler = InputDataHandler::new(input_path, lats, lons);
     let len = lats.len();
 
     let timeline = handler.get_timeline();
     for time in timeline {
-        println!("{}", time.format("%Y%m%d%H%M"));
+        println!("Processing {}", time.format("%Y-%m-%d %H:%M"));
         let input = get_input(&handler, &time, len);
         state.update(props, &input);
 

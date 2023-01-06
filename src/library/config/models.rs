@@ -659,10 +659,6 @@ fn read_warm_state(base_warm_file: &str, date: DateTime<Utc>) -> Option<(Vec<War
 
         let file_handle = File::open(filename);
         if file_handle.is_err() {
-            println!(
-                "Could not find warm state file for {}",
-                current_date.format("%Y%m%d%H%M")
-            );
             continue;
         }
         file = Some(file_handle.expect("Should unwrap"));
@@ -671,13 +667,13 @@ fn read_warm_state(base_warm_file: &str, date: DateTime<Utc>) -> Option<(Vec<War
     let file = match file {
         Some(file) => file,
         None => {
-            println!("Loading warm state from {}",current_date.format("%Y%m%d%H%M"));
+            println!("WARNING: Could not find a valid warm state file for run date {}", date.format("%Y-%m-%d"));
             return None;
         }
     };
     
 
-    println!("Loading warm state from {}",current_date.format("%Y%m%d%H%M"));
+    println!("Loading warm state from {}",current_date.format("%Y-%m-%d"));
     let mut warm_state: Vec<WarmState> = Vec::new();
     
     let reader = io::BufReader::new(file);
