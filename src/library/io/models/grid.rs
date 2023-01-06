@@ -1,4 +1,4 @@
-use std::{collections::HashMap, fmt::Debug};
+use std::{fmt::Debug};
 
 use crate::library::{
     config::models::{read_config, ConfigError}
@@ -29,7 +29,7 @@ impl From<&str> for ClusterMode {
 pub trait Grid {
     fn index(&self, lat: &f32, lon: &f32) -> Option<usize>;
     fn shape(&self) -> (usize, usize);
-    fn build_cache(&mut self, lats: &[f32], lons: &[f32]);
+    fn indexes(&mut self, lats: &[f32], lons: &[f32]) -> Array1<Option<usize>>;
 }
 
 impl Debug for dyn Grid {
@@ -163,82 +163,39 @@ impl Grid for RegularGrid {
         (self.nrows, self.ncols)
     }
 
-    fn build_cache(&mut self, _lats: &[f32], _lons: &[f32]) {}
-
+    fn indexes(&mut self, lats: &[f32], lons: &[f32]) -> Array1<Option<usize>> {
+        izip!(lats, lons)
+            .map(|(lat, lon)| {
+                self.index(lat, lon)
+            })
+            .collect::<Array1<_>>()
+    }
 }
 
 #[derive(Debug)]
 pub struct IrregularGrid {
     pub nrows: usize,
     pub ncols: usize,
-    pub lats: Vec<f32>,
-    pub lons: Vec<f32>,
-
-    cached: bool,
-    cache: HashMap<([u8; 8]), usize>,
+    pub lats: Array1<f32>,
+    pub lons: Array1<f32>,
+    tree: RTree<PointWithIndex>,
 }
 
 impl IrregularGrid {
-    pub fn new(nrows: usize, ncols: usize, lats: Vec<f32>, lons: Vec<f32>) -> IrregularGrid {
+    pub fn new(nrows: usize, ncols: usize, lats: Array1<f32>, lons: Array1<f32>) -> IrregularGrid {
+        let points = izip!(&lats, &lons)
+                .enumerate()
+                .map(|(index, (lat, lon))| PointWithIndex::new([*lat, *lon], index))
+                .collect::<Vec<_>>();
+        let tree = RTree::bulk_load(points);
+
         IrregularGrid {
             nrows,
             ncols,
             lats,
             lons,
-            cache: HashMap::new(),
-            cached: false,
+            tree,
         }
-    }
-
-    fn get_key(&self, lat: &f32, lon: &f32) -> [u8; 8] {
-        let lat_bytes = lat.to_le_bytes();
-        let lon_bytes = lon.to_le_bytes();
-        let mut key: [u8; 8] = [0; 8];
-        key[0..4].copy_from_slice(&lat_bytes);
-        key[4..8].copy_from_slice(&lon_bytes);
-        key
-    }
-
-    fn get_cached_index(&self, lat: &f32, lon: &f32) -> Option<usize> {
-        let key = self.get_key(lat, lon);
-        self.cache.get(&key).map(|index| *index)
-    }
-
-    fn index_non_cached(&self, lat: &f32, lon: &f32) -> usize {
-        let mut min_i = self.nrows / 2;
-        let mut min_j = self.ncols / 2;
-
-        let mut minidx = min_i * self.ncols + min_j;
-        let mut minerr = f32::abs(self.lons[minidx] - lon) + f32::abs(self.lats[minidx] - lat);
-
-        let mut dobreak = false;
-        while !dobreak {
-            let mut found = false;
-            let i = min_i;
-            let j = min_j;
-            for ii in i - 1..i + 2 {
-                for jj in j - 1..j + 2 {
-                    let p_i = usize::min(ii, self.nrows - 1);
-                    let p_j = usize::min(jj, self.ncols - 1);
-                    let idx2 = p_i * self.ncols + (p_j);
-                    let err = f32::abs(self.lons[idx2] - lon)
-                        + f32::abs(self.lats[idx2] - lat);
-
-                    if err < minerr {
-                        minerr = err;
-                        minidx = idx2;
-                        min_i = p_i;
-                        min_j = p_j;
-                        found = true;
-                    }
-                }
-            }
-            if !found {
-                dobreak = true;
-            }
-        }
-
-        minidx
     }
 }
 
@@ -246,41 +203,21 @@ type PointWithIndex = GeomWithData<[f32; 2], usize>;
 
 impl Grid for IrregularGrid {
     fn index(&self, lat: &f32, lon: &f32) -> Option<usize> {
-        let maybe_index = self.get_cached_index(lat, lon);
-        if let Some(index) = maybe_index {
-            return Some(index);
-        };
-        Some(self.index_non_cached(lat, lon))
+        let point = self.tree.nearest_neighbor(&[*lat, *lon]).unwrap();
+        Some(point.data)
     }
 
     fn shape(&self) -> (usize, usize) {
         (self.nrows, self.ncols)
     }
 
-    fn build_cache(&mut self, lats: &[f32], lons: &[f32]) {
-        if self.cached {
-            return;
-        }
-
-        let tree = RTree::bulk_load(
-            izip!(&self.lats, &self.lons)
-                .enumerate()
-                .map(|(index, (lat, lon))| PointWithIndex::new([*lat, *lon], index))
-                .collect::<Vec<_>>()
-        );
-
+    fn indexes(&mut self, lats: &[f32], lons: &[f32]) -> Array1<Option<usize>> {
         izip!(lats, lons)
             .map(|(lat, lon)| {
-                let point = tree.nearest_neighbor(&[*lat, *lon]).unwrap();
-                
-                (self.get_key(lat, lon), point.data)
+                let point = self.tree.nearest_neighbor(&[*lat, *lon]).unwrap();
+                Some(point.data)
             })
-            .collect::<Vec<_>>()
-            .iter()
-            .for_each(|(key, index)| {
-                self.cache.insert(*key, *index);
-            });
-        self.cached = true;
+            .collect::<Array1<_>>()
     }
 
 }

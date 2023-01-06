@@ -9,14 +9,12 @@ use std::{
 
 use chrono::*;
 use chrono::{DateTime, Utc};
-use itertools::izip;
-
 use ndarray::Array1;
 
-use crate::library::{io::{readers::read_input_from_file, models::{output::{OutputType, OutputVariable}, palette::Palette}}, state::{models::{Output, Properties}, constants::NODATAVAL}};
+use crate::library::{io::{readers::{read_grid_from_file,read_values_from_file} , models::{output::{OutputType, OutputVariable}, palette::Palette}}, state::{models::{Output, Properties}, constants::NODATAVAL}};
 use crate::{
     library::{
-        io::models::grid::{ClusterMode, Grid},
+        io::models::grid::{ClusterMode},
         state::models::State,
     }
 };
@@ -238,7 +236,7 @@ impl Config {
             },
             None => false,
         };
-        let output_time_res = match config_map.first(KEY_HOURSRESOLUTION) {
+        let output_time_resolution = match config_map.first(KEY_HOURSRESOLUTION) {
             Some(value) => value.parse::<u32>().unwrap_or(3),
             None => 3,
         };
@@ -295,17 +293,17 @@ impl Config {
 
         let config = Config {
             run_date: date,
-            model_name: model_name,
-            warm_state_path: warm_state_path,
+            model_name,
+            warm_state_path,
             warm_state,
             warm_state_time,
             properties: props,
             output_types_defs, 
             variables_defs,
             palettes,
-            use_temperature_effect: use_temperature_effect,
-            use_ndvi: use_ndvi,
-            output_time_resolution: output_time_res
+            use_temperature_effect,
+            use_ndvi,
+            output_time_resolution,
         };
 
         Ok(config)
@@ -472,59 +470,23 @@ fn parse_line(line: &str) -> Result<(String, String, DateTime<Utc>), InputFilePa
 }
 
 #[derive(Debug)]
-pub struct LazyInputFile {
+pub struct InputFile {
     pub grid_name: String,
     pub path: String,
-    pub data: Option<Vec<f32>>,
-}
-
-impl LazyInputFile {
-    pub fn new(grid_name: String, path: String) -> LazyInputFile {
-        LazyInputFile {
-            grid_name,
-            path,
-            data: None,
-        }
-    }
-
-    pub fn load(
-        &mut self,
-        grid_registry: &mut HashMap<String, Box<dyn Grid>>,
-    ) -> Result<(), InputFileParseError> {
-        if !self.data.is_none() {
-            return Ok(());
-        }
-
-        let (grid, data) = read_input_from_file(&self.path)
-            .map_err(|error| format!("Error reading input file {}: {error}", self.path))?;
-        
-        self.data = Some(data);
-
-        // insert the grid in the registry if not already present
-        if !grid_registry.contains_key(&self.grid_name) {
-            grid_registry.insert(self.grid_name.clone(), grid);
-        }
-
-        Ok(())
-    }
 }
 
 #[derive(Debug)]
 pub struct InputDataHandler {
-    pub grid_registry: HashMap<String, Box<dyn Grid>>,
-    pub data_map: HashMap<DateTime<Utc>, HashMap<String, LazyInputFile>>,
+    pub grid_registry: HashMap<String, Array1<Option<usize>>>,
+    pub data_map: HashMap<DateTime<Utc>, HashMap<String, InputFile>>,
 }
 
 
 impl InputDataHandler {
-    pub fn new(file_path: &str) -> InputDataHandler {
-        let mut handler = InputDataHandler {
-            grid_registry: HashMap::new(),
-            data_map: HashMap::new(),
-        };
-
-        let data_map = &mut handler.data_map;
-
+    pub fn new(file_path: &str, lats: &[f32], lons: &[f32]) -> InputDataHandler {
+        let mut grid_registry= HashMap::new();
+        let mut data_map = HashMap::new();
+        
         let file = File::open(file_path).expect(&format!("Can't open input file {}", file_path));
 
         // file is a text file in which each line is a file with the following structure:
@@ -533,56 +495,64 @@ impl InputDataHandler {
         let reader = io::BufReader::new(file);
 
         for line in reader.lines() {
-            let line = line.unwrap();
+            let line = match line {
+                Ok(line) => line,
+                Err(e) => {
+                    println!("Error reading line: {}", e);
+                    continue;
+                }
+            };
 
             if !line.ends_with(".zbin") {
                 continue;
             }
 
-            let maybe_parsed = parse_line(&line);
-            if maybe_parsed.is_err() {
-                let err = maybe_parsed.err();
-                print!("Error parsing filename {line}: {err:?}");
-                continue;
-            }
+            let (grid_name, variable, date) = match parse_line(&line){
+                Ok(parsed) => parsed,
+                Err(err) => {
+                    print!("Error parsing filename {line}: {err:?}");
+                    continue;
+                }
+            };
 
-            let (grid_name, variable, date) = maybe_parsed.unwrap();
+            //let (grid_name, variable, date) = maybe_parsed.unwrap();
 
             let date = date.with_timezone(&Utc);
 
-            let lazy_input_file = LazyInputFile::new(grid_name, line);
+            let input_file = InputFile {
+                grid_name, 
+                path: line
+            };
+
+            
+            if !grid_registry.contains_key(&input_file.grid_name) {
+                let mut grid = match read_grid_from_file(input_file.path.as_str()){
+                    Ok(grid) => grid,
+                    Err(e) => {
+                        println!("Error reading grid: {}", e);
+                        continue;
+                    }
+                };
+
+                let indexes = grid.indexes(lats, lons);
+                grid_registry.insert(input_file.grid_name.clone(), indexes);
+            }
+            
             // add the data to the data map
             if !data_map.contains_key(&date) {
                 data_map.insert(date, HashMap::new());
             }
-            let data_map = data_map.get_mut(&date).unwrap();
-            data_map.insert(variable.to_string(), lazy_input_file);
+            let data_map_for_date = data_map.get_mut(&date).unwrap();
+            data_map_for_date.insert(variable.to_string(), input_file);
         }
 
-        handler
-    }
-
-    pub fn load_data(&mut self, date: &DateTime<Utc>, lats: &[f32], lons: &[f32]) {
-        let data_map = self.data_map.get_mut(date).unwrap();
-        for (_, lazy_file) in data_map.iter_mut() {
-            if lazy_file.data.is_none() {
-                lazy_file
-                    .load(&mut self.grid_registry)
-                    .expect(&format!("Error loading file {}", lazy_file.path));
-            }
-            // build cache
-            let grid = self.grid_registry.get_mut(&lazy_file.grid_name).unwrap();
-            
-            grid.build_cache(lats, lons);    
-        }
+        InputDataHandler { grid_registry, data_map }
     }
 
     /// Returns the data for the given date and variable on the selected coordinates
     pub fn get_values(&self, 
             var: &str, 
-            date: &DateTime<Utc>, 
-            lats: &[f32], 
-            lons: &[f32]) 
+            date: &DateTime<Utc>) 
             -> Option<Array1<f32>> {
         let data_map = match self
             .data_map
@@ -591,25 +561,27 @@ impl InputDataHandler {
                 None => return None,
             };
             
-        let lazy_file = match data_map
+        let file = match data_map
             .get(var) {
-                Some(lazy_file) => lazy_file,
+                Some(file) => file,
                 None => return None,
             };
             
 
-        let data = &lazy_file.data;
-        let data = data.as_ref().unwrap();
+        let data = read_values_from_file(file.path.as_str())
+            .expect(&format!("Error reading file {}", file.path));        
 
-        let grid = self.grid_registry.get(&lazy_file.grid_name).unwrap();
-        let data = izip!(lats, lons)
-            .map(|(lat, lon)| grid.index(lat, lon))
+        let indexes = self.grid_registry.get(&file.grid_name)
+            .expect(&format!("there should be a grid named {}", file.grid_name));
+
+        let data = indexes
+            .iter()
             .map(|index| 
-                match index {
-                    Some(index) => data[index],
-                    None => NODATAVAL
-                }
-            ).collect();
+                index
+                    .and_then(|idx| Some(data[idx]))
+                    .unwrap_or(NODATAVAL)
+            )
+            .collect();
         Some(data)
     }
 

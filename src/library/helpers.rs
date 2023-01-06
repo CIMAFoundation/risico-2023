@@ -26,36 +26,35 @@ fn maybe_replace(dst: &mut Array1<f32>, src: &Option<Array1<f32>>) {
 
 pub fn get_input(
     handler: &InputDataHandler,
-    lats: &[f32],
-    lons: &[f32],
     time: &DateTime<Utc>,
+    len: usize,
 ) -> Input {
-    let mut snow_cover: Array1<f32> = Array1::ones(lats.len()) * NODATAVAL;
-    let mut precipitation: Array1<f32> = Array1::ones(lats.len()) * NODATAVAL;
-    let mut temperature: Array1<f32> = Array1::ones(lats.len()) * NODATAVAL;
-    let mut wind_speed: Array1<f32> = Array1::ones(lats.len()) * NODATAVAL;
-    let mut wind_dir: Array1<f32> = Array1::ones(lats.len()) * NODATAVAL;
-    let mut humidity: Array1<f32> = Array1::ones(lats.len()) * NODATAVAL;
-    let mut ndvi: Array1<f32> = Array1::ones(lats.len()) * NODATAVAL;
-    let mut ndwi: Array1<f32> = Array1::ones(lats.len()) * NODATAVAL;
-    let mut ndsi: Array1<f32> = Array1::ones(lats.len()) * NODATAVAL;
-    let mut swi: Array1<f32> = Array1::ones(lats.len()) * NODATAVAL;
-    let mut msi: Array1<f32> = Array1::ones(lats.len()) * NODATAVAL;
+    let mut snow_cover: Array1<f32> = Array1::ones(len) * NODATAVAL;
+    let mut precipitation: Array1<f32> = Array1::ones(len) * NODATAVAL;
+    let mut temperature: Array1<f32> = Array1::ones(len) * NODATAVAL;
+    let mut wind_speed: Array1<f32> = Array1::ones(len) * NODATAVAL;
+    let mut wind_dir: Array1<f32> = Array1::ones(len) * NODATAVAL;
+    let mut humidity: Array1<f32> = Array1::ones(len) * NODATAVAL;
+    let mut ndvi: Array1<f32> = Array1::ones(len) * NODATAVAL;
+    let mut ndwi: Array1<f32> = Array1::ones(len) * NODATAVAL;
+    let mut ndsi: Array1<f32> = Array1::ones(len) * NODATAVAL;
+    let mut swi: Array1<f32> = Array1::ones(len) * NODATAVAL;
+    let mut msi: Array1<f32> = Array1::ones(len) * NODATAVAL;
 
-    let snow = handler.get_values("SNOW", &time, lats, lons);
+    let snow = handler.get_values("SNOW", &time);
 
     maybe_replace(&mut snow_cover, &snow);
 
     // Observed relative humidity
-    let h = handler.get_values("F", &time, lats, lons);
+    let h = handler.get_values("F", &time);
     maybe_replace(&mut humidity, &h);
 
     // forecasted relative humidity
-    let h = handler.get_values("H", &time, lats, lons);
+    let h = handler.get_values("H", &time);
     maybe_replace(&mut humidity, &h);
 
     // Observed temperature
-    let t = handler.get_values("K", &time, lats, lons);
+    let t = handler.get_values("K", &time);
 
     if let Some(t) = t {
         let t = t.mapv(|_t| if _t > 200.0 { _t - 273.15 } else { _t });
@@ -63,15 +62,15 @@ pub fn get_input(
     }
 
     // Forecasted temperature
-    let t = handler.get_values("T", &time, lats, lons);
+    let t = handler.get_values("T", &time);
 
     if let Some(t) = t {
         let t = t.mapv(|_t| if _t > 200.0 { _t - 273.15 } else { _t });
         replace(&mut temperature, &t);
         // Forecasted dew point temperature
-        let r = handler.get_values("R", &time, lats, lons);
+        let r = handler.get_values("R", &time);
         if let Some(r) = r {
-            let mut h: Array1<f32> = Array1::ones(lats.len()) * NODATAVAL;
+            let mut h: Array1<f32> = Array1::ones(len) * NODATAVAL;
             azip!((
                 h in &mut h,
                 r in &r,
@@ -90,19 +89,19 @@ pub fn get_input(
     }
 
     // Observed precipitation
-    let op = handler.get_values("O", &time, lats, lons);
+    let op = handler.get_values("O", &time);
     maybe_replace(&mut precipitation, &op);
     // Forecast precipitation
-    let fp = handler.get_values("P", &time, lats, lons);
+    let fp = handler.get_values("P", &time);
     maybe_replace(&mut precipitation, &fp);
 
     // wind speed
-    let ws = handler.get_values("W", &time, lats, lons);
+    let ws = handler.get_values("W", &time);
     // wind direction
-    let wd = handler.get_values("D", &time, lats, lons);
+    let wd = handler.get_values("D", &time);
 
-    let u = handler.get_values("U", &time, lats, lons);
-    let v = handler.get_values("V", &time, lats, lons);
+    let u = handler.get_values("U", &time);
+    let v = handler.get_values("V", &time);
 
     if let Some(ws) = ws {
         let ws = ws.mapv(|_ws| {
@@ -156,19 +155,19 @@ pub fn get_input(
         replace(&mut wind_speed, &ws);
     }
 
-    let _swi = handler.get_values("SWI", &time, lats, lons);
+    let _swi = handler.get_values("SWI", &time);
     maybe_replace(&mut swi, &_swi);
 
-    let _ndsi = handler.get_values("N", &time, lats, lons);
+    let _ndsi = handler.get_values("N", &time);
     maybe_replace(&mut ndsi, &_ndsi);
 
-    let _ndvi = handler.get_values("NDVI", &time, lats, lons);
+    let _ndvi = handler.get_values("NDVI", &time);
     maybe_replace(&mut ndvi, &_ndvi);
 
-    let _ndwi = handler.get_values("NDWI", &time, lats, lons);
+    let _ndwi = handler.get_values("NDWI", &time);
     maybe_replace(&mut ndwi, &_ndwi);
 
-    let _msi = handler.get_values("M", &time, lats, lons);
+    let _msi = handler.get_values("M", &time);
     maybe_replace(&mut msi, &_msi);
 
     Input {

@@ -29,7 +29,7 @@ fn main() {
 
     let date = Utc.datetime_from_str(date, "%Y%m%d%H%M").unwrap();
     let config = Config::new(&config_path, date).unwrap();
-    let mut handler = InputDataHandler::new(input_path);
+
 
     let mut output_writer = config
         .get_output_writer()
@@ -38,16 +38,16 @@ fn main() {
     let props = config.get_properties();
     let mut state = config.new_state();
 
-    let timeline = handler.get_timeline();
     let lats = config.properties.lats.as_slice().unwrap();
     let lons = config.properties.lons.as_slice().unwrap();
+    
+    let handler = InputDataHandler::new(input_path, lats, lons);
+    let len = lats.len();
 
+    let timeline = handler.get_timeline();
     for time in timeline {
         println!("{}", time.format("%Y%m%d%H%M"));
-
-        handler.load_data(&time, lats, lons);
-        
-        let input = get_input(&handler, lats, lons, &time);
+        let input = get_input(&handler, &time, len);
         state.update(props, &input);
 
         if config.should_write_output(&state.time) {
