@@ -10,6 +10,7 @@ use std::{
 use chrono::*;
 use chrono::{DateTime, Utc};
 use ndarray::Array1;
+use rayon::prelude::*;
 
 use crate::library::{io::{readers::{read_grid_from_file,read_values_from_file} , models::{output::{OutputType, OutputVariable}, palette::Palette}}, state::{models::{Output, Properties}, constants::NODATAVAL}};
 use crate::{
@@ -396,7 +397,7 @@ impl OutputWriter {
 
 
     pub fn write_output(&mut self, lats: &[f32], lons: &[f32], output: &Output) -> Result<(), RISICOError> {
-        self.outputs.iter_mut().for_each(|output_type| {
+        self.outputs.par_iter_mut().for_each(|output_type| {
             match output_type.write_variables(lats, lons, output) {
                 Ok(_) => (),
                 Err(e) => println!("Error writing output: {}", e)

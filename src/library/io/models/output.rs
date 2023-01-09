@@ -103,6 +103,9 @@ pub struct OutputType {
     writer: Box<dyn Writer>,
 }
 
+unsafe impl Send for OutputType {}
+
+
 impl OutputType {
     pub fn new(
         internal_name: &str,

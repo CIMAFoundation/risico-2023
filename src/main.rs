@@ -47,30 +47,44 @@ fn main() {
     let lons = config.properties.lons.as_slice()
         .expect("should unwrap");
     
+    let c = Utc::now();
     println!("Loading input data from {}", input_path);
     let handler = InputDataHandler::new(input_path, lats, lons);
-    let len = lats.len();
+    println!("Loading input configuration took {} seconds", Utc::now() - c);
+    let len = state.len();
 
     let timeline = handler.get_timeline();
     for time in timeline {
+        let step_time = Utc::now();
         println!("Processing {}", time.format("%Y-%m-%d %H:%M"));
         let input = get_input(&handler, &time, len);
+        
+        let c = Utc::now();
         state.update(props, &input);
+        println!("Updating state took {} seconds", Utc::now() - c);
 
         if config.should_write_output(&state.time) {
+            let c = Utc::now();
             let output = state.output(props, &input);
+            println!("Generating output took {} seconds", Utc::now() - c);
+
+            let c = Utc::now();
             match output_writer.write_output(lats, lons, &output) {
                 Ok(_) => (),
                 Err(err) => println!("Error writing output: {}", err),
             };
+            println!("Writing output took {} seconds", Utc::now() - c);
         }
 
         if time.hour() == 0 {
+            let c = Utc::now();
             match config.write_warm_state(&state) {
                 Ok(_) => (),
                 Err(err) => println!("Error writing warm state: {}", err),
             };
+            println!("Writing warm state took {} seconds", Utc::now() - c);
         }
+        println!("Step took {} seconds", Utc::now() - step_time);
     }
     let elapsed_time = Utc::now() - start_time;
     println!("Elapsed time: {} seconds", elapsed_time.num_seconds());
