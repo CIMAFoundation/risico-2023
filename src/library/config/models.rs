@@ -701,10 +701,16 @@ fn read_warm_state(base_warm_file: &str, date: DateTime<Utc>) -> Option<(Vec<War
             .expect(&format!("Could not parse NDVI from {}", line));
         let NDVI_TIME = components[6].parse::<f32>()
             .expect(&format!("Could not parse NDVI_TIME from {}", line));
-        let NDWI = components[7].parse::<f32>()
-            .expect(&format!("Could not parse NDWI from {}", line));
-        let NDWI_TIME = components[8].parse::<f32>()
-            .expect(&format!("Could not parse NDWI_TIME from {}", line));
+        
+        let mut NDWI = NODATAVAL;
+        let mut NDWI_TIME = 0.0;
+
+        if components.len()>7 {
+            NDWI = components[7].parse::<f32>()
+                .expect(&format!("Could not parse NDWI from {}", line));
+            NDWI_TIME = components[8].parse::<f32>()
+                .expect(&format!("Could not parse NDWI_TIME from {}", line));
+        }
 
         warm_state.push(WarmState {
             dffm,
