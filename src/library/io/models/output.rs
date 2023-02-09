@@ -7,9 +7,12 @@ use netcdf::MutableFile;
 
 use crate::library::{
     config::models::{RISICOError, PaletteMap},
-    io::writers::{write_to_pngwjson, write_to_zbin_file, write_to_geotiff, create_nc_file},
+    io::writers::{write_to_pngwjson, write_to_zbin_file, create_nc_file},
     state::{constants::NODATAVAL, models::Output},
 };
+
+#[cfg(feature = "gdal")]
+use crate::library::io::writers::write_to_geotiff;
 
 use super::grid::{ClusterMode, Grid, RegularGrid};
 
@@ -122,6 +125,7 @@ impl OutputType {
             "ZBIN" => Box::new(ZBinWriter::new(path, name, run_date)),
             "PNGWJSON" => Box::new(PngWriter::new(path, name, &palettes, run_date)),
             "NETCDF" => Box::new(NetcdfWriter::new(path, name, run_date)),
+            #[cfg(feature = "gdal")]
             "GEOTIFF" => Box::new(GeotiffWriter::new(path, name, run_date)),
             _ => Box::new(ZBinWriter::new(path, name, run_date)),
         };
@@ -347,13 +351,13 @@ impl Writer for PngWriter {
         Ok(())
     }
 }
-
+#[cfg(feature = "gdal")]
 pub struct GeotiffWriter {
     path: PathBuf,
     name: String,
     run_date: DateTime<Utc>,
 }
-
+#[cfg(feature = "gdal")]
 impl GeotiffWriter {
     pub fn new(path: &str, name: &str, run_date: &DateTime<Utc>) -> Self {
         GeotiffWriter {
@@ -363,7 +367,7 @@ impl GeotiffWriter {
         }
     }
 }
-
+#[cfg(feature = "gdal")]
 impl Writer for GeotiffWriter {
     fn write(
         &mut self,

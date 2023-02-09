@@ -1,4 +1,6 @@
+#[cfg(feature = "gdal")]
 use gdal::raster::{Buffer, RasterCreationOption};
+
 use libflate::gzip;
 use std::io::BufWriter;
 use std::path::Path;
@@ -115,6 +117,7 @@ pub fn write_to_pngwjson(
     Ok(())
 }
 
+#[cfg(feature = "gdal")]
 pub fn write_to_geotiff(
     file: &str,
     grid: &RegularGrid,
