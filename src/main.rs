@@ -2,7 +2,7 @@
 // import state from lib
 mod library;
 use std::env::args;
-
+use log::{trace, info, warn, error, debug};
 use chrono::prelude::*;
 
 use crate::library::{
@@ -17,10 +17,11 @@ const GIT_VERSION: &str = git_version!();
 
 // parse command line arguments: first argument is model date in the form YYYYMMDDHHMM, second is configuration path, third is input path
 fn main() {
-    println!("RISICO.rs {VERSION}.{GIT_VERSION}");
+    info!("RISICO.rs {VERSION}.{GIT_VERSION}");
     let args: Vec<String> = args().collect();
     if args.len() != 4 {
-        panic!("Usage: {} YYYYMMDDHHMM config_path input_path", args[0]);
+        info!("Usage: {} YYYYMMDDHHMM config_path input_path", args[0]);
+        return;
     }
 
     let start_time = Utc::now();
@@ -48,44 +49,44 @@ fn main() {
         .expect("should unwrap");
     
     let c = Utc::now();
-    println!("Loading input data from {}", input_path);
+    info!("Loading input data from {}", input_path);
     let handler = InputDataHandler::new(input_path, lats, lons);
-    println!("Loading input configuration took {} seconds", Utc::now() - c);
+    trace!("Loading input configuration took {} seconds", Utc::now() - c);
     let len = state.len();
 
     let timeline = handler.get_timeline();
     for time in timeline {
         let step_time = Utc::now();
-        println!("Processing {}", time.format("%Y-%m-%d %H:%M"));
+        info!("Processing {}", time.format("%Y-%m-%d %H:%M"));
         let input = get_input(&handler, &time, len);
         
         let c = Utc::now();
         state.update(props, &input);
-        println!("Updating state took {} seconds", Utc::now() - c);
+        trace!("Updating state took {} seconds", Utc::now() - c);
 
         if config.should_write_output(&state.time) {
             let c = Utc::now();
             let output = state.output(props, &input);
-            println!("Generating output took {} seconds", Utc::now() - c);
+            trace!("Generating output took {} seconds", Utc::now() - c);
 
             let c = Utc::now();
             match output_writer.write_output(lats, lons, &output) {
                 Ok(_) => (),
-                Err(err) => println!("Error writing output: {}", err),
+                Err(err) => warn!("Error writing output: {}", err),
             };
-            println!("Writing output took {} seconds", Utc::now() - c);
+            trace!("Writing output took {} seconds", Utc::now() - c);
         }
 
         if time.hour() == 0 {
             let c = Utc::now();
             match config.write_warm_state(&state) {
                 Ok(_) => (),
-                Err(err) => println!("Error writing warm state: {}", err),
+                Err(err) => warn!("Error writing warm state: {}", err),
             };
-            println!("Writing warm state took {} seconds", Utc::now() - c);
+            trace!("Writing warm state took {} seconds", Utc::now() - c);
         }
-        println!("Step took {} seconds", Utc::now() - step_time);
+        trace!("Step took {} seconds", Utc::now() - step_time);
     }
     let elapsed_time = Utc::now() - start_time;
-    println!("Elapsed time: {} seconds", elapsed_time.num_seconds());
+    info!("Elapsed time: {} seconds", elapsed_time.num_seconds());
 }

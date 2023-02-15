@@ -9,6 +9,7 @@ use std::{
 
 use chrono::*;
 use chrono::{DateTime, Utc};
+use log::{warn, info};
 use ndarray::Array1;
 use rayon::prelude::*;
 
@@ -400,7 +401,7 @@ impl OutputWriter {
         self.outputs.par_iter_mut().for_each(|output_type| {
             match output_type.write_variables(lats, lons, output) {
                 Ok(_) => (),
-                Err(e) => println!("Error writing output: {}", e)
+                Err(e) => warn!("Error writing output: {}", e)
             }
         });
         Ok(())
@@ -499,7 +500,7 @@ impl InputDataHandler {
             let line = match line {
                 Ok(line) => line,
                 Err(e) => {
-                    println!("Error reading line: {}", e);
+                    warn!("Error reading line: {}", e);
                     continue;
                 }
             };
@@ -511,7 +512,7 @@ impl InputDataHandler {
             let (grid_name, variable, date) = match parse_line(&line){
                 Ok(parsed) => parsed,
                 Err(err) => {
-                    print!("Error parsing filename {line}: {err:?}");
+                    warn!("Error parsing filename {line}: {err:?}");
                     continue;
                 }
             };
@@ -526,7 +527,7 @@ impl InputDataHandler {
                 let mut grid = match read_grid_from_file(input_file.path.as_str()){
                     Ok(grid) => grid,
                     Err(e) => {
-                        println!("Error reading grid: {}", e);
+                        warn!("Error reading grid: {}", e);
                         continue;
                     }
                 };
@@ -668,20 +669,20 @@ fn read_warm_state(base_warm_file: &str, date: DateTime<Utc>) -> Option<(Vec<War
     let file = match file {
         Some(file) => file,
         None => {
-            println!("WARNING: Could not find a valid warm state file for run date {}", date.format("%Y-%m-%d"));
+            warn!("WARNING: Could not find a valid warm state file for run date {}", date.format("%Y-%m-%d"));
             return None;
         }
     };
     
 
-    println!("Loading warm state from {}",current_date.format("%Y-%m-%d"));
+    info!("Loading warm state from {}",current_date.format("%Y-%m-%d"));
     let mut warm_state: Vec<WarmState> = Vec::new();
     
     let reader = io::BufReader::new(file);
     
     for line in reader.lines() {
         if let Err(line) = line {
-            println!("Error reading warm state file: {}", line);
+            warn!("Error reading warm state file: {}", line);
             return None;
         }
         let line = line.expect("Should unwrap line");

@@ -1,5 +1,7 @@
 use std::io::Read;
 
+use log::warn;
+
 use crate::library::config::models::RISICOError;
 
 #[derive(Debug, Clone, Copy)]
@@ -68,7 +70,7 @@ impl Palette {
             }
             let parts: Vec<&str> = line.split_whitespace().collect();
             if line.len() < 5 {
-                println!("warning skipping line: {}", line);
+                warn!("warning skipping line: {}", line);
                 continue;
             }
             let val: f32 = parts[0].parse()

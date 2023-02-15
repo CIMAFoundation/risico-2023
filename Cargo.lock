@@ -834,6 +834,7 @@ dependencies = [
  "git-version",
  "itertools",
  "libflate",
+ "log",
  "ndarray",
  "ndarray-stats",
  "netcdf",
