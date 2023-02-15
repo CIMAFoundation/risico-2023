@@ -1,8 +1,10 @@
 #![allow(dead_code)]
 // import state from lib
 mod library;
-use std::env::args;
-use log::{trace, info, warn, error, debug};
+use std::env::{args, var, set_var};
+
+use log::{trace, info, warn};
+use pretty_env_logger;
 use chrono::prelude::*;
 
 use crate::library::{
@@ -15,8 +17,15 @@ const VERSION: &str = env!("CARGO_PKG_VERSION");
 use git_version::git_version;
 const GIT_VERSION: &str = git_version!();
 
+
+
 // parse command line arguments: first argument is model date in the form YYYYMMDDHHMM, second is configuration path, third is input path
 fn main() {
+    if var("RUST_LOG").is_err() {
+       set_var("RUST_LOG", "info")
+    }
+    pretty_env_logger::init();
+
     info!("RISICO.rs {VERSION}.{GIT_VERSION}");
     let args: Vec<String> = args().collect();
     if args.len() != 4 {
