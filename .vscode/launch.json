@@ -16,9 +16,9 @@
                 ]
             },
             "args": [
-                "202301240000",
-                "/opt/risico/RISICOWORLD/configuration.txt",
-                "/opt/risico/RISICOWORLD/INPUT/202301241540/input.txt",
+                "202302150000",
+                "/opt/risico/RISICOLOMBARDIA/configuration.txt",
+                "/opt/risico/RISICOLOMBARDIA/INPUT/202302150939/input.txt",
             ],
             //"visualizerFile": "${workspaceFolder}/.vscode/custom.natvis"
         }

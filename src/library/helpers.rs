@@ -37,7 +37,6 @@ pub fn get_input(
     let mut humidity: Array1<f32> = Array1::ones(len) * NODATAVAL;
     let mut ndvi: Array1<f32> = Array1::ones(len) * NODATAVAL;
     let mut ndwi: Array1<f32> = Array1::ones(len) * NODATAVAL;
-    let mut ndsi: Array1<f32> = Array1::ones(len) * NODATAVAL;
     let mut swi: Array1<f32> = Array1::ones(len) * NODATAVAL;
     let mut msi: Array1<f32> = Array1::ones(len) * NODATAVAL;
 
@@ -158,8 +157,6 @@ pub fn get_input(
     let _swi = handler.get_values("SWI", &time);
     maybe_replace(&mut swi, &_swi);
 
-    let _ndsi = handler.get_values("N", &time);
-    maybe_replace(&mut ndsi, &_ndsi);
 
     let _ndvi = handler.get_values("NDVI", &time);
     maybe_replace(&mut ndvi, &_ndvi);
@@ -180,7 +177,6 @@ pub fn get_input(
         snow_cover: snow_cover,
         ndvi: ndvi,
         ndwi: ndwi,
-        ndsi: ndsi,
         swi: swi,
         msi: msi,
     }

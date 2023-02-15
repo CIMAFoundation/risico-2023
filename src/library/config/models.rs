@@ -9,6 +9,7 @@ use std::{
 
 use chrono::*;
 use chrono::{DateTime, Utc};
+use log::{warn, info};
 use ndarray::Array1;
 use rayon::prelude::*;
 
@@ -342,18 +343,18 @@ impl Config {
         for idx in 0..state.dffm.len() {
             let dffm = state.dffm[idx];
             
-            let NDSI = state.NDSI[idx]; //cell.state.NDSI;
-            let NDSI_TTL = state.NDSI_TTL[idx];  //cell.state.NDSI_TTL;
             let MSI = state.MSI[idx];  //cell.state.MSI;
             let MSI_TTL = state.MSI_TTL[idx];  //cell.state.MSI_TTL;
             let NDVI = state.NDVI[idx];  //cell.state.NDVI;
             let NDVI_TIME = state.NDVI_TIME[idx];  //cell.state.NDVI_TIME;
             let NDWI = state.NDWI[idx];  //cell.state.NDWI;
             let NDWI_TIME = state.NDWI_TIME[idx];  //cell.state.NDWI_TTL;
+            let snow_cover = state.snow_cover[idx];  //cell.state.snow_cover;
+            let snow_cover_time = state.snow_cover_time[idx];  //cell.state.snow_cover_time;
 
             let line = format!(
                 "{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}",
-                dffm, NDSI, NDSI_TTL, MSI, MSI_TTL, NDVI, NDVI_TIME, NDWI, NDWI_TIME
+                dffm, snow_cover, snow_cover_time, MSI, MSI_TTL, NDVI, NDVI_TIME, NDWI, NDWI_TIME
             );
             writeln!(warm_state_writer, "{}", line).map_err(|error| {
                 format!(
@@ -400,7 +401,7 @@ impl OutputWriter {
         self.outputs.par_iter_mut().for_each(|output_type| {
             match output_type.write_variables(lats, lons, output) {
                 Ok(_) => (),
-                Err(e) => println!("Error writing output: {}", e)
+                Err(e) => warn!("Error writing output: {}", e)
             }
         });
         Ok(())
@@ -499,7 +500,7 @@ impl InputDataHandler {
             let line = match line {
                 Ok(line) => line,
                 Err(e) => {
-                    println!("Error reading line: {}", e);
+                    warn!("Error reading line: {}", e);
                     continue;
                 }
             };
@@ -511,7 +512,7 @@ impl InputDataHandler {
             let (grid_name, variable, date) = match parse_line(&line){
                 Ok(parsed) => parsed,
                 Err(err) => {
-                    print!("Error parsing filename {line}: {err:?}");
+                    warn!("Error parsing filename {line}: {err:?}");
                     continue;
                 }
             };
@@ -526,7 +527,7 @@ impl InputDataHandler {
                 let mut grid = match read_grid_from_file(input_file.path.as_str()){
                     Ok(grid) => grid,
                     Err(e) => {
-                        println!("Error reading grid: {}", e);
+                        warn!("Error reading grid: {}", e);
                         continue;
                     }
                 };
@@ -613,8 +614,8 @@ impl InputDataHandler {
 #[derive(Debug, Clone)]
 pub struct WarmState {    
     pub dffm: f32,
-    pub NDSI: f32,
-    pub NDSI_TTL: f32,
+    pub snow_cover: f32,
+    pub snow_cover_time: f32,
     pub MSI: f32,
     pub MSI_TTL: f32,
     pub NDVI: f32,
@@ -627,8 +628,8 @@ impl Default for WarmState {
     fn default() -> Self {
         WarmState {
             dffm: 40.0,
-            NDSI: 0.0,
-            NDSI_TTL: 0.0,
+            snow_cover: 0.0,
+            snow_cover_time: 0.0,
             MSI: 0.0,
             MSI_TTL: 0.0,
             NDVI: 0.0,
@@ -668,20 +669,20 @@ fn read_warm_state(base_warm_file: &str, date: DateTime<Utc>) -> Option<(Vec<War
     let file = match file {
         Some(file) => file,
         None => {
-            println!("WARNING: Could not find a valid warm state file for run date {}", date.format("%Y-%m-%d"));
+            warn!("WARNING: Could not find a valid warm state file for run date {}", date.format("%Y-%m-%d"));
             return None;
         }
     };
     
 
-    println!("Loading warm state from {}",current_date.format("%Y-%m-%d"));
+    info!("Loading warm state from {}",current_date.format("%Y-%m-%d"));
     let mut warm_state: Vec<WarmState> = Vec::new();
     
     let reader = io::BufReader::new(file);
     
     for line in reader.lines() {
         if let Err(line) = line {
-            println!("Error reading warm state file: {}", line);
+            warn!("Error reading warm state file: {}", line);
             return None;
         }
         let line = line.expect("Should unwrap line");
@@ -689,10 +690,10 @@ fn read_warm_state(base_warm_file: &str, date: DateTime<Utc>) -> Option<(Vec<War
         let components: Vec<&str> = line.split_whitespace().collect();
         let dffm = components[0].parse::<f32>()
             .expect(&format!("Could not parse dffm from {}", line));
-        let NDSI = components[1].parse::<f32>()
-            .expect(&format!("Could not parse NDSI from {}", line));
-        let NDSI_TTL = components[2].parse::<f32>()
-            .expect(&format!("Could not parse NDSI_TTL from {}", line));
+        let snow_cover = components[1].parse::<f32>()
+            .expect(&format!("Could not parse snow_cover from {}", line));
+        let snow_cover_time = components[2].parse::<f32>()
+            .expect(&format!("Could not parse snow_cover_time from {}", line));
         let MSI = components[3].parse::<f32>()
             .expect(&format!("Could not parse MSI from {}", line));
         let MSI_TTL = components[4].parse::<f32>()
@@ -714,8 +715,8 @@ fn read_warm_state(base_warm_file: &str, date: DateTime<Utc>) -> Option<(Vec<War
 
         warm_state.push(WarmState {
             dffm,
-            NDSI,
-            NDSI_TTL,
+            snow_cover,
+            snow_cover_time,
             MSI,
             MSI_TTL,
             NDVI,

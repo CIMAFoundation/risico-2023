@@ -12,6 +12,8 @@ gdal = ["dep:gdal"]
 
 
 [dependencies]
+log = "0.4.17"
+pretty_env_logger = "0.4.0"
 itertools = "0.10.5"
 chrono = "0.4"
 serde = "1.0"

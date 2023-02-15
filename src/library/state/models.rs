@@ -6,13 +6,15 @@ use ndarray::{azip, Array1};
 use crate::library::{
     config::models::WarmState,
     state::{
-        constants::{MAXRAIN, NODATAVAL, SNOW_COVER_THRESHOLD},
+        constants::{MAXRAIN, NODATAVAL, SNOW_COVER_THRESHOLD, SNOW_SECONDS_VALIDITY},
         functions::{
             get_intensity, get_lhv_dff, get_lhv_l1, get_ppf, get_slope_effect, get_t_effect, get_v,
             get_v0, get_wind_effect, update_dffm_dry, update_dffm_rain,
         },
     },
 };
+
+use super::constants::SATELLITE_DATA_SECONDS_VALIDITY;
 
 //const UPDATE_TIME: i64 = 100;
 
@@ -241,7 +243,6 @@ pub struct Input {
     //[TODO] refactor this!!!
     pub ndvi: Array1<f32>,
     pub ndwi: Array1<f32>,
-    pub ndsi: Array1<f32>,
     pub msi: Array1<f32>,
     pub swi: Array1<f32>,
 }
@@ -255,9 +256,8 @@ pub struct State {
     // state
     pub dffm: Array1<f32>,
     pub snow_cover: Array1<f32>,
+    pub snow_cover_time: Array1<f32>,
 
-    pub NDSI: Array1<f32>,
-    pub NDSI_TTL: Array1<f32>,
     pub MSI: Array1<f32>,
     pub MSI_TTL: Array1<f32>,
     pub NDVI: Array1<f32>,
@@ -273,29 +273,28 @@ impl State {
     /// Create a new state.
     pub fn new(warm_state: &Vec<WarmState>, time: &DateTime<Utc>) -> State {
         let dffm = Array1::from_vec(warm_state.iter().map(|w| w.dffm).collect());
-        let NDSI = Array1::from_vec(warm_state.iter().map(|w| w.NDSI).collect());
-        let NDSI_TTL = Array1::from_vec(warm_state.iter().map(|w| w.NDSI_TTL).collect());
         let MSI = Array1::from_vec(warm_state.iter().map(|w| w.MSI).collect());
         let MSI_TTL = Array1::from_vec(warm_state.iter().map(|w| w.MSI_TTL).collect());
         let NDVI = Array1::from_vec(warm_state.iter().map(|w| w.NDVI).collect());
         let NDVI_TIME = Array1::from_vec(warm_state.iter().map(|w| w.NDVI_TIME).collect());
         let NDWI = Array1::from_vec(warm_state.iter().map(|w| w.NDWI).collect());
         let NDWI_TIME = Array1::from_vec(warm_state.iter().map(|w| w.NDWI_TIME).collect());
+
         let snow_cover = Array1::zeros(warm_state.len());
+        let snow_cover_time = Array1::zeros(warm_state.len());
 
         State {
             time: time.clone(),
             // props,
             dffm,
-            NDSI_TTL,
-            NDSI,
+            snow_cover,
+            snow_cover_time,
             MSI_TTL,
             MSI,
             NDVI,
             NDVI_TIME,
             NDWI,
             NDWI_TIME,
-            snow_cover,
             len: warm_state.len(),
         }
     }
@@ -307,34 +306,25 @@ impl State {
     fn update_snow_cover(&mut self, input: &Input) {
         azip!((
             snow_cover in &mut self.snow_cover,
-            ndsi in &self.NDSI,
+            snow_cover_time in &mut self.snow_cover_time,
             i_snow_cover in &input.snow_cover,
         ){
-            *snow_cover = *i_snow_cover;
-            if *ndsi != NODATAVAL {
-                *snow_cover = 1.0;
+            let time = input.time.timestamp() as f32;
+            
+            if *i_snow_cover == NODATAVAL {
+                if (time - *snow_cover_time) as i64 > SNOW_SECONDS_VALIDITY {
+                    *snow_cover = NODATAVAL;
+                }
+                return;
             }
+            
+            *snow_cover = *i_snow_cover;
+            *snow_cover_time = time;
         });
     }
 
     fn update_satellite(&mut self, input: &Input) {
         for idx in 0..self.len() {
-            {
-                let ndsi = &mut self.NDSI[idx];
-                let ndsi_ttl = &mut self.NDSI_TTL[idx];
-                let i_ndsi = input.ndsi[idx];
-
-                if i_ndsi < 0.0 {
-                    if *ndsi_ttl > 0.0 {
-                        *ndsi_ttl -= 1.0;
-                    } else {
-                        *ndsi = NODATAVAL;
-                    }
-                } else {
-                    *ndsi = i_ndsi;
-                    *ndsi_ttl = 56.0;
-                }
-            }
             {
                 let msi = &mut self.MSI[idx];
                 let msi_ttl = &mut self.MSI_TTL[idx];
@@ -356,7 +346,7 @@ impl State {
                 let ndvi_time = &mut self.NDVI_TIME[idx];
                 let i_ndvi = input.ndvi[idx];
 
-                if self.time.timestamp() - *ndvi_time as i64 > 240 * 3600 {
+                if self.time.timestamp() - *ndvi_time as i64 > SATELLITE_DATA_SECONDS_VALIDITY {
                     *ndvi = NODATAVAL;
                 }
 
@@ -375,7 +365,7 @@ impl State {
                 let ndwi_time = &mut self.NDWI_TIME[idx];
                 let i_ndwi = input.ndwi[idx];
 
-                if self.time.timestamp() - *ndwi_time as i64 > 240 * 3600 {
+                if self.time.timestamp() - *ndwi_time as i64 > SATELLITE_DATA_SECONDS_VALIDITY {
                     *ndwi = NODATAVAL;
                 }
 
@@ -422,8 +412,8 @@ impl State {
             } else if snow_cover > SNOW_COVER_THRESHOLD {
                 *dffm = sat;
                 continue;
-            } else if *dffm == NODATAVAL || temperature == NODATAVAL || humidity == NODATAVAL {
-                *dffm = NODATAVAL;
+            } else if temperature == NODATAVAL || humidity == NODATAVAL {
+                // keep current humidity if we don't have all the data
                 continue;
             }
 
