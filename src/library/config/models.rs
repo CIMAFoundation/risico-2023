@@ -94,7 +94,8 @@ pub fn read_config(file_name: impl Into<String>) -> Result<ConfigMap, RISICOErro
         let line = line.map_err(|error| format!("error line: {i} \n {error}"))?;
         let line = line.trim().to_string();
 
-        if line.starts_with("%") || line.is_empty() {
+        if line.starts_with("%") || line.starts_with("#") || line.is_empty() {
+            // skip comments and empty lines
             continue;
         }
         if !line.contains("=") {
