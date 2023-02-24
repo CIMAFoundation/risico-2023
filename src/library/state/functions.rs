@@ -10,11 +10,6 @@ use chrono::{DateTime, Utc, Datelike};
 use super::{constants::*};
 
 
-pub fn get_ffm(ffm: f32) -> f32 {
-    ffm + 1.0
-}
-
-
 ///calculate PPF from the date and the two values
 pub fn get_ppf(time: &DateTime<Utc>, ppf_summer: f32, ppf_winter: f32) -> f32{
 	const MARCH_31:u32 = 89;

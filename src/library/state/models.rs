@@ -406,7 +406,7 @@ impl State {
 
             let T0 = veg.T0;
 
-            if d0 == NODATAVAL {
+            if d0 <= 0.0 {
                 *dffm = NODATAVAL;
                 continue;
             } else if snow_cover > SNOW_COVER_THRESHOLD {
