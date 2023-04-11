@@ -29,7 +29,7 @@ pub fn get_ppf(time: &DateTime<Utc>, ppf_summer: f32, ppf_winter: f32) -> f32{
     let ppf = match day_number{
         1..=MARCH_31 => ppf_winter,
         APRIL_1..=MAY_31 => {
-            let val:f32 = (day_number - (MARCH_31 + 1)) as f32 / (MAY_31 - MAY_31) as f32;
+            let val:f32 = (day_number - (MARCH_31 + 1)) as f32 / (MAY_31 - MARCH_31) as f32;
             val * ppf_summer + (1.0 - val) * ppf_winter
         }
         JUNE_1..=SEPTEMBER_30 => ppf_summer,
@@ -160,5 +160,43 @@ pub fn update_dffm_dry(dffm: f32, _sat: f32, T: f32, W: f32, H: f32, T0: f32, dT
 pub fn index_from_swi(dffm: f32, swi: f32) -> f32{
 	if swi <= 10.0 { return 0.0 } ;
     dffm
+
+}
+
+
+
+#[cfg(test)]
+mod tests {
+	use super::*;
+	use chrono::NaiveDate;
+
+	#[test]
+	fn test_get_ppf_winter() {
+		let date = NaiveDate::from_ymd(2019, 1, 1);
+		let ppf = get_ppf(&date, 0.0, 1.0);
+		assert_eq!(ppf, 0.0);
+	}
+
+	#[test]
+	fn test_get_ppf_summer() {
+		let date = NaiveDate::from_ymd(2019, 7, 1).and_hms(0, 0, 0);
+		
+		let ppf = get_ppf(&date, 0.0, 1.0);
+		assert_eq!(ppf, 1.0);
+	}
+
+	#[test]
+	fn test_get_ppf_spring() {
+		let date = NaiveDate::from_ymd(2019, 4, 1);
+		let ppf = get_ppf(&date, 0.0, 1.0);
+		assert_eq!(ppf, 0.5);
+	}
+
+	#[test]
+	fn test_get_ppf_autumn() {
+		let date = NaiveDate::from_ymd(2019, 10, 1);
+		let ppf = get_ppf(&date, 0.0, 1.0);
+		assert_eq!(ppf, 0.5);
+	}
 
 }

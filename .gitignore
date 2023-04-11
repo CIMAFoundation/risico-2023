@@ -5,6 +5,10 @@
 # Created by https://www.toptal.com/developers/gitignore/api/rust,macos,linux,windows,python
 # Edit at https://www.toptal.com/developers/gitignore?templates=rust,macos,linux,windows,python
 
+### MacOS ###
+# General
+.DS_Store
+
 ### Linux ###
 *~
 
