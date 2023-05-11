@@ -168,18 +168,19 @@ pub fn index_from_swi(dffm: f32, swi: f32) -> f32{
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use chrono::NaiveDate;
+	use chrono::{NaiveDate, DateTime, Utc};
 
 	#[test]
 	fn test_get_ppf_winter() {
-		let date = NaiveDate::from_ymd(2019, 1, 1);
+		// create an utc datetime object
+		let date: DateTime<Utc> = DateTime::<Utc>::from_utc(NaiveDate::from_ymd(2019, 1, 1).and_hms(0, 0, 0), Utc);
 		let ppf = get_ppf(&date, 0.0, 1.0);
 		assert_eq!(ppf, 0.0);
 	}
 
 	#[test]
 	fn test_get_ppf_summer() {
-		let date = NaiveDate::from_ymd(2019, 7, 1).and_hms(0, 0, 0);
+		let date: DateTime<Utc> = DateTime::<Utc>::from_utc(NaiveDate::from_ymd(2019, 7, 1).and_hms(0, 0, 0), Utc);
 		
 		let ppf = get_ppf(&date, 0.0, 1.0);
 		assert_eq!(ppf, 1.0);
@@ -187,14 +188,14 @@ mod tests {
 
 	#[test]
 	fn test_get_ppf_spring() {
-		let date = NaiveDate::from_ymd(2019, 4, 1);
+		let date: DateTime<Utc> = DateTime::<Utc>::from_utc(NaiveDate::from_ymd(2019, 4, 1).and_hms(0, 0, 0), Utc);
 		let ppf = get_ppf(&date, 0.0, 1.0);
 		assert_eq!(ppf, 0.5);
 	}
 
 	#[test]
 	fn test_get_ppf_autumn() {
-		let date = NaiveDate::from_ymd(2019, 10, 1);
+		let date: DateTime<Utc> = DateTime::<Utc>::from_utc(NaiveDate::from_ymd(2019, 10, 1).and_hms(0, 0, 0), Utc);
 		let ppf = get_ppf(&date, 0.0, 1.0);
 		assert_eq!(ppf, 0.5);
 	}
