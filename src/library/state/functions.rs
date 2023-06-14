@@ -145,15 +145,34 @@ pub fn update_dffm_rain(r: f32, dffm: f32, sat: f32) -> f32{
 
 #[allow(non_snake_case)]
 ///Get the new value for the dfmm when there is no rain (p<p*)
+//pub fn update_dffm_dry(dffm: f32, _sat: f32, T: f32, W: f32, H: f32, T0: f32, dT: f32) -> f32{
+//	let EMC  = A1 * f32::powf(H, A2) + A3 * f32::exp((H - 100.0)/10.0) + A4 * (30.0 - f32::min(T, 30.0))*(1.0 - f32::exp(-A5 * H));
+//	let K1 = T0 / (1.0 + A6 * f32::powf(T, B1) + A7 * f32::powf(W, B2));
+//
+//	//dinamica di drying / wetting
+//	let dffm = EMC + (dffm - EMC) * f32::exp(-dT/K1);
+//
+//	if dffm >= 0.0 { dffm } else { 0.0 }
+//	
+//}
+
 pub fn update_dffm_dry(dffm: f32, _sat: f32, T: f32, W: f32, H: f32, T0: f32, dT: f32) -> f32{
 	let EMC  = A1 * f32::powf(H, A2) + A3 * f32::exp((H - 100.0)/10.0) + A4 * (30.0 - f32::min(T, 30.0))*(1.0 - f32::exp(-A5 * H));
-	let K1 = T0 / (1.0 + A6 * f32::powf(T, B1) + A7 * f32::powf(W, B2));
+	
+	let D_dry: f32 = 1.0 + B1_D * f32::powf(T_STANDARD, C1_D);
+	let K_dry: f32 = T0 * (D_dry / (1.0 + B1_D * f32::powf(T, C1_D) + B2_D * f32::powf(W, C2_D)) );
+
+	let D_wet: f32 = 1.0 + B1_W * f32::powf(T_STANDARD, C1_W);
+	let K_wet: f32 = T0 * (D_wet / (1.0 + B1_W * f32::powf(T, C1_W) + B2_W * f32::powf(W, C2_W)) );
+
+	let K: f32 = if dffm>=EMC {K_dry} else {K_wet};
 
 	//dinamica di drying / wetting
-	let dffm = EMC + (dffm - EMC) * f32::exp(-dT/K1);
+
+	let const_G: f32 = (EMC - dffm) / (100.0 - dffm);
+	let dffm= (EMC - 100.0 * const_G * f32::exp(-dT/K)) / (1.0 - const_G * f32::exp(-dT/K));
 
 	if dffm >= 0.0 { dffm } else { 0.0 }
-	
 }
 
 
