@@ -31,6 +31,7 @@ pub const  A7:f32 = 0.00722;
 
 pub const  B1_D:f32 = 1.3037;
 pub const  B2_D:f32 = 2.4539;
+//pub const  B2_D:f32 = 0.9640; // contant for wind in m/h
 pub const  C1_D:f32 = 0.1753;
 pub const  C2_D:f32 = 0.1141;
 pub const  B1_W:f32 = 2.5942;
