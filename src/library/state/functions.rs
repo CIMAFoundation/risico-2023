@@ -152,7 +152,7 @@ pub fn update_dffm_rain(r: f32, dffm: f32, sat: f32) -> f32 {
 #[allow(non_snake_case)]
 ///Get the new value for the dfmm when there is no rain (p<p*)
 pub fn update_dffm_dry_legacy(dffm: f32, _sat: f32, T: f32, W: f32, H: f32, T0: f32, dT: f32) -> f32{
-	let EMC  = A1 * f32::powf(H, A2) + A3 * f32::exp((H - 100.0)/10.0) + A4 * (30.0 - f32::min(T, 30.0))*(1.0 - f32::exp(-A5 * H));
+	let EMC  = A1_LEGACY * f32::powf(H, A2) + A3 * f32::exp((H - 100.0)/10.0) + A4 * (30.0 - f32::min(T, 30.0))*(1.0 - f32::exp(-A5 * H));
 	let K1 = T0 / (1.0 + A6 * f32::powf(T, B1) + A7 * f32::powf(W, B2));
 
 	// drying-wtting dynamic
