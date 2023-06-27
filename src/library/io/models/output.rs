@@ -3,7 +3,7 @@ use std::{collections::HashMap, path::PathBuf};
 use chrono::{DateTime, Utc};
 use itertools::izip;
 use ndarray::Array1;
-use netcdf::MutableFile;
+use netcdf::{MutableFile, extent::Extents};
 
 use crate::library::{
     config::models::{RISICOError, PaletteMap},
@@ -252,8 +252,10 @@ impl Writer for NetcdfWriter {
                 .ok_or_else(|| format!("variable not found: time"))?;
             let time: i64 = output.time.timestamp() as i64;
             let len = time_var.len();
+            let extents: Extents = (&[len, ], &[1, ]).try_into().unwrap();
+            
             time_var
-                .put_values(&[time], Some(&[len]), Some(&[1 as usize]))
+                .put_values(&[time], extents)
                 .unwrap_or_else(|_| panic!("Add time failed"));
 
             let mut variable_var = file
@@ -261,13 +263,12 @@ impl Writer for NetcdfWriter {
                 .ok_or_else(|| format!("variable not found: {}", variable.name))?;
 
             let values = variable.get_variable_on_grid(&output, lats, lons, &grid);
-
+            let extents: Extents = (&[len, 0, 0], &[1, n_lats, n_lons]).try_into().unwrap();
             if let Some(values) = values {
                 variable_var
                     .put_values(
                         values.as_slice().expect("Should unwrap"),
-                        Some(&[len, 0, 0]),
-                        Some(&[1, n_lats, n_lons]),
+                        extents,
                     )
                     .unwrap_or_else(|err| panic!("Add variable failed: {err}"));
             } else {

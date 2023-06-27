@@ -13,6 +13,9 @@
                     "build",
                     "--bin",
                     "risico-2023"
+                    // "--features",
+                    // "default"
+
                 ]
             },
             "args": [

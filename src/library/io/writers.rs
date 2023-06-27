@@ -2,6 +2,7 @@
 use gdal::raster::{Buffer, RasterCreationOption};
 
 use libflate::gzip;
+use netcdf::extent::Extents;
 use std::io::BufWriter;
 use std::path::Path;
 use std::{
@@ -218,14 +219,14 @@ pub fn create_nc_file(file_name: &str, grid: &RegularGrid, variable_name: &str) 
         .add_variable::<f32>("latitude", &["latitude"])
         .expect("Add latitude failed");
 
-    var.put_values(&lats, None, None)
+    var.put_values(&lats, Extents::All)
         .expect("Add longitude failed");
 
     let mut var = file
         .add_variable::<f32>("longitude", &["longitude"])
         .expect("Add longitude failed");
 
-    var.put_values(&lons, None, None)
+    var.put_values(&lons, Extents::All)
         .expect("Add longitude failed");
 
     let mut time_var = file
@@ -247,7 +248,7 @@ pub fn create_nc_file(file_name: &str, grid: &RegularGrid, variable_name: &str) 
         .unwrap_or_else(|_| panic!("Add {} failed", variable_name));
 
     variable_var
-        .compression(COMPRESSION_RATE)
+        .compression(COMPRESSION_RATE, false)
         .expect("Set compression failed");
 
     variable_var
