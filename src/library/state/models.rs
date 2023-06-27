@@ -432,9 +432,9 @@ impl State {
             let r = if rain != NODATAVAL { rain } else { 0.0 };
 
             if r > MAXRAIN {
-                *dffm = self.config.ffmc_rain_function(r, *dffm, sat);
+                *dffm = self.config.ffmc_rain(r, *dffm, sat);
             } else {
-                *dffm = self.config.ffmc_no_rain_function(*dffm, sat, t, w, h, T0, dt);
+                *dffm = self.config.ffmc_no_rain(*dffm, sat, t, w, h, T0, dt);
             }
 
             // limit dffm to [0, sat]
