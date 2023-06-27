@@ -9,12 +9,12 @@ use crate::library::{
         constants::{MAXRAIN, NODATAVAL, SNOW_COVER_THRESHOLD, SNOW_SECONDS_VALIDITY},
         functions::{
             get_intensity, get_lhv_dff, get_lhv_l1, get_ppf, get_slope_effect, get_t_effect, get_v,
-            get_v0, get_wind_effect, update_dffm_dry, update_dffm_rain,
+            get_v0, get_wind_effect,
         },
     },
 };
 
-use super::constants::SATELLITE_DATA_SECONDS_VALIDITY;
+use super::{constants::SATELLITE_DATA_SECONDS_VALIDITY, config::ModelConfig};
 
 //const UPDATE_TIME: i64 = 100;
 
@@ -247,6 +247,7 @@ pub struct Input {
     pub swi: Array1<f32>,
 }
 
+
 #[derive(Debug)]
 #[allow(non_snake_case)]
 pub struct State {
@@ -266,12 +267,14 @@ pub struct State {
     pub NDWI_TIME: Array1<f32>,
 
     len: usize,
+
+    config: ModelConfig
 }
 
 impl State {
     #[allow(dead_code, non_snake_case)]
     /// Create a new state.
-    pub fn new(warm_state: &Vec<WarmState>, time: &DateTime<Utc>) -> State {
+    pub fn new(warm_state: &Vec<WarmState>, time: &DateTime<Utc>, config: ModelConfig) -> State {
         let dffm = Array1::from_vec(warm_state.iter().map(|w| w.dffm).collect());
         let MSI = Array1::from_vec(warm_state.iter().map(|w| w.MSI).collect());
         let MSI_TTL = Array1::from_vec(warm_state.iter().map(|w| w.MSI_TTL).collect());
@@ -296,6 +299,7 @@ impl State {
             NDWI,
             NDWI_TIME,
             len: warm_state.len(),
+            config: config
         }
     }
 
@@ -428,9 +432,9 @@ impl State {
             let r = if rain != NODATAVAL { rain } else { 0.0 };
 
             if r > MAXRAIN {
-                *dffm = update_dffm_rain(r, *dffm, sat);
+                *dffm = self.config.ffmc_rain_function(r, *dffm, sat);
             } else {
-                *dffm = update_dffm_dry(*dffm, sat, t, w, h, T0, dt)
+                *dffm = self.config.ffmc_no_rain_function(*dffm, sat, t, w, h, T0, dt);
             }
 
             // limit dffm to [0, sat]

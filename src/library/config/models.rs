@@ -13,7 +13,7 @@ use log::{warn, info};
 use ndarray::Array1;
 use rayon::prelude::*;
 
-use crate::library::{io::{readers::{read_grid_from_file,read_values_from_file} , models::{output::{OutputType, OutputVariable}, palette::Palette}}, state::{models::{Output, Properties}, constants::NODATAVAL}};
+use crate::library::{io::{readers::{read_grid_from_file,read_values_from_file} , models::{output::{OutputType, OutputVariable}, palette::Palette}}, state::{models::{Output, Properties}, constants::NODATAVAL, config::ModelConfig}};
 use crate::{
     library::{
         io::models::grid::{ClusterMode},
@@ -32,6 +32,9 @@ const CELLS_FILE_KEY: &str = "CELLE";
 const VEGETATION_FILE_KEY: &str = "VEG";
 const PPF_FILE_KEY: &str = "PPF";
 const CACHE_PATH_KEY: &str = "BUFFERS";
+
+const MODEL_VERSION_KEY: &str = "MODEL_VERSION";
+
 const USE_TEMPERATURE_EFFECT_KEY: &str = "USETCONTR";
 const USE_NDVI_KEY: &str = "USENDVI";
 const OUTPUTS_KEY: &str = "MODEL";
@@ -222,6 +225,10 @@ impl Config {
         //     .first(CACHE_PATH_KEY)
         //     .ok_or(format!("Error: {CACHE_PATH_KEY} not found in config"))?;
 
+        let model_version = config_map
+            .first(MODEL_VERSION_KEY)
+            .ok_or("legacy")?;
+
         let ppf_file = config_map.first(PPF_FILE_KEY);
 
         let use_temperature_effect = match config_map.first(USE_TEMPERATURE_EFFECT_KEY) {
@@ -307,6 +314,7 @@ impl Config {
             use_temperature_effect,
             use_ndvi,
             output_time_resolution,
+            model_version
         };
 
         Ok(config)
@@ -317,7 +325,8 @@ impl Config {
     }
     
     pub fn new_state(&self) -> State {
-        State::new(&self.warm_state, &self.warm_state_time)
+        let config = ModelConfig::new(&self.model_version);
+        State::new(&self.warm_state, &self.warm_state_time, config)
     }
 
     pub fn get_output_writer(&self) -> Result<OutputWriter, RISICOError> {
@@ -384,6 +393,7 @@ pub struct Config {
     use_temperature_effect: bool,
     use_ndvi: bool,
     output_time_resolution: u32,
+    model_version: String,
 }
 
 pub struct OutputWriter {
@@ -749,12 +759,12 @@ pub fn read_ppf(ppf_file: &str) -> Result<Vec<(f32, f32)>, RISICOError> {
             }
         };
         let components: Vec<&str> = line.split_whitespace().collect();
-        let lat = components[0].parse::<f32>()
+        let ppf_summer = components[0].parse::<f32>()
             .map_err(|err| format!("Could not parse value from PPF file {}: {}", ppf_file, err))?;
 
-        let lon = components[1].parse::<f32>()
+        let ppf_winter = components[1].parse::<f32>()
             .map_err(|err| format!("Could not parse value from PPF file {}: {}", ppf_file, err))?;
-        ppf.push((lat, lon));
+        ppf.push((ppf_summer, ppf_winter));
     }
     Ok(ppf)
 }
