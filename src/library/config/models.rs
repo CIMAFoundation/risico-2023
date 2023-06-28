@@ -225,9 +225,10 @@ impl Config {
         //     .first(CACHE_PATH_KEY)
         //     .ok_or(format!("Error: {CACHE_PATH_KEY} not found in config"))?;
 
-        let model_version = config_map
-            .first(MODEL_VERSION_KEY)
-            .ok_or("legacy")?;
+        let model_version = match config_map.first(MODEL_VERSION_KEY) {
+            Some(value) => value,
+            None => "legacy".to_owned()
+        };
 
         let ppf_file = config_map.first(PPF_FILE_KEY);
 
