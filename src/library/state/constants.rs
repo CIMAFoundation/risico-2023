@@ -62,3 +62,8 @@ pub const SNOW_COVER_THRESHOLD: f32 = 0.001;
 
 pub const SATELLITE_DATA_SECONDS_VALIDITY: i64 = 10 * 24 * 3600;
 pub const SNOW_SECONDS_VALIDITY: i64 = 10 * 24 * 3600;
+
+pub const BETA1: f32 = 0.1783;
+pub const BETA2: f32 = 3.533;
+pub const BETA3: f32 = 1.2;
+pub const C_MOIST: f32 = -0.014;
