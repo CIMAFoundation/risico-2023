@@ -41,7 +41,7 @@ pub fn get_ppf(time: &DateTime<Utc>, ppf_summer: f32, ppf_winter: f32) -> f32 {
 }
 
 ///calculate the wind effect on fire propagation
-pub fn get_wind_effect(w_speed: f32, w_dir: f32, slope: f32, aspect: f32) -> f32 {
+pub fn get_wind_effect_legacy(w_speed: f32, w_dir: f32, slope: f32, aspect: f32) -> f32 {
     if w_speed == NODATAVAL || w_dir == NODATAVAL {
         return 1.0;
     }
@@ -61,21 +61,24 @@ pub fn get_wind_effect(w_speed: f32, w_dir: f32, slope: f32, aspect: f32) -> f32
     ws / n
 }
 
-pub fn get_slope_effect(slope: f32) -> f32 {
+pub fn get_slope_effect_legacy(slope: f32) -> f32 {
     1.0 + LAMBDA * (slope / (PI / 2.0))
 }
 
-pub fn get_v0(v0: f32, d0: f32, _d1: f32, dffm: f32, snow_cover: f32) -> f32 {
+pub fn get_v0_legacy(v0: f32, d0: f32, _d1: f32, dffm: f32, snow_cover: f32) -> f32 {
     if snow_cover > 0.0 || d0 == NODATAVAL {
         return 0.0;
     }
     v0 * f32::exp(-1.0 * f32::powf(dffm / 20.0, 2.0))
 }
 
+
 pub fn get_v(v0: f32, w_effect: f32, s_effect: f32, t_effect: f32) -> f32 {
     v0 * w_effect * s_effect * t_effect
 }
 
+
+/// DEPRECATED
 pub fn get_t_effect(t: f32) -> f32 {
     if t <= 0.0 {
         return 1.0;
