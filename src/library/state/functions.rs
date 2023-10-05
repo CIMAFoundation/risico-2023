@@ -72,9 +72,64 @@ pub fn get_v0_legacy(v0: f32, d0: f32, _d1: f32, dffm: f32, snow_cover: f32) -> 
     v0 * f32::exp(-1.0 * f32::powf(dffm / 20.0, 2.0))
 }
 
-
-pub fn get_v(v0: f32, w_effect: f32, s_effect: f32, t_effect: f32) -> f32 {
+pub fn get_v_legacy(v0: f32, w_effect: f32, s_effect: f32, t_effect: f32) -> f32 {
     v0 * w_effect * s_effect * t_effect
+}
+
+// NEW FORMULATION ROS
+
+pub fn get_wind_effect(w_speed: f32, w_dir: f32, angle: f32) -> f32 {
+    // wind speed in angle direction
+    let ws: f32 = w_speed * f32::cos(w_dir - angle);
+    // wind effect in angle direction
+    let mut wind_eff: f32 = f32::exp(BETA1 * ws);
+    // clip in [0, 10]
+    wind_eff = f32::max(0.0, f32::min(10., wind_eff));
+    return wind_eff
+}
+
+pub fn get_slope_effect(slope: f32, aspect: f32, angle: f32) -> f32 {
+    // slope in angle direction
+    let s: f32 = f32::atan(f32::cos(aspect-angle) * f32::tan(slope));
+    // slope effect in angle direction
+    let mut slope_eff: f32 = f32::exp(f32::signum(s) * BETA2 * f32::powf(f32::tan(f32::abs(s)), BETA3));
+    // clip in [0, 10]
+    slope_eff = f32::max(0.0, f32::min(10., slope_eff));
+    return slope_eff
+}
+
+
+pub fn get_moisture_effect(moisture: f32) -> f32 {
+    // moisture effect
+    return f32::exp(C_MOIST * moisture)
+}
+
+
+pub fn wind_slope_coefficient(slope: f32, aspect: f32, w_speed: f32, w_dir: f32, angle: f32) -> f32 {
+    let slope_eff: f32 = get_slope_effect(slope, aspect, angle);
+    let wind_eff: f32 = get_wind_effect(w_speed, w_dir, angle);
+    return slope_eff*wind_eff
+}
+
+pub fn get_v0(v0: f32, d0: f32, _d1: f32, dffm: f32, snow_cover: f32) -> f32 {
+    if snow_cover > 0.0 || d0 == NODATAVAL {
+        return 0.0;
+    }
+    v0 * get_moisture_effect(dffm)
+}
+
+pub fn get_v(v0: f32, slope: f32, aspect: f32, w_speed: f32, w_dir: f32) -> (f32, f32) {
+    let angles = Array::linspace(0., 2.*PI, 360);
+    let mut coeff_w_s: f32 = 0.;
+    let mut angle_ros: f32 = 0.;
+    for angle in angles.iter() {
+        let coeff_tmp: f32 = wind_slope_coefficient(slope, aspect, w_speed, w_dir, *angle);
+        if coeff_tmp > coeff_w_s {
+            coeff_w_s = coeff_tmp;
+            angle_ros = *angle;
+        }
+    }
+    return (v0 * coeff_w_s, angle_ros)
 }
 
 
