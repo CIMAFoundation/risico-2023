@@ -72,7 +72,9 @@ pub fn get_v0_legacy(v0: f32, d0: f32, _d1: f32, dffm: f32, snow_cover: f32) -> 
     v0 * f32::exp(-1.0 * f32::powf(dffm / 20.0, 2.0))
 }
 
-pub fn get_v_legacy(v0: f32, w_effect: f32, s_effect: f32, t_effect: f32) -> f32 {
+pub fn get_v_legacy(v0: f32, slope: f32, aspect: f32, w_speed: f32, w_dir: f32, t_effect: f32) -> f32 {
+    let w_effect: f32 = get_wind_effect_legacy(w_speed, w_dir, slope, aspect);
+    let s_effect: f32 = get_slope_effect_legacy(slope);
     v0 * w_effect * s_effect * t_effect
 }
 
@@ -118,18 +120,16 @@ pub fn get_v0(v0: f32, d0: f32, _d1: f32, dffm: f32, snow_cover: f32) -> f32 {
     v0 * get_moisture_effect(dffm)
 }
 
-pub fn get_v(v0: f32, slope: f32, aspect: f32, w_speed: f32, w_dir: f32) -> (f32, f32) {
+pub fn get_v(v0: f32, slope: f32, aspect: f32, w_speed: f32, w_dir: f32, t_effect: f32) -> (f32, f32) {
     let angles = Array::linspace(0., 2.*PI, 360);
     let mut coeff_w_s: f32 = 0.;
-    let mut angle_ros: f32 = 0.;
     for angle in angles.iter() {
         let coeff_tmp: f32 = wind_slope_coefficient(slope, aspect, w_speed, w_dir, *angle);
         if coeff_tmp > coeff_w_s {
             coeff_w_s = coeff_tmp;
-            angle_ros = *angle;
         }
     }
-    return (v0 * coeff_w_s, angle_ros)
+    return v0 * coeff_w_s * t_effect
 }
 
 
