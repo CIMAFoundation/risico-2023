@@ -120,7 +120,7 @@ pub fn get_v0(v0: f32, d0: f32, _d1: f32, dffm: f32, snow_cover: f32) -> f32 {
     v0 * get_moisture_effect(dffm)
 }
 
-pub fn get_v(v0: f32, slope: f32, aspect: f32, w_speed: f32, w_dir: f32, t_effect: f32) -> (f32, f32) {
+pub fn get_v(v0: f32, slope: f32, aspect: f32, w_speed: f32, w_dir: f32, t_effect: f32) -> f32 {
     let angles = Array::linspace(0., 2.*PI, 360);
     let mut coeff_w_s: f32 = 0.;
     for angle in angles.iter() {
