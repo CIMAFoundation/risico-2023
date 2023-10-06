@@ -493,20 +493,19 @@ impl State {
                 *ndwi = f32::max(f32::min(1.0 - self.NDWI[idx], 1.0), 0.0);
             }
 
+            // TO BE MODIFIED !!!
             *w_effect = get_wind_effect_legacy(wind_speed, wind_dir, slope, aspect);
-            let slope_effect = get_slope_effect_legacy(slope);
 
             *t_effect = 1.0;
             if use_t_effect {
                 *t_effect = get_t_effect(temperature);
             }
-
+            
             if dffm == NODATAVAL {
                 continue;
             }
-            let V0 = self.config.ros0(veg.v0, veg.d0, veg.d1, dffm, snow_cover);
+            *V = self.config.ros(veg.v0, veg.d0, veg.d1, dffm, snow_cover, slope, aspect, wind_speed, wind_dir, *t_effect);
             *ppf = get_ppf(time, ppf_summer, ppf_winter);
-            *V = self.config.ros(V0, slope, aspect, wind_speed, wind_dir, *t_effect);
 
             if veg.hhv == NODATAVAL || dffm == NODATAVAL {
                 *I = NODATAVAL;
