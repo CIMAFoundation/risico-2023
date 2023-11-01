@@ -1,4 +1,4 @@
-use super::functions::{update_dffm_dry, update_dffm_dry_legacy, update_dffm_rain_legacy, update_dffm_rain, get_v_legacy, get_v0_legacy, get_v, get_v0};
+use super::functions::{update_dffm_dry, update_dffm_dry_legacy, update_dffm_rain_legacy, update_dffm_rain, get_v_legacy, get_v};
 
 /// configuration structure for model config 
 /// can be used to store functions and constants

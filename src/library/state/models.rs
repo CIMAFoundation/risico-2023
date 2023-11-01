@@ -8,8 +8,8 @@ use crate::library::{
     state::{
         constants::{MAXRAIN, NODATAVAL, SNOW_COVER_THRESHOLD, SNOW_SECONDS_VALIDITY},
         functions::{
-            get_intensity, get_lhv_dff, get_lhv_l1, get_ppf, get_slope_effect, get_t_effect, get_v,
-            get_v0, get_wind_effect,
+            get_intensity, get_lhv_dff, get_lhv_l1, get_ppf, get_t_effect,
+            get_wind_effect_legacy,
         },
     },
 };

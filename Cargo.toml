@@ -25,3 +25,4 @@ git-version = "0.3.5"
 gdal = {version="0.15.0", default-features = false, optional = true }
 rstar = "0.11.0"
 hdf5 = "0.8.1"
+hdf5-sys = "0.8.1"

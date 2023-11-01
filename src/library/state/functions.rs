@@ -1,4 +1,5 @@
 use std::f32::consts::PI;
+use ndarray::Array;
 
 #[allow(dead_code)]
 ///functions to work on the state of the risico model
@@ -104,7 +105,7 @@ pub fn get_slope_effect(slope: f32, aspect: f32, angle: f32) -> f32 {
 
 pub fn get_moisture_effect(dffm: f32) -> f32 {
     // moisture effect
-    f32::exp(C_MOIST * moisture)
+    f32::exp(C_MOIST * dffm)
 }
 
 
@@ -119,12 +120,12 @@ pub fn get_v(v0: f32, d0: f32, _d1: f32, snow_cover: f32,
     // wind-slope contribution for each angle
     let angles = Array::linspace(0., 2.*PI, 360);
     let mut coeff_w_s: f32 = 0.;
-    let mut slope_eff: f32 = 1.;
-    let mut wind_eff: f32 = 1.;
-    let mut coeff_w_s_tmp: f32 = 1.;
+    let mut slope_eff: f32;
+    let mut wind_eff: f32;
+    let mut coeff_w_s_tmp: f32;
     for angle in angles.iter() {
-        slope_eff = get_slope_effect(slope, aspect, angle);
-        wind_eff = get_wind_effect(wind_speed, wind_dir, angle);
+        slope_eff = get_slope_effect(slope, aspect, *angle);
+        wind_eff = get_wind_effect(wind_speed, wind_dir, *angle);
         coeff_w_s_tmp = slope_eff * wind_eff;
         if coeff_w_s_tmp > coeff_w_s {
             coeff_w_s = coeff_w_s_tmp;
