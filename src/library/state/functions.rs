@@ -85,31 +85,55 @@ pub fn get_v_legacy(v0: f32, d0: f32, _d1: f32, snow_cover: f32,
 // NEW FORMULATION ROS
 
 pub fn get_wind_effect(wind_speed: f32, wind_dir: f32, angle: f32) -> f32 {
-    // wind speed in angle direction
-    let ws: f32 = wind_speed * f32::cos(wind_dir - angle);
-    // wind effect in angle direction
-    let wind_eff: f32 = f32::exp(BETA1 * ws);
-    // clip in [0, 10]
-    f32::max(0.0, f32::min(10., wind_eff))
+    // convert from m/h to km/h
+    let ws_kph: f32 = wind_speed * 0.001;
+    // constant for formula
+    let a_const: f32 = 1. - ((D1 * (D2 * f32::tanh((0. / D3) - D4))) + (0. / D5));
+    // contribution of wind - module
+    let w_eff_mod: f32 = a_const + (D1 * (D2 * f32::tanh((ws_kph / D3) - D4))) + (ws_kph / D5);
+    let a: f32 = (w_eff_mod - 1.) / 4.;
+    // normalize on direction
+    let theta: f32 = wind_dir - angle;
+    let theta_norm: f32 = (theta + PI) % (2. * PI) - PI;
+    let w_eff_on_dir: f32 = (a + 1.) * (1. - f32::powf(a, 2.)) / (1. - a * f32::cos(theta_norm));
+    return w_eff_on_dir
 }
+
 
 pub fn get_slope_effect(slope: f32, aspect: f32, angle: f32) -> f32 {
     // slope in angle direction
     let s: f32 = f32::atan(f32::cos(aspect-angle) * f32::tan(slope));
     // slope effect in angle direction
-    let slope_eff: f32 = f32::exp(f32::signum(s) * BETA2 * f32::powf(f32::tan(f32::abs(s)), BETA3));
-    // clip in [0, 10]
-    f32::max(0.0, f32::min(10., slope_eff))
+    let h_eff_on_dir: f32 = f32::powf(2., f32::tanh(f32::powf(s * 3., 2.) * f32::signum(s)));
+    return h_eff_on_dir
 }
 
 
-pub fn get_moisture_effect(dffm: f32) -> f32 {
+ pub fn get_wind_slope_effect(slope: f32, aspect: f32, wind_speed: f32, wind_dir: f32, angle: f32) -> f32 {
+    let w_eff: f32 = get_wind_effect(wind_speed, wind_dir, angle);
+    let s_eff: f32 = get_slope_effect(slope, aspect, angle);
+    let mut wh: f32 = s_eff * w_eff;
+    wh = wh - 1.0;
+    if wh > 0. {
+        wh = wh / 2.13;
+    } else if wh < 0. {
+        wh = wh / 1.12;
+    }
+    return wh + 1.     
+ }
+ 
+
+ pub fn get_moisture_effect(dffm: f32) -> f32 {
+    // noramlize in [0, 1] and divide by moisture of extintion
+    let x: f32 = (dffm / 100.) / MX;
     // moisture effect
-    f32::exp(C_MOIST * dffm)
-}
-
-
-pub fn get_v(v0: f32, d0: f32, _d1: f32, snow_cover: f32,
+    let moist_eff: f32 = M5 * f32::powf(x, 5.) + M4 * f32::powf(x, 4.) + M3 * f32::powf(x, 3.) + M2 * f32::powf(x, 2.) + M1 * x + M0;
+    // clip in [0, 1]
+    return f32::max(0.0, f32::min(1., moist_eff))
+ }
+ 
+ 
+ pub fn get_v(v0: f32, d0: f32, _d1: f32, snow_cover: f32,
              dffm: f32, slope: f32, aspect: f32, wind_speed: f32, wind_dir: f32,
              t_effect: f32) -> f32 {
     if snow_cover > 0.0 || d0 == NODATAVAL {
@@ -117,22 +141,18 @@ pub fn get_v(v0: f32, d0: f32, _d1: f32, snow_cover: f32,
     }
     // moisture effect
     let moist_coeff: f32 = get_moisture_effect(dffm);
-    // wind-slope contribution for each angle
-    let angles = Array::linspace(0., 2.*PI, 360);
-    let mut coeff_w_s: f32 = 0.;
-    let mut slope_eff: f32;
-    let mut wind_eff: f32;
-    let mut coeff_w_s_tmp: f32;
+    // wind-slope contribution for each angle -> take the maximum
+    let angles = Array::linspace(0., 2.*PI, N_ANGLES_ROS);
+    let mut w_s_eff: f32 = 0.;
+    let mut w_s_eff_tmp: f32;
     for angle in angles.iter() {
-        slope_eff = get_slope_effect(slope, aspect, *angle);
-        wind_eff = get_wind_effect(wind_speed, wind_dir, *angle);
-        coeff_w_s_tmp = slope_eff * wind_eff;
-        if coeff_w_s_tmp > coeff_w_s {
-            coeff_w_s = coeff_w_s_tmp;
+        w_s_eff_tmp = get_wind_slope_effect(slope, aspect, wind_speed, wind_dir, *angle);
+        if w_s_eff_tmp > w_s_eff {
+            w_s_eff = w_s_eff_tmp;
         }
     }
-    v0 * moist_coeff * coeff_w_s * t_effect
-}
+    return v0 * moist_coeff * w_s_eff * t_effect
+ }
 
 
 /// DEPRECATED
@@ -158,7 +178,6 @@ pub fn get_lhv_l1(humidity: f32, msi: f32, hhv: f32) -> f32 {
     } else {
         lhv_l1 = hhv * (1.0 - (humidity / 100.0)) - Q * (humidity / 100.0);
     }
-
     lhv_l1
 }
 

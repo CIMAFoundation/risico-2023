@@ -63,7 +63,17 @@ pub const SNOW_COVER_THRESHOLD: f32 = 0.001;
 pub const SATELLITE_DATA_SECONDS_VALIDITY: i64 = 10 * 24 * 3600;
 pub const SNOW_SECONDS_VALIDITY: i64 = 10 * 24 * 3600;
 
-pub const BETA1: f32 = 0.1783;
-pub const BETA2: f32 = 3.533;
-pub const BETA3: f32 = 1.2;
-pub const C_MOIST: f32 = -0.014;
+// ROS NEW CONSTANTS
+pub const N_ANGLES_ROS: usize = 8;
+pub const D1: f32 = 0.5;
+pub const D2: f32 = 1.4;
+pub const D3: f32 = 8.2;
+pub const D4: f32 = 2.0;
+pub const D5: f32 = 50.0;
+pub const M0: f32 = 1.0003;
+pub const M1: f32 = -1.7211;
+pub const M2: f32 = 6.598;
+pub const M3: f32 = -17.331;
+pub const M4: f32 = 22.963;
+pub const M5: f32 = -11.507;
+pub const MX: f32 = 0.3;
