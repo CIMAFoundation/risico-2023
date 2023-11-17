@@ -124,8 +124,8 @@ pub fn get_slope_effect_angle(slope: f32, aspect: f32, angle: f32) -> f32 {
 
  pub fn get_wind_slope_effect(slope: f32, aspect: f32, wind_speed: f32, wind_dir: f32) -> f32 {
     let angles = Array::linspace(0., 2.*PI, N_ANGLES_ROS);
-    let ws_all:Vec<f32> = angles.iter().map(|x| get_wind_slope_effect_angle(slope, aspect, wind_speed, wind_dir, *x)).collect();
-    let ws_effect: f32 = ws_all.into_iter().reduce(f32::max).unwrap();
+    let ws_all = angles.iter().map(|x| get_wind_slope_effect_angle(slope, aspect, wind_speed, wind_dir, *x));
+    let ws_effect: f32 = ws_all.reduce(f32::max).unwrap_or(NODATAVAL);
     ws_effect
  }
  
