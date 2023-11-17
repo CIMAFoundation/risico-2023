@@ -72,14 +72,14 @@ pub fn get_moisture_effect_legacy(dffm: f32) -> f32 {
 
 pub fn get_v_legacy(v0: f32, d0: f32, _d1: f32, snow_cover: f32,
                     dffm: f32, slope: f32, aspect: f32, wind_speed: f32, wind_dir: f32,
-                    t_effect: f32) -> f32 {
+                    t_effect: f32) -> (f32, f32) {
     if snow_cover > 0.0 || d0 == NODATAVAL {
-        return 0.0;
+        return (0.0, 0.0);
     }
     let moist_eff: f32 = get_moisture_effect_legacy(dffm);
     let w_effect: f32 = get_wind_effect_legacy(wind_speed, wind_dir, slope, aspect);
     let s_effect: f32 = get_slope_effect_legacy(slope);
-    v0 * moist_eff * w_effect * s_effect * t_effect
+    (v0 * moist_eff * w_effect * s_effect * t_effect, w_effect)
 }
 
 // NEW FORMULATION ROS
@@ -142,15 +142,15 @@ pub fn get_slope_effect_angle(slope: f32, aspect: f32, angle: f32) -> f32 {
  
  pub fn get_v(v0: f32, d0: f32, _d1: f32, snow_cover: f32,
              dffm: f32, slope: f32, aspect: f32, wind_speed: f32, wind_dir: f32,
-             t_effect: f32) -> f32 {
+             t_effect: f32) -> (f32, f32) {
     if snow_cover > 0.0 || d0 == NODATAVAL {
-        return 0.0;
+        return (0.0, 0.0);
     }
     // moisture effect
     let moist_coeff: f32 = get_moisture_effect(dffm);
     // wind-slope contribution
-    let w_s_eff: f32 = get_wind_slope_effect(slope, aspect, wind_speed, wind_dir)
-    v0 * moist_coeff * w_s_eff * t_effect
+    let w_s_eff: f32 = get_wind_slope_effect(slope, aspect, wind_speed, wind_dir);
+    (v0 * moist_coeff * w_s_eff * t_effect, w_s_eff)
  }
 
 

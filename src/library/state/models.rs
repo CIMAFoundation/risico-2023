@@ -9,7 +9,6 @@ use crate::library::{
         constants::{MAXRAIN, NODATAVAL, SNOW_COVER_THRESHOLD, SNOW_SECONDS_VALIDITY},
         functions::{
             get_intensity, get_lhv_dff, get_lhv_l1, get_ppf, get_t_effect,
-            get_wind_effect_legacy,
         },
     },
 };
@@ -493,9 +492,6 @@ impl State {
                 *ndwi = f32::max(f32::min(1.0 - self.NDWI[idx], 1.0), 0.0);
             }
 
-            // TO BE MODIFIED !!!
-            *w_effect = get_wind_effect_legacy(wind_speed, wind_dir, slope, aspect);
-
             *t_effect = 1.0;
             if use_t_effect {
                 *t_effect = get_t_effect(temperature);
@@ -504,7 +500,7 @@ impl State {
             if dffm == NODATAVAL {
                 continue;
             }
-            *V = self.config.ros(veg.v0, veg.d0, veg.d1, dffm, snow_cover, slope, aspect, wind_speed, wind_dir, *t_effect);
+            (*V, *w_effect) = self.config.ros(veg.v0, veg.d0, veg.d1, dffm, snow_cover, slope, aspect, wind_speed, wind_dir, *t_effect);
             *ppf = get_ppf(time, ppf_summer, ppf_winter);
 
             if veg.hhv == NODATAVAL || dffm == NODATAVAL {
