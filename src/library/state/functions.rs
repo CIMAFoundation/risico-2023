@@ -84,7 +84,7 @@ pub fn get_v_legacy(v0: f32, d0: f32, _d1: f32, snow_cover: f32,
 
 // NEW FORMULATION ROS
 
-pub fn get_wind_effect(wind_speed: f32, wind_dir: f32, angle: f32) -> f32 {
+pub fn get_wind_effect_angle(wind_speed: f32, wind_dir: f32, angle: f32) -> f32 {
     // convert from m/h to km/h
     let ws_kph: f32 = wind_speed * 0.001;
     // constant for formula
@@ -96,22 +96,22 @@ pub fn get_wind_effect(wind_speed: f32, wind_dir: f32, angle: f32) -> f32 {
     let theta: f32 = wind_dir - angle;
     let theta_norm: f32 = (theta + PI) % (2. * PI) - PI;
     let w_eff_on_dir: f32 = (a + 1.) * (1. - f32::powf(a, 2.)) / (1. - a * f32::cos(theta_norm));
-    return w_eff_on_dir
+    w_eff_on_dir
 }
 
 
-pub fn get_slope_effect(slope: f32, aspect: f32, angle: f32) -> f32 {
+pub fn get_slope_effect_angle(slope: f32, aspect: f32, angle: f32) -> f32 {
     // slope in angle direction
     let s: f32 = f32::atan(f32::cos(aspect-angle) * f32::tan(slope));
     // slope effect in angle direction
     let h_eff_on_dir: f32 = f32::powf(2., f32::tanh(f32::powf(s * 3., 2.) * f32::signum(s)));
-    return h_eff_on_dir
+    h_eff_on_dir
 }
 
 
- pub fn get_wind_slope_effect(slope: f32, aspect: f32, wind_speed: f32, wind_dir: f32, angle: f32) -> f32 {
-    let w_eff: f32 = get_wind_effect(wind_speed, wind_dir, angle);
-    let s_eff: f32 = get_slope_effect(slope, aspect, angle);
+ pub fn get_wind_slope_effect_angle(slope: f32, aspect: f32, wind_speed: f32, wind_dir: f32, angle: f32) -> f32 {
+    let w_eff: f32 = get_wind_effect_angle(wind_speed, wind_dir, angle);
+    let s_eff: f32 = get_slope_effect_angle(slope, aspect, angle);
     let mut wh: f32 = s_eff * w_eff;
     wh = wh - 1.0;
     if wh > 0. {
@@ -119,7 +119,14 @@ pub fn get_slope_effect(slope: f32, aspect: f32, angle: f32) -> f32 {
     } else if wh < 0. {
         wh = wh / 1.12;
     }
-    return wh + 1.     
+    wh + 1.     
+ }
+
+ pub fn get_wind_slope_effect(slope: f32, aspect: f32, wind_speed: f32, wind_dir: f32) -> f32 {
+    let angles = Array::linspace(0., 2.*PI, N_ANGLES_ROS);
+    let ws_all:Vec<f32> = angles.iter().map(|x| get_wind_slope_effect_angle(slope, aspect, wind_speed, wind_dir, *x)).collect();
+    let ws_effect: f32 = ws_all.into_iter().reduce(f32::max).unwrap();
+    ws_effect
  }
  
 
@@ -129,7 +136,7 @@ pub fn get_slope_effect(slope: f32, aspect: f32, angle: f32) -> f32 {
     // moisture effect
     let moist_eff: f32 = M5 * f32::powf(x, 5.) + M4 * f32::powf(x, 4.) + M3 * f32::powf(x, 3.) + M2 * f32::powf(x, 2.) + M1 * x + M0;
     // clip in [0, 1]
-    return f32::max(0.0, f32::min(1., moist_eff))
+    f32::max(0.0, f32::min(1., moist_eff))
  }
  
  
@@ -141,17 +148,9 @@ pub fn get_slope_effect(slope: f32, aspect: f32, angle: f32) -> f32 {
     }
     // moisture effect
     let moist_coeff: f32 = get_moisture_effect(dffm);
-    // wind-slope contribution for each angle -> take the maximum
-    let angles = Array::linspace(0., 2.*PI, N_ANGLES_ROS);
-    let mut w_s_eff: f32 = 0.;
-    let mut w_s_eff_tmp: f32;
-    for angle in angles.iter() {
-        w_s_eff_tmp = get_wind_slope_effect(slope, aspect, wind_speed, wind_dir, *angle);
-        if w_s_eff_tmp > w_s_eff {
-            w_s_eff = w_s_eff_tmp;
-        }
-    }
-    return v0 * moist_coeff * w_s_eff * t_effect
+    // wind-slope contribution
+    let w_s_eff: f32 = get_wind_slope_effect(slope, aspect, wind_speed, wind_dir)
+    v0 * moist_coeff * w_s_eff * t_effect
  }
 
 
