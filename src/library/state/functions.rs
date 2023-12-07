@@ -112,18 +112,20 @@ pub fn get_slope_effect_angle(slope: f32, aspect: f32, angle: f32) -> f32 {
  pub fn get_wind_slope_effect_angle(slope: f32, aspect: f32, wind_speed: f32, wind_dir: f32, angle: f32) -> f32 {
     let w_eff: f32 = get_wind_effect_angle(wind_speed, wind_dir, angle);
     let s_eff: f32 = get_slope_effect_angle(slope, aspect, angle);
-    let mut wh: f32 = s_eff * w_eff;
-    wh = wh - 1.0;
-    if wh > 0. {
-        wh = wh / 2.13;
-    } else if wh < 0. {
-        wh = wh / 1.12;
-    }
-    wh + 1.     
+    let wh: f32 = s_eff * w_eff;
+    wh
+    // DEPRECATED - normalization
+    // wh = wh - 1.0;
+    // if wh > 0. {
+    //     wh = wh / 2.13;
+    // } else if wh < 0. {
+    //     wh = wh / 1.12;
+    // }
+    // wh + 1.     
  }
 
  pub fn get_wind_slope_effect(slope: f32, aspect: f32, wind_speed: f32, wind_dir: f32) -> f32 {
-    let angles = Array::linspace(0., 2.*PI, N_ANGLES_ROS);
+    let angles: ndarray::prelude::ArrayBase<ndarray::OwnedRepr<f32>, ndarray::prelude::Dim<[usize; 1]>> = Array::linspace(0., 2.*PI, N_ANGLES_ROS);
     let ws_all = angles.iter().map(|x| get_wind_slope_effect_angle(slope, aspect, wind_speed, wind_dir, *x));
     let ws_effect: f32 = ws_all.reduce(f32::max).unwrap_or(NODATAVAL);
     ws_effect
