@@ -64,7 +64,7 @@ pub const SATELLITE_DATA_SECONDS_VALIDITY: i64 = 10 * 24 * 3600;
 pub const SNOW_SECONDS_VALIDITY: i64 = 10 * 24 * 3600;
 
 // ROS NEW CONSTANTS
-pub const N_ANGLES_ROS: usize = 8;
+pub const N_ANGLES_ROS: usize = 40;
 pub const D1: f32 = 0.5;
 pub const D2: f32 = 1.4;
 pub const D3: f32 = 8.2;
