@@ -14,12 +14,16 @@ pub const R1_LEGACY:f32 = 12.119; //OLD
 pub const R2_LEGACY:f32 = 20.77;  //OLD
 pub const R3_LEGACY:f32 = 3.2;    //OLD
 
-pub const R1: f32 = 68.8371;
-pub const R2: f32 = 53.4436;
-pub const R3: f32 = 0.9423;
+// pub const R1: f32 = 68.8371;
+// pub const R2: f32 = 53.4436;
+// pub const R3: f32 = 0.9423;
 
+pub const R1: f32 = 68.658964;
+pub const R2: f32 = 53.374067;
+pub const R3: f32 = 0.935953;
 
-pub const A1: f32 = 0.7012;
+// pub const A1: f32 = 0.7012;
+pub const A1: f32 = 0.592789;
 pub const A2: f32 = 0.555;
 pub const A3: f32 = 10.6;
 pub const A4: f32 = 0.5022;
@@ -31,14 +35,27 @@ pub const B1: f32 = 3.0;
 pub const B2: f32 = 0.60;
 pub const B3: f32 = 0.1;
 
-pub const B1_D: f32 = 1.3037;
-pub const B2_D: f32 = 2.4539;
-pub const C1_D: f32 = 0.1753;
-pub const C2_D: f32 = 0.1141;
-pub const B1_W: f32 = 2.5942;
-pub const B2_W: f32 = 4.1077;
-pub const C1_W: f32 = 1.1502;
-pub const C2_W: f32 = 1.2764;
+// pub const B1_D: f32 = 1.3037;
+// pub const B2_D: f32 = 2.4539;
+// pub const C1_D: f32 = 0.1753;
+// pub const C2_D: f32 = 0.1141;
+// pub const B1_W: f32 = 2.5942;
+// pub const B2_W: f32 = 4.1077;
+// pub const C1_W: f32 = 1.1502;
+// pub const C2_W: f32 = 1.2764;
+
+pub const B1_D: f32 = 0.112756;
+pub const B2_D: f32 = 0.34982;
+pub const B3_D: f32 = 0.111055;
+pub const C1_D: f32 = 0.531471;
+pub const C2_D: f32 = 0.534400;
+pub const C3_D: f32 = 0.517728;
+pub const B1_W: f32 = 0.104363;
+pub const B2_W: f32 = 0.482954;
+pub const B3_W: f32 = 0.100061;
+pub const C1_W: f32 = 0.509857;
+pub const C2_W: f32 = 0.6789;
+pub const C3_W: f32 = 0.504871;
 
 pub const GAMMA1: f32 = 1.0;
 pub const GAMMA2: f32 = 0.01;

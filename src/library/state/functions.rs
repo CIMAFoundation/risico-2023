@@ -249,11 +249,11 @@ pub fn update_dffm_dry(dffm: f32, _sat: f32, T: f32, W: f32, H: f32, T0: f32, dT
         + A3 * f32::exp((H - 100.0) / 10.0)
         + A4 * (30.0 - f32::min(T, 30.0)) * (1.0 - f32::exp(-A5 * H));
 
-    let D_dry: f32 = 1.0 + B1_D * f32::powf(T_STANDARD, C1_D);
-    let K_dry: f32 = T0 * (D_dry / (1.0 + B1_D * f32::powf(T, C1_D) + B2_D * f32::powf(W, C2_D)));
+    let D_dry: f32 = (1.0 + B1_D * f32::powf(T_STANDARD, C1_D) + B2_D * f32::powf(W_STANDARD, C2_D)) / (1.0 + B3_D * f32::powf(H_STANDARD, C3_D));
+    let K_dry: f32 = T0 * D_dry * ((1.0 + B3_D * f32::powf(H, C3_D)) / (1.0 + B1_D * f32::powf(T, C1_D) + B2_D * f32::powf(W, C2_D)));
 
-    let D_wet: f32 = 1.0 + B1_W * f32::powf(T_STANDARD, C1_W);
-    let K_wet: f32 = T0 * (D_wet / (1.0 + B1_W * f32::powf(T, C1_W) + B2_W * f32::powf(W, C2_W)));
+    let D_wet: f32 = (1.0 + B3_W * f32::powf(H_STANDARD, C3_W)) / (1.0 + B1_W * f32::powf(T_STANDARD, C1_W) + B2_W * f32::powf(W_STANDARD, C2_W));
+    let K_wet: f32 = T0 * D_wet * ((1.0 + B1_W * f32::powf(T, C1_W) + B2_W * f32::powf(W, C2_W)) / (1.0 + B3_W * f32::powf(H, C3_W)));
 
     let K: f32 = if dffm >= EMC { K_dry } else { K_wet };
 
