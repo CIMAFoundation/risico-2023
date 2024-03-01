@@ -478,7 +478,7 @@ fn parse_line(line: &str) -> Result<(String, String, DateTime<Utc>), InputFilePa
     let date = NaiveDateTime::parse_from_str(date, "%Y%m%d%H%M")
         .map_err(|error| format!("Error parsing date: {error}"))?;
 
-    let date = DateTime::<Utc>::from_utc(date, Utc);
+    let date = DateTime::from_naive_utc_and_offset(date, Utc);
 
     Ok((grid_name, variable, date))
 }

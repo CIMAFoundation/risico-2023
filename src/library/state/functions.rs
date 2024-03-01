@@ -1,4 +1,5 @@
 use std::f32::consts::PI;
+use ndarray::Array;
 
 #[allow(dead_code)]
 ///functions to work on the state of the risico model
@@ -41,41 +42,121 @@ pub fn get_ppf(time: &DateTime<Utc>, ppf_summer: f32, ppf_winter: f32) -> f32 {
 }
 
 ///calculate the wind effect on fire propagation
-pub fn get_wind_effect(w_speed: f32, w_dir: f32, slope: f32, aspect: f32) -> f32 {
-    if w_speed == NODATAVAL || w_dir == NODATAVAL {
+pub fn get_wind_effect_legacy(wind_speed: f32, wind_dir: f32, slope: f32, aspect: f32) -> f32 {
+    if wind_speed == NODATAVAL || wind_dir == NODATAVAL {
         return 1.0;
     }
-
     //wind speed effect
-    let ws = (1.0 + DELTA1 * (DELTA2 + f32::tanh((w_speed / DELTA3) - DELTA4)))
-        * (1.0 - (w_speed / DELTA5));
-    let eta = w_dir - aspect;
-
+    let ws = (1.0 + DELTA1 * (DELTA2 + f32::tanh((wind_speed / DELTA3) - DELTA4)))
+        * (1.0 - (wind_speed / DELTA5));
+    let eta = wind_dir - aspect;
     //aspect contribution
     let mut n =
         1.0 + (slope / (PI / 2.0)) * (ws - 1.0) * f32::exp(-f32::powf(eta - PI, 2.0) / QEPSIX2);
-
     if n < 1.0 {
         n = 1.0;
     }
     ws / n
 }
 
-pub fn get_slope_effect(slope: f32) -> f32 {
+
+pub fn get_slope_effect_legacy(slope: f32) -> f32 {
     1.0 + LAMBDA * (slope / (PI / 2.0))
 }
 
-pub fn get_v0(v0: f32, d0: f32, _d1: f32, dffm: f32, snow_cover: f32) -> f32 {
+
+pub fn get_moisture_effect_legacy(dffm: f32) -> f32 {
+    f32::exp(-1.0 * f32::powf(dffm / 20.0, 2.0))
+}
+
+
+pub fn get_v_legacy(v0: f32, d0: f32, _d1: f32, snow_cover: f32,
+                    dffm: f32, slope: f32, aspect: f32, wind_speed: f32, wind_dir: f32,
+                    t_effect: f32) -> (f32, f32) {
     if snow_cover > 0.0 || d0 == NODATAVAL {
-        return 0.0;
+        return (0.0, 0.0);
     }
-    v0 * f32::exp(-1.0 * f32::powf(dffm / 20.0, 2.0))
+    let moist_eff: f32 = get_moisture_effect_legacy(dffm);
+    let w_effect: f32 = get_wind_effect_legacy(wind_speed, wind_dir, slope, aspect);
+    let s_effect: f32 = get_slope_effect_legacy(slope);
+    (v0 * moist_eff * w_effect * s_effect * t_effect, w_effect)
 }
 
-pub fn get_v(v0: f32, w_effect: f32, s_effect: f32, t_effect: f32) -> f32 {
-    v0 * w_effect * s_effect * t_effect
+// NEW FORMULATION ROS
+
+pub fn get_wind_effect_angle(wind_speed: f32, wind_dir: f32, angle: f32) -> f32 {
+    // convert from m/h to km/h
+    let ws_kph: f32 = wind_speed * 0.001;
+    // constant for formula
+    let a_const: f32 = 1. - ((D1 * (D2 * f32::tanh((0. / D3) - D4))) + (0. / D5));
+    // contribution of wind - module
+    let w_eff_mod: f32 = a_const + (D1 * (D2 * f32::tanh((ws_kph / D3) - D4))) + (ws_kph / D5);
+    let a: f32 = (w_eff_mod - 1.) / 4.;
+    // normalize on direction
+    let theta: f32 = wind_dir - angle;
+    let theta_norm: f32 = (theta + PI) % (2. * PI) - PI;
+    let w_eff_on_dir: f32 = (a + 1.) * (1. - f32::powf(a, 2.)) / (1. - a * f32::cos(theta_norm));
+    w_eff_on_dir
 }
 
+
+pub fn get_slope_effect_angle(slope: f32, aspect: f32, angle: f32) -> f32 {
+    // slope in angle direction
+    let s: f32 = f32::atan(f32::cos(aspect-angle) * f32::tan(slope));
+    // slope effect in angle direction
+    let h_eff_on_dir: f32 = f32::powf(2., f32::tanh(f32::powf(s * 3., 2.) * f32::signum(s)));
+    h_eff_on_dir
+}
+
+
+ pub fn get_wind_slope_effect_angle(slope: f32, aspect: f32, wind_speed: f32, wind_dir: f32, angle: f32) -> f32 {
+    let w_eff: f32 = get_wind_effect_angle(wind_speed, wind_dir, angle);
+    let s_eff: f32 = get_slope_effect_angle(slope, aspect, angle);
+    let wh: f32 = s_eff * w_eff;
+    wh
+    // DEPRECATED - normalization
+    // wh = wh - 1.0;
+    // if wh > 0. {
+    //     wh = wh / 2.13;
+    // } else if wh < 0. {
+    //     wh = wh / 1.12;
+    // }
+    // wh + 1.     
+ }
+
+ pub fn get_wind_slope_effect(slope: f32, aspect: f32, wind_speed: f32, wind_dir: f32) -> f32 {
+    let angles: ndarray::prelude::ArrayBase<ndarray::OwnedRepr<f32>, ndarray::prelude::Dim<[usize; 1]>> = Array::linspace(0., 2.*PI, N_ANGLES_ROS);
+    let ws_all = angles.iter().map(|x| get_wind_slope_effect_angle(slope, aspect, wind_speed, wind_dir, *x));
+    let ws_effect: f32 = ws_all.reduce(f32::max).unwrap_or(NODATAVAL);
+    ws_effect
+ }
+ 
+
+ pub fn get_moisture_effect(dffm: f32) -> f32 {
+    // noramlize in [0, 1] and divide by moisture of extintion
+    let x: f32 = (dffm / 100.) / MX;
+    // moisture effect
+    let moist_eff: f32 = M5 * f32::powf(x, 5.) + M4 * f32::powf(x, 4.) + M3 * f32::powf(x, 3.) + M2 * f32::powf(x, 2.) + M1 * x + M0;
+    // clip in [0, 1]
+    f32::max(0.0, f32::min(1., moist_eff))
+ }
+ 
+ 
+ pub fn get_v(v0: f32, d0: f32, _d1: f32, snow_cover: f32,
+             dffm: f32, slope: f32, aspect: f32, wind_speed: f32, wind_dir: f32,
+             t_effect: f32) -> (f32, f32) {
+    if snow_cover > 0.0 || d0 == NODATAVAL {
+        return (0.0, 0.0);
+    }
+    // moisture effect
+    let moist_coeff: f32 = get_moisture_effect(dffm);
+    // wind-slope contribution
+    let w_s_eff: f32 = get_wind_slope_effect(slope, aspect, wind_speed, wind_dir);
+    (v0 * moist_coeff * w_s_eff * t_effect, w_s_eff)
+ }
+
+
+/// DEPRECATED
 pub fn get_t_effect(t: f32) -> f32 {
     if t <= 0.0 {
         return 1.0;
@@ -98,7 +179,6 @@ pub fn get_lhv_l1(humidity: f32, msi: f32, hhv: f32) -> f32 {
     } else {
         lhv_l1 = hhv * (1.0 - (humidity / 100.0)) - Q * (humidity / 100.0);
     }
-
     lhv_l1
 }
 
@@ -169,11 +249,11 @@ pub fn update_dffm_dry(dffm: f32, _sat: f32, T: f32, W: f32, H: f32, T0: f32, dT
         + A3 * f32::exp((H - 100.0) / 10.0)
         + A4 * (30.0 - f32::min(T, 30.0)) * (1.0 - f32::exp(-A5 * H));
 
-    let D_dry: f32 = 1.0 + B1_D * f32::powf(T_STANDARD, C1_D);
-    let K_dry: f32 = T0 * (D_dry / (1.0 + B1_D * f32::powf(T, C1_D) + B2_D * f32::powf(W, C2_D)));
+    let D_dry: f32 = (1.0 + B1_D * f32::powf(T_STANDARD, C1_D) + B2_D * f32::powf(W_STANDARD, C2_D)) / (1.0 + B3_D * f32::powf(H_STANDARD, C3_D));
+    let K_dry: f32 = T0 * D_dry * ((1.0 + B3_D * f32::powf(H, C3_D)) / (1.0 + B1_D * f32::powf(T, C1_D) + B2_D * f32::powf(W, C2_D)));
 
-    let D_wet: f32 = 1.0 + B1_W * f32::powf(T_STANDARD, C1_W);
-    let K_wet: f32 = T0 * (D_wet / (1.0 + B1_W * f32::powf(T, C1_W) + B2_W * f32::powf(W, C2_W)));
+    let D_wet: f32 = (1.0 + B3_W * f32::powf(H_STANDARD, C3_W)) / (1.0 + B1_W * f32::powf(T_STANDARD, C1_W) + B2_W * f32::powf(W_STANDARD, C2_W));
+    let K_wet: f32 = T0 * D_wet * ((1.0 + B1_W * f32::powf(T, C1_W) + B2_W * f32::powf(W, C2_W)) / (1.0 + B3_W * f32::powf(H, C3_W)));
 
     let K: f32 = if dffm >= EMC { K_dry } else { K_wet };
 

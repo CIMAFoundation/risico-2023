@@ -39,8 +39,10 @@ fn main() {
     let config_path = &args[2];
     let input_path = &args[3];
 
-    let date = Utc.datetime_from_str(date, "%Y%m%d%H%M")
+    let date = NaiveDateTime::parse_from_str(date, "%Y%m%d%H%M")
         .expect("Could not parse date");
+    let date = DateTime::from_naive_utc_and_offset(date, Utc);
+
     let config = Config::new(&config_path, date)
         .expect("Could not configure model");
 
