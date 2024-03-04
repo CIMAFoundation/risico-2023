@@ -1,11 +1,11 @@
 #![allow(dead_code)]
 // import state from lib
 mod library;
-use std::env::{args, var, set_var};
+use std::env::{args, set_var, var};
 
-use log::{trace, info, warn};
-use pretty_env_logger;
 use chrono::prelude::*;
+use log::{info, trace, warn};
+use pretty_env_logger;
 
 use crate::library::{
     config::models::{Config, InputDataHandler},
@@ -17,12 +17,10 @@ const VERSION: &str = env!("CARGO_PKG_VERSION");
 use git_version::git_version;
 const GIT_VERSION: &str = git_version!();
 
-
-
 // parse command line arguments: first argument is model date in the form YYYYMMDDHHMM, second is configuration path, third is input path
 fn main() {
     if var("RUST_LOG").is_err() {
-       set_var("RUST_LOG", "info")
+        set_var("RUST_LOG", "info")
     }
     pretty_env_logger::init();
 
@@ -39,13 +37,10 @@ fn main() {
     let config_path = &args[2];
     let input_path = &args[3];
 
-    let date = NaiveDateTime::parse_from_str(date, "%Y%m%d%H%M")
-        .expect("Could not parse date");
+    let date = NaiveDateTime::parse_from_str(date, "%Y%m%d%H%M").expect("Could not parse date");
     let date = DateTime::from_naive_utc_and_offset(date, Utc);
 
-    let config = Config::new(&config_path, date)
-        .expect("Could not configure model");
-
+    let config = Config::new(&config_path, date).expect("Could not configure model");
 
     let mut output_writer = config
         .get_output_writer()
@@ -54,15 +49,16 @@ fn main() {
     let props = config.get_properties();
     let mut state = config.new_state();
 
-    let lats = config.properties.lats.as_slice()
-        .expect("should unwrap");
-    let lons = config.properties.lons.as_slice()
-        .expect("should unwrap");
-    
+    let lats = config.properties.lats.as_slice().expect("should unwrap");
+    let lons = config.properties.lons.as_slice().expect("should unwrap");
+
     let c = Utc::now();
     info!("Loading input data from {}", input_path);
     let handler = InputDataHandler::new(input_path, lats, lons);
-    trace!("Loading input configuration took {} seconds", Utc::now() - c);
+    trace!(
+        "Loading input configuration took {} seconds",
+        Utc::now() - c
+    );
     let len = state.len();
 
     let timeline = handler.get_timeline();
@@ -70,7 +66,7 @@ fn main() {
         let step_time = Utc::now();
         info!("Processing {}", time.format("%Y-%m-%d %H:%M"));
         let input = get_input(&handler, &time, len);
-        
+
         let c = Utc::now();
         state.update(props, &input);
         trace!("Updating state took {} seconds", Utc::now() - c);

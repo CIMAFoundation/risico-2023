@@ -1,7 +1,6 @@
-use std::f32::consts::PI;
 use ndarray::Array;
+use std::f32::consts::PI;
 
-#[allow(dead_code)]
 ///functions to work on the state of the risico model
 use chrono::{DateTime, Datelike, Utc};
 
@@ -59,20 +58,26 @@ pub fn get_wind_effect_legacy(wind_speed: f32, wind_dir: f32, slope: f32, aspect
     ws / n
 }
 
-
 pub fn get_slope_effect_legacy(slope: f32) -> f32 {
     1.0 + LAMBDA * (slope / (PI / 2.0))
 }
-
 
 pub fn get_moisture_effect_legacy(dffm: f32) -> f32 {
     f32::exp(-1.0 * f32::powf(dffm / 20.0, 2.0))
 }
 
-
-pub fn get_v_legacy(v0: f32, d0: f32, _d1: f32, snow_cover: f32,
-                    dffm: f32, slope: f32, aspect: f32, wind_speed: f32, wind_dir: f32,
-                    t_effect: f32) -> (f32, f32) {
+pub fn get_v_legacy(
+    v0: f32,
+    d0: f32,
+    _d1: f32,
+    snow_cover: f32,
+    dffm: f32,
+    slope: f32,
+    aspect: f32,
+    wind_speed: f32,
+    wind_dir: f32,
+    t_effect: f32,
+) -> (f32, f32) {
     if snow_cover > 0.0 || d0 == NODATAVAL {
         return (0.0, 0.0);
     }
@@ -99,17 +104,21 @@ pub fn get_wind_effect_angle(wind_speed: f32, wind_dir: f32, angle: f32) -> f32 
     w_eff_on_dir
 }
 
-
 pub fn get_slope_effect_angle(slope: f32, aspect: f32, angle: f32) -> f32 {
     // slope in angle direction
-    let s: f32 = f32::atan(f32::cos(aspect-angle) * f32::tan(slope));
+    let s: f32 = f32::atan(f32::cos(aspect - angle) * f32::tan(slope));
     // slope effect in angle direction
     let h_eff_on_dir: f32 = f32::powf(2., f32::tanh(f32::powf(s * 3., 2.) * f32::signum(s)));
     h_eff_on_dir
 }
 
-
- pub fn get_wind_slope_effect_angle(slope: f32, aspect: f32, wind_speed: f32, wind_dir: f32, angle: f32) -> f32 {
+pub fn get_wind_slope_effect_angle(
+    slope: f32,
+    aspect: f32,
+    wind_speed: f32,
+    wind_dir: f32,
+    angle: f32,
+) -> f32 {
     let w_eff: f32 = get_wind_effect_angle(wind_speed, wind_dir, angle);
     let s_eff: f32 = get_slope_effect_angle(slope, aspect, angle);
     let wh: f32 = s_eff * w_eff;
@@ -121,30 +130,47 @@ pub fn get_slope_effect_angle(slope: f32, aspect: f32, angle: f32) -> f32 {
     // } else if wh < 0. {
     //     wh = wh / 1.12;
     // }
-    // wh + 1.     
- }
+    // wh + 1.
+}
 
- pub fn get_wind_slope_effect(slope: f32, aspect: f32, wind_speed: f32, wind_dir: f32) -> f32 {
-    let angles: ndarray::prelude::ArrayBase<ndarray::OwnedRepr<f32>, ndarray::prelude::Dim<[usize; 1]>> = Array::linspace(0., 2.*PI, N_ANGLES_ROS);
-    let ws_all = angles.iter().map(|x| get_wind_slope_effect_angle(slope, aspect, wind_speed, wind_dir, *x));
+pub fn get_wind_slope_effect(slope: f32, aspect: f32, wind_speed: f32, wind_dir: f32) -> f32 {
+    let angles: ndarray::prelude::ArrayBase<
+        ndarray::OwnedRepr<f32>,
+        ndarray::prelude::Dim<[usize; 1]>,
+    > = Array::linspace(0., 2. * PI, N_ANGLES_ROS);
+    let ws_all = angles
+        .iter()
+        .map(|x| get_wind_slope_effect_angle(slope, aspect, wind_speed, wind_dir, *x));
     let ws_effect: f32 = ws_all.reduce(f32::max).unwrap_or(NODATAVAL);
     ws_effect
- }
- 
+}
 
- pub fn get_moisture_effect(dffm: f32) -> f32 {
+pub fn get_moisture_effect(dffm: f32) -> f32 {
     // noramlize in [0, 1] and divide by moisture of extintion
     let x: f32 = (dffm / 100.) / MX;
     // moisture effect
-    let moist_eff: f32 = M5 * f32::powf(x, 5.) + M4 * f32::powf(x, 4.) + M3 * f32::powf(x, 3.) + M2 * f32::powf(x, 2.) + M1 * x + M0;
+    let moist_eff: f32 = M5 * f32::powf(x, 5.)
+        + M4 * f32::powf(x, 4.)
+        + M3 * f32::powf(x, 3.)
+        + M2 * f32::powf(x, 2.)
+        + M1 * x
+        + M0;
     // clip in [0, 1]
     f32::max(0.0, f32::min(1., moist_eff))
- }
- 
- 
- pub fn get_v(v0: f32, d0: f32, _d1: f32, snow_cover: f32,
-             dffm: f32, slope: f32, aspect: f32, wind_speed: f32, wind_dir: f32,
-             t_effect: f32) -> (f32, f32) {
+}
+
+pub fn get_v(
+    v0: f32,
+    d0: f32,
+    _d1: f32,
+    snow_cover: f32,
+    dffm: f32,
+    slope: f32,
+    aspect: f32,
+    wind_speed: f32,
+    wind_dir: f32,
+    t_effect: f32,
+) -> (f32, f32) {
     if snow_cover > 0.0 || d0 == NODATAVAL {
         return (0.0, 0.0);
     }
@@ -153,8 +179,7 @@ pub fn get_slope_effect_angle(slope: f32, aspect: f32, angle: f32) -> f32 {
     // wind-slope contribution
     let w_s_eff: f32 = get_wind_slope_effect(slope, aspect, wind_speed, wind_dir);
     (v0 * moist_coeff * w_s_eff * t_effect, w_s_eff)
- }
-
+}
 
 /// DEPRECATED
 pub fn get_t_effect(t: f32) -> f32 {
@@ -212,10 +237,12 @@ pub fn get_intensity(
     v * (lhv_dff * d0 + lhv_l1 * d1) / 3600.0
 }
 
-
 ///Get the new value for the dfmm when is raining (p>p*)
 pub fn update_dffm_rain_legacy(r: f32, dffm: f32, sat: f32) -> f32 {
-    let delta_dffm = r * R1_LEGACY * f32::exp(-R2_LEGACY / ((sat + 1.0) - dffm)) * (1.0 - f32::exp(-R3_LEGACY / r));
+    let delta_dffm = r
+        * R1_LEGACY
+        * f32::exp(-R2_LEGACY / ((sat + 1.0) - dffm))
+        * (1.0 - f32::exp(-R3_LEGACY / r));
     let dffm = dffm + delta_dffm;
 
     f32::min(dffm, sat)
@@ -231,14 +258,28 @@ pub fn update_dffm_rain(r: f32, dffm: f32, sat: f32) -> f32 {
 
 #[allow(non_snake_case)]
 ///Get the new value for the dfmm when there is no rain (p<p*)
-pub fn update_dffm_dry_legacy(dffm: f32, _sat: f32, T: f32, W: f32, H: f32, T0: f32, dT: f32) -> f32{
-	let EMC  = A1_LEGACY * f32::powf(H, A2) + A3 * f32::exp((H - 100.0)/10.0) + A4 * (30.0 - f32::min(T, 30.0))*(1.0 - f32::exp(-A5 * H));
-	let K1 = T0 / (1.0 + A6 * f32::powf(T, B1) + A7 * f32::powf(W, B2));
+pub fn update_dffm_dry_legacy(
+    dffm: f32,
+    _sat: f32,
+    T: f32,
+    W: f32,
+    H: f32,
+    T0: f32,
+    dT: f32,
+) -> f32 {
+    let EMC = A1_LEGACY * f32::powf(H, A2)
+        + A3 * f32::exp((H - 100.0) / 10.0)
+        + A4 * (30.0 - f32::min(T, 30.0)) * (1.0 - f32::exp(-A5 * H));
+    let K1 = T0 / (1.0 + A6 * f32::powf(T, B1) + A7 * f32::powf(W, B2));
 
-	// drying-wtting dynamic
-	let dffm = EMC + (dffm - EMC) * f32::exp(-dT/K1);
+    // drying-wtting dynamic
+    let dffm = EMC + (dffm - EMC) * f32::exp(-dT / K1);
 
-	if dffm >= 0.0 { dffm } else { 0.0 }
+    if dffm >= 0.0 {
+        dffm
+    } else {
+        0.0
+    }
 }
 
 #[allow(non_snake_case)]
@@ -249,11 +290,20 @@ pub fn update_dffm_dry(dffm: f32, _sat: f32, T: f32, W: f32, H: f32, T0: f32, dT
         + A3 * f32::exp((H - 100.0) / 10.0)
         + A4 * (30.0 - f32::min(T, 30.0)) * (1.0 - f32::exp(-A5 * H));
 
-    let D_dry: f32 = (1.0 + B1_D * f32::powf(T_STANDARD, C1_D) + B2_D * f32::powf(W_STANDARD, C2_D)) / (1.0 + B3_D * f32::powf(H_STANDARD, C3_D));
-    let K_dry: f32 = T0 * D_dry * ((1.0 + B3_D * f32::powf(H, C3_D)) / (1.0 + B1_D * f32::powf(T, C1_D) + B2_D * f32::powf(W, C2_D)));
+    let D_dry: f32 =
+        (1.0 + B1_D * f32::powf(T_STANDARD, C1_D) + B2_D * f32::powf(W_STANDARD, C2_D))
+            / (1.0 + B3_D * f32::powf(H_STANDARD, C3_D));
+    let K_dry: f32 = T0
+        * D_dry
+        * ((1.0 + B3_D * f32::powf(H, C3_D))
+            / (1.0 + B1_D * f32::powf(T, C1_D) + B2_D * f32::powf(W, C2_D)));
 
-    let D_wet: f32 = (1.0 + B3_W * f32::powf(H_STANDARD, C3_W)) / (1.0 + B1_W * f32::powf(T_STANDARD, C1_W) + B2_W * f32::powf(W_STANDARD, C2_W));
-    let K_wet: f32 = T0 * D_wet * ((1.0 + B1_W * f32::powf(T, C1_W) + B2_W * f32::powf(W, C2_W)) / (1.0 + B3_W * f32::powf(H, C3_W)));
+    let D_wet: f32 = (1.0 + B3_W * f32::powf(H_STANDARD, C3_W))
+        / (1.0 + B1_W * f32::powf(T_STANDARD, C1_W) + B2_W * f32::powf(W_STANDARD, C2_W));
+    let K_wet: f32 = T0
+        * D_wet
+        * ((1.0 + B1_W * f32::powf(T, C1_W) + B2_W * f32::powf(W, C2_W))
+            / (1.0 + B3_W * f32::powf(H, C3_W)));
 
     let K: f32 = if dffm >= EMC { K_dry } else { K_wet };
 
@@ -277,38 +327,62 @@ pub fn index_from_swi(dffm: f32, swi: f32) -> f32 {
 
 #[cfg(test)]
 mod tests {
-	use super::*;
-	use chrono::{NaiveDate, DateTime, Utc};
+    use super::*;
+    use chrono::{DateTime, NaiveDate, Utc};
 
-	#[test]
-	fn test_get_ppf_winter() {
-		// create an utc datetime object
-		let date: DateTime<Utc> = DateTime::<Utc>::from_utc(NaiveDate::from_ymd_opt(2019, 1, 1).unwrap().and_hms_opt(0, 0, 0).unwrap(), Utc);
-		let ppf = get_ppf(&date, 0.0, 1.0);
-		assert_eq!(ppf, 0.0);
-	}
+    #[test]
+    fn test_get_ppf_winter() {
+        // create an utc datetime object
+        let date: DateTime<Utc> = DateTime::<Utc>::from_utc(
+            NaiveDate::from_ymd_opt(2019, 1, 1)
+                .unwrap()
+                .and_hms_opt(0, 0, 0)
+                .unwrap(),
+            Utc,
+        );
+        let ppf = get_ppf(&date, 0.0, 1.0);
+        assert_eq!(ppf, 0.0);
+    }
 
-	#[test]
-	fn test_get_ppf_summer() {
-		let date: DateTime<Utc> = DateTime::<Utc>::from_utc(NaiveDate::from_ymd_opt(2019, 7, 1).unwrap().and_hms_opt(0, 0, 0).unwrap(), Utc);
-		
-		let ppf = get_ppf(&date, 0.0, 1.0);
-		assert_eq!(ppf, 1.0);
-	}
+    #[test]
+    fn test_get_ppf_summer() {
+        let date: DateTime<Utc> = DateTime::<Utc>::from_utc(
+            NaiveDate::from_ymd_opt(2019, 7, 1)
+                .unwrap()
+                .and_hms_opt(0, 0, 0)
+                .unwrap(),
+            Utc,
+        );
 
-	#[test]
-	fn test_get_ppf_spring() {
-		let date: DateTime<Utc> = DateTime::<Utc>::from_utc(NaiveDate::from_ymd_opt(2019, 4, 1).unwrap().and_hms_opt(0, 0, 0).unwrap(), Utc);
-		let ppf = get_ppf(&date, 0.0, 1.0);
-		assert_eq!(ppf, 0.5);
-	}
+        let ppf = get_ppf(&date, 0.0, 1.0);
+        assert_eq!(ppf, 1.0);
+    }
 
-	#[test]
-	fn test_get_ppf_autumn() {
-		let date: DateTime<Utc> = DateTime::<Utc>::from_utc(NaiveDate::from_ymd_opt(2019, 10, 1).unwrap().and_hms_opt(0, 0, 0).unwrap(), Utc);
-		let ppf = get_ppf(&date, 0.0, 1.0);
-		assert_eq!(ppf, 0.5);
-	}
+    #[test]
+    fn test_get_ppf_spring() {
+        let date: DateTime<Utc> = DateTime::<Utc>::from_utc(
+            NaiveDate::from_ymd_opt(2019, 4, 1)
+                .unwrap()
+                .and_hms_opt(0, 0, 0)
+                .unwrap(),
+            Utc,
+        );
+        let ppf = get_ppf(&date, 0.0, 1.0);
+        assert_eq!(ppf, 0.5);
+    }
+
+    #[test]
+    fn test_get_ppf_autumn() {
+        let date: DateTime<Utc> = DateTime::<Utc>::from_utc(
+            NaiveDate::from_ymd_opt(2019, 10, 1)
+                .unwrap()
+                .and_hms_opt(0, 0, 0)
+                .unwrap(),
+            Utc,
+        );
+        let ppf = get_ppf(&date, 0.0, 1.0);
+        assert_eq!(ppf, 0.5);
+    }
 
     // #[test]
     // fn test_get_ppf_autumn() {
