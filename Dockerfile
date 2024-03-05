@@ -4,7 +4,7 @@ FROM rust:latest
 
 
 # install hdf5, netcdf, zlib
-RUN apt-get update && apt-get install -y libhdf5-dev libnetcdf-dev zlib1g-dev libcurl4-openssl-dev curl musl-tools \
+RUN apt-get update && apt-get install -y curl musl-tools musl-dev \
     build-essential \
     zlib1g-dev
 
@@ -22,35 +22,31 @@ RUN cd hdf5-hdf5-1_12_3 \
     && make -j$(nproc) \
     && make install
 
-WORKDIR /tmp
-# Download, build, and install NetCDF statically, linking against the static HDF5
-RUN cd netcdf-c-4.9.2 \
-    && CC=musl-gcc CPPFLAGS="-I/usr/local/include" LDFLAGS="-L/usr/local/lib" ./configure --prefix=/usr/local --enable-static --disable-shared \
-    && make -j$(nproc) \
-    && make install
+WORKDIR /tmp/netcdf-c-4.9.2
+
+# Commented out to try to build interactively
+
+# RUN CC=musl-gcc CFLAGS="-std=gnu99" CPPFLAGS="-I/usr/local/include" LDFLAGS="-L/usr/local/lib -L/usr/lib/x86_64-linux-gnu" ./configure --prefix=/usr/local --enable-static --disable-shared
+# RUN make -j$(nproc) \
+#     && make install
+
+# # Set environment variables to use static linking
+# ENV HDF5_VERSION=1.12.3
+# ENV NETCDF4_DIR=/usr/local
+# ENV HDF5_DIR=/usr/local
+# ENV LD_LIBRARY_PATH=/usr/local/lib
+# ENV RUSTFLAGS="-C link-args=-Wl,-rpath,/usr/local/lib"
+
+# # Add the musl target
+# RUN rustup target add x86_64-unknown-linux-musl
+
+# # Set the working directory in the container
+# WORKDIR /app
+
+# # Copy the local application code into the container
+# COPY . .
 
 
-# Set environment variables to use static linking
-ENV HDF5_VERSION=1.12.3
-ENV NETCDF4_DIR=/usr/local
-ENV HDF5_DIR=/usr/local
-ENV LD_LIBRARY_PATH=/usr/local/lib
-ENV RUSTFLAGS="-C link-args=-Wl,-rpath,/usr/local/lib"
-
-# Add the musl target
-RUN rustup target add x86_64-unknown-linux-musl
-
-# Set the working directory in the container
-WORKDIR /app
-
-# Copy the local application code into the container
-COPY . .
-
-
-# Set the default command to run when a new container is started
-# CMD ["/bin/bash", "/app/build.sh"]
-ENTRYPOINT ["/bin/bash"]
-
-
-
-
+# # Set the default command to run when a new container is started
+# # CMD ["/bin/bash", "/app/build.sh"]
+# ENTRYPOINT ["/bin/bash"]
