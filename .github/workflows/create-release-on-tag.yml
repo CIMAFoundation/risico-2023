@@ -1,4 +1,4 @@
-name: Create Release on Tag Push
+name: create release on tag
 
 on:
   push:
@@ -31,5 +31,5 @@ jobs:
           body: |
             This is an automatically generated release for tag ${{ github.ref }}.
             ${{ steps.changelog.outputs.changes }}
-          draft: false
-          prerelease: false
+          draft: true
+          prerelease: true
