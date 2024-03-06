@@ -20,6 +20,17 @@ jobs:
           - target: wasm32-wasi
             archive: zip
     steps:
+      - uses: actions/checkout@master
+
+      - name: Create CHANGELOG
+        id: changelog
+        uses: requarks/changelog-action@v1
+        with:
+          token: ${{ github.token }}
+          tag: ${{ github.ref_name }}
+          writeToFile: false
+          includeInvalidCommits: false
+
       - name: Create Release
         id: create_release
         uses: actions/create-release@v1
@@ -27,13 +38,13 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
           tag_name: ${{ github.ref }}
-          release_name: Release ${{ github.ref }}
+          release_name: Release ${{ github.ref }} - ${{ matrix.target }}
           body: |
             This is an automatically generated release for tag ${{ github.ref }}.
+            ${{ steps.changelog.outputs.changes }}
           draft: false
           prerelease: false
 
-      - uses: actions/checkout@master
       - name: Compile and release
         uses: rust-build/rust-build.action@v1.4.5
         env:
