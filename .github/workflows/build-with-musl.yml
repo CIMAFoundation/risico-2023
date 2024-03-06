@@ -49,6 +49,7 @@ jobs:
           - target: wasm32-wasi
             archive: zip
     steps:
+      - uses: actions/checkout@master
       - name: Build and add artifacts
         uses: rust-build/rust-build.action@v1.4.5
         env:
