@@ -13,9 +13,7 @@ use crate::library::{
 };
 
 const VERSION: &str = env!("CARGO_PKG_VERSION");
-
-use git_version::git_version;
-const GIT_VERSION: &str = git_version!();
+const GIT_VERSION: Option<&str> = option_env!("GIT_COMMIT_SHORT_HASH");
 
 // parse command line arguments: first argument is model date in the form YYYYMMDDHHMM, second is configuration path, third is input path
 fn main() {
@@ -23,8 +21,11 @@ fn main() {
         set_var("RUST_LOG", "info")
     }
     pretty_env_logger::init();
+    match GIT_VERSION {
+        Some(git_version) => info!("RISICO.rs {}-{}", VERSION, git_version),
+        None => info!("RISICO.rs {}", VERSION),
+    }
 
-    info!("RISICO.rs {VERSION}.{GIT_VERSION}");
     let args: Vec<String> = args().collect();
     if args.len() != 4 {
         info!("Usage: {} YYYYMMDDHHMM config_path input_path", args[0]);
