@@ -36,6 +36,7 @@ jobs:
           release_name: Release ${{ github.ref }}
           body: |
             This is an automatically generated release for tag ${{ github.ref }}.
+            ${{ steps.changelog.outputs.changelog }}
           draft: false
           prerelease: false
 
