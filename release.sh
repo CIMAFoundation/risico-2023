@@ -78,11 +78,12 @@ short_commit_hash=$(git rev-parse --short HEAD)
 if [[ "$OSTYPE" == "darwin"* ]]; then
   # Mac OS
   sed -i '' 's/^version = \".*\"/version = \"'$new_tag'\"/' Cargo.toml
-  sed -i '' 's/GIT_COMMIT_SHORT_HASH=.*/GIT_COMMIT_SHORT_HASH='$short_commit_hash'/' Dockerfile
+  # replace #COMMIT# with the short commit hash in src/main.rs
+  sed -i '' 's/__COMMIT__/'$short_commit_hash'/' src/main.rs
 else
   # Linux
   sed -i 's/^version = \".*\"/version = \"'$new_tag'\"/' Cargo.toml
-  sed -i 's/GIT_COMMIT_SHORT_HASH=.*/GIT_COMMIT_SHORT_HASH='$short_commit_hash'/' Dockerfile
+  sed -i 's/__COMMIT__/'$short_commit_hash'/' src/main.rs
 fi
 
 # commit the changes
@@ -92,3 +93,6 @@ git commit -m "Bump version to v$new_tag"
 git push
 git tag v$new_tag
 git push origin v$new_tag
+
+echo "Tag v$new_tag has been pushed to origin"
+echo "In order to trigger the release build, you need to remove the draft status from the release in GitHub"
