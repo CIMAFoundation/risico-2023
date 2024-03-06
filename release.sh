@@ -88,7 +88,7 @@ fi
 # commit the changes
 git add Cargo.toml Dockerfile
 
-#git commit -m "Bump version to v$new_tag"
-#git push
-#git tag v$new_tag
-#git push origin v$new_tag
+git commit -m "Bump version to v$new_tag"
+git push
+git tag v$new_tag
+git push origin v$new_tag
