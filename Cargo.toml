@@ -22,7 +22,6 @@ rayon = "1.6.0"
 ndarray = "0.15.6"
 ndarray-stats = "0.5.1"
 png = "0.17.7"
-git-version = "0.3.5"
 gdal = { version = "0.15.0", default-features = false, optional = true }
 rstar = "0.11.0"
 hdf5 = "0.8.1"
