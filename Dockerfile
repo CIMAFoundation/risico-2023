@@ -12,6 +12,6 @@ WORKDIR /app
 # Copy the local application code into the container
 COPY . .
 
-ENV GIT_COMMIT_SHORT_HASH="unknown"
+ENV GIT_COMMIT_SHORT_HASH=$short_commit_hash
 
 ENTRYPOINT ["cargo", "build", "--release"]
