@@ -1,9 +1,11 @@
+name: MUSL build after release
+
 on:
   release:
     types: [created]
 
 jobs:
-  release:
+  build:
     name: release ${{ matrix.target }}
     runs-on: ubuntu-latest
     strategy:
@@ -18,4 +20,4 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
           RUSTTARGET: ${{ matrix.target }}
-          EXTRA_FILES: "README.md LICENSE"
+          EXTRA_FILES: "README.md"
