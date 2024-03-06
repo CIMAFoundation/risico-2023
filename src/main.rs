@@ -13,7 +13,7 @@ use crate::library::{
 };
 
 const VERSION: &str = env!("CARGO_PKG_VERSION");
-const GIT_VERSION: &str = "__COMMIT__";
+const GIT_VERSION: &str = "699c768";
 
 // parse command line arguments: first argument is model date in the form YYYYMMDDHHMM, second is configuration path, third is input path
 fn main() {
@@ -22,7 +22,7 @@ fn main() {
     }
     pretty_env_logger::init();
 
-    if GIT_VERSION == "__COMMIT__" {
+    if GIT_VERSION == "699c768" {
         info!("RISICO.rs {}", VERSION);
     } else {
         info!("RISICO.rs {}-{}", VERSION, GIT_VERSION);
