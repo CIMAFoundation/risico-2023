@@ -1,19 +1,21 @@
-use std::{collections::HashMap, sync::Arc};
-
 use chrono::prelude::*;
+
+use ndarray::parallel::prelude::*;
+use ndarray::Zip;
 use ndarray::{azip, Array1};
+
+use std::default;
+use std::{collections::HashMap, sync::Arc};
 
 use crate::library::{
     config::models::WarmState,
     state::{
         constants::{MAXRAIN, NODATAVAL, SNOW_COVER_THRESHOLD, SNOW_SECONDS_VALIDITY},
-        functions::{
-            get_intensity, get_lhv_dff, get_lhv_l1, get_ppf, get_t_effect,
-        },
+        functions::{get_intensity, get_lhv_dff, get_lhv_l1, get_ppf, get_t_effect},
     },
 };
 
-use super::{constants::SATELLITE_DATA_SECONDS_VALIDITY, config::ModelConfig};
+use super::{config::ModelConfig, constants::SATELLITE_DATA_SECONDS_VALIDITY};
 
 //const UPDATE_TIME: i64 = 100;
 
@@ -134,6 +136,25 @@ impl Default for Vegetation {
     }
 }
 
+pub struct OutputElement {
+    pub time: DateTime<Utc>,
+    pub dffm: f32,
+    pub W: f32,
+    pub V: f32,
+    pub I: f32,
+    pub NDVI: f32,
+    pub NDWI: f32,
+    pub PPF: f32,
+    pub t_effect: f32,
+    // pub SWI: f32,
+    pub temperature: f32,
+    pub rain: f32,
+    pub wind_speed: f32,
+    pub wind_dir: f32,
+    pub humidity: f32,
+    pub snow_cover: f32,
+}
+
 #[allow(non_snake_case)]
 pub struct Output {
     pub time: DateTime<Utc>,
@@ -230,22 +251,42 @@ impl Output {
     }
 }
 
-pub struct Input {
-    pub time: DateTime<Utc>,
-    pub temperature: Array1<f32>,
-    pub rain: Array1<f32>,
-    pub wind_speed: Array1<f32>,
-    pub wind_dir: Array1<f32>,
-    pub humidity: Array1<f32>,
-    pub snow_cover: Array1<f32>,
+#[derive(Debug)]
+pub struct InputElement {
+    pub temperature: f32,
+    pub rain: f32,
+    pub wind_speed: f32,
+    pub wind_dir: f32,
+    pub humidity: f32,
+    pub snow_cover: f32,
     // satellite variables
-    //[TODO] refactor this!!!
-    pub ndvi: Array1<f32>,
-    pub ndwi: Array1<f32>,
-    pub msi: Array1<f32>,
-    pub swi: Array1<f32>,
+    pub ndvi: f32,
+    pub ndwi: f32,
+    pub msi: f32,
+    pub swi: f32,
 }
 
+impl Default for InputElement {
+    fn default() -> Self {
+        Self {
+            temperature: NODATAVAL,
+            rain: NODATAVAL,
+            wind_speed: NODATAVAL,
+            wind_dir: NODATAVAL,
+            humidity: NODATAVAL,
+            snow_cover: NODATAVAL,
+            ndvi: NODATAVAL,
+            ndwi: NODATAVAL,
+            msi: NODATAVAL,
+            swi: NODATAVAL,
+        }
+    }
+}
+
+pub struct Input {
+    pub time: DateTime<Utc>,
+    pub data: Array1<InputElement>,
+}
 
 #[derive(Debug)]
 #[allow(non_snake_case)]
@@ -267,7 +308,7 @@ pub struct State {
 
     len: usize,
 
-    config: ModelConfig
+    config: ModelConfig,
 }
 
 impl State {
@@ -298,7 +339,7 @@ impl State {
             NDWI,
             NDWI_TIME,
             len: warm_state.len(),
-            config: config
+            config: config,
         }
     }
 
@@ -310,28 +351,29 @@ impl State {
         azip!((
             snow_cover in &mut self.snow_cover,
             snow_cover_time in &mut self.snow_cover_time,
-            i_snow_cover in &input.snow_cover,
+            i_data in &input.data
         ){
+            let i_snow_cover = i_data.snow_cover;
             let time = input.time.timestamp() as f32;
-            
-            if *i_snow_cover == NODATAVAL {
+
+            if i_snow_cover == NODATAVAL {
                 if (time - *snow_cover_time) as i64 > SNOW_SECONDS_VALIDITY {
                     *snow_cover = NODATAVAL;
                 }
                 return;
             }
-            
-            *snow_cover = *i_snow_cover;
+
+            *snow_cover = i_snow_cover;
             *snow_cover_time = time;
         });
     }
 
     fn update_satellite(&mut self, input: &Input) {
-        for idx in 0..self.len() {
-            {
-                let msi = &mut self.MSI[idx];
-                let msi_ttl = &mut self.MSI_TTL[idx];
-                let i_msi = input.msi[idx];
+        Zip::from(&mut self.MSI)
+            .and(&mut self.MSI_TTL)
+            .and(&input.data)
+            .par_for_each(|msi, msi_ttl, input_data| {
+                let i_msi = input_data.msi;
 
                 if i_msi < 0.0 || i_msi > 1.0 {
                     if *msi_ttl > 0.0 {
@@ -343,11 +385,12 @@ impl State {
                     *msi = i_msi;
                     *msi_ttl = 56.0;
                 }
-            }
-            {
-                let ndvi = &mut self.NDVI[idx];
-                let ndvi_time = &mut self.NDVI_TIME[idx];
-                let i_ndvi = input.ndvi[idx];
+            });
+        Zip::from(&mut self.NDVI)
+            .and(&mut self.NDVI_TIME)
+            .and(&input.data)
+            .par_for_each(|ndvi, ndvi_time, input_data| {
+                let i_ndvi = input_data.ndvi;
 
                 if self.time.timestamp() - *ndvi_time as i64 > SATELLITE_DATA_SECONDS_VALIDITY {
                     *ndvi = NODATAVAL;
@@ -362,16 +405,16 @@ impl State {
 
                     *ndvi_time = input.time.timestamp() as f32;
                 }
-            }
-            {
-                let ndwi = &mut self.NDWI[idx];
-                let ndwi_time = &mut self.NDWI_TIME[idx];
-                let i_ndwi = input.ndwi[idx];
+            });
+        Zip::from(&mut self.NDWI)
+            .and(&mut self.NDWI_TIME)
+            .and(&input.data)
+            .par_for_each(|ndwi, ndwi_time, input_data| {
+                let i_ndwi = input_data.ndwi;
 
                 if self.time.timestamp() - *ndwi_time as i64 > SATELLITE_DATA_SECONDS_VALIDITY {
                     *ndwi = NODATAVAL;
                 }
-
 
                 if self.time.timestamp() - *ndwi_time as i64 > 240 * 3600 {
                     *ndwi = NODATAVAL;
@@ -380,66 +423,64 @@ impl State {
                 if i_ndwi != NODATAVAL {
                     if i_ndwi >= 0.0 && i_ndwi <= 1.0 {
                         *ndwi = i_ndwi;
-                        
                     } else {
                         *ndwi = NODATAVAL;
                     }
-                    *ndwi_time = input.time.timestamp() as f32;                 
+                    *ndwi_time = input.time.timestamp() as f32;
                 }
-            }
-        }
+            });
     }
 
     #[allow(non_snake_case)]
     fn update_moisture(&mut self, props: &Properties, input: &Input, dt: f32) {
         let dt = f32::max(1.0, f32::min(72.0, dt));
 
-        for idx in 0..self.len() {
-            let dffm = &mut self.dffm[idx];
+        Zip::from(&mut self.dffm)
+            // .and(&self.snow_cover)
+            .and(&props.vegetations)
+            .and(&self.snow_cover)
+            .and(&input.data)
+            .par_for_each(|dffm, veg, snow_cover, input_data| {
+                let d0 = veg.d0;
+                let sat = veg.sat;
+                let temperature = input_data.temperature;
+                let humidity = input_data.humidity;
+                let wind_speed = input_data.wind_speed;
+                let rain = input_data.rain;
+                let T0 = veg.T0;
 
-            let snow_cover = self.snow_cover[idx];
-            let veg = &props.vegetations[idx];
-            let temperature = input.temperature[idx];
-            let humidity = input.humidity[idx];
-            let wind_speed = input.wind_speed[idx];
-            let rain = input.rain[idx];
+                if d0 <= 0.0 {
+                    *dffm = NODATAVAL;
+                    return;
+                } else if *snow_cover > SNOW_COVER_THRESHOLD {
+                    *dffm = sat;
+                    return;
+                } else if temperature == NODATAVAL || humidity == NODATAVAL {
+                    // keep current humidity if we don't have all the data
+                    return;
+                }
 
-            let d0 = veg.d0;
-            let sat = veg.sat;
+                let t = if temperature > 0.0 { temperature } else { 0.0 };
 
-            let T0 = veg.T0;
+                let h = if humidity <= 100.0 { humidity } else { 100.0 };
+                let w = if wind_speed != NODATAVAL {
+                    wind_speed
+                } else {
+                    0.0
+                };
+                let r = if rain != NODATAVAL { rain } else { 0.0 };
 
-            if d0 <= 0.0 {
-                *dffm = NODATAVAL;
-                continue;
-            } else if snow_cover > SNOW_COVER_THRESHOLD {
-                *dffm = sat;
-                continue;
-            } else if temperature == NODATAVAL || humidity == NODATAVAL {
-                // keep current humidity if we don't have all the data
-                continue;
-            }
+                if r > MAXRAIN {
+                    *dffm = self.config.ffmc_rain(r, *dffm, sat);
+                } else {
+                    *dffm = self.config.ffmc_no_rain(*dffm, sat, t, w, h, T0, dt);
+                }
 
-            let t = if temperature > 0.0 { temperature } else { 0.0 };
+                // limit dffm to [0, sat]
 
-            let h = if humidity <= 100.0 { humidity } else { 100.0 };
-            let w = if wind_speed != NODATAVAL {
-                wind_speed
-            } else {
-                0.0
-            };
-            let r = if rain != NODATAVAL { rain } else { 0.0 };
-
-            if r > MAXRAIN {
-                *dffm = self.config.ffmc_rain(r, *dffm, sat);
-            } else {
-                *dffm = self.config.ffmc_no_rain(*dffm, sat, t, w, h, T0, dt);
-            }
-
-            // limit dffm to [0, sat]
-
-            *dffm = f32::max(0.0, f32::min(sat, *dffm));
-        }
+                *dffm = f32::max(0.0, f32::min(sat, *dffm));
+            });
+        // create a par_iter on indexes
     }
 
     #[allow(non_snake_case)]
@@ -458,6 +499,7 @@ impl State {
 
         for idx in 0..self.len {
             let dffm = self.dffm[idx];
+            let input = &input.data[idx];
 
             let t_effect = &mut t_effect[idx];
             let w_effect = &mut w_effect[idx];
@@ -468,12 +510,12 @@ impl State {
 
             let veg = &props.vegetations[idx];
 
-            let wind_dir = input.wind_dir[idx];
-            let wind_speed = input.wind_speed[idx];
+            let wind_dir = input.wind_dir;
+            let wind_speed = input.wind_speed;
             let slope = props.slopes[idx];
             let aspect = props.aspects[idx];
 
-            let temperature = input.temperature[idx];
+            let temperature = input.temperature;
             let snow_cover = self.snow_cover[idx];
 
             let ppf_summer = props.ppf_summer[idx];
@@ -486,7 +528,7 @@ impl State {
             if veg.use_ndvi && self.NDVI[idx] != NODATAVAL {
                 *ndvi = f32::max(f32::min(1.0 - self.NDVI[idx], 1.0), 0.0);
             }
-            
+
             *ndwi = 1.0;
             if self.NDWI[idx] != NODATAVAL {
                 *ndwi = f32::max(f32::min(1.0 - self.NDWI[idx], 1.0), 0.0);
@@ -496,11 +538,14 @@ impl State {
             if use_t_effect {
                 *t_effect = get_t_effect(temperature);
             }
-            
+
             if dffm == NODATAVAL {
                 continue;
             }
-            (*V, *w_effect) = self.config.ros(veg.v0, veg.d0, veg.d1, dffm, snow_cover, slope, aspect, wind_speed, wind_dir, *t_effect);
+            (*V, *w_effect) = self.config.ros(
+                veg.v0, veg.d0, veg.d1, dffm, snow_cover, slope, aspect, wind_speed, wind_dir,
+                *t_effect,
+            );
             *ppf = get_ppf(time, ppf_summer, ppf_winter);
 
             if veg.hhv == NODATAVAL || dffm == NODATAVAL {
@@ -524,11 +569,11 @@ impl State {
             I,
             PPF,
             t_effect,
-            input.temperature.clone(),
-            input.rain.clone(),
-            input.wind_speed.clone(),
-            input.wind_dir.clone(),
-            input.humidity.clone(),
+            input.data.iter().map(|i| i.temperature).collect(),
+            input.data.iter().map(|i| i.rain).collect(),
+            input.data.iter().map(|i| i.wind_speed).collect(),
+            input.data.iter().map(|i| i.wind_dir).collect(),
+            input.data.iter().map(|i| i.humidity).collect(),
             self.snow_cover.clone(),
             NDVI,
             NDWI,

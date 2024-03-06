@@ -2,9 +2,15 @@ use std::f32::consts::PI;
 
 use chrono::{DateTime, Utc};
 use itertools::izip;
-use ndarray::{Array1, azip};
+use ndarray::{azip, Array1};
 
-use super::{config::models::InputDataHandler, state::{constants::NODATAVAL, models::Input}};
+use super::{
+    config::models::InputDataHandler,
+    state::{
+        constants::NODATAVAL,
+        models::{Input, InputElement},
+    },
+};
 
 fn replace(dst: &mut Array1<f32>, src: &Array1<f32>) {
     azip!((
@@ -24,40 +30,27 @@ fn maybe_replace(dst: &mut Array1<f32>, src: &Option<Array1<f32>>) {
     }
 }
 
-pub fn get_input(
-    handler: &InputDataHandler,
-    time: &DateTime<Utc>,
-    len: usize,
-) -> Input {
-    let mut snow_cover: Array1<f32> = Array1::ones(len) * NODATAVAL;
-    let mut precipitation: Array1<f32> = Array1::ones(len) * NODATAVAL;
-    let mut temperature: Array1<f32> = Array1::ones(len) * NODATAVAL;
-    let mut wind_speed: Array1<f32> = Array1::ones(len) * NODATAVAL;
-    let mut wind_dir: Array1<f32> = Array1::ones(len) * NODATAVAL;
-    let mut humidity: Array1<f32> = Array1::ones(len) * NODATAVAL;
-    let mut ndvi: Array1<f32> = Array1::ones(len) * NODATAVAL;
-    let mut ndwi: Array1<f32> = Array1::ones(len) * NODATAVAL;
-    let mut swi: Array1<f32> = Array1::ones(len) * NODATAVAL;
-    let mut msi: Array1<f32> = Array1::ones(len) * NODATAVAL;
+pub fn get_input(handler: &InputDataHandler, time: &DateTime<Utc>, len: usize) -> Input {
+    let mut data: Array1<InputElement> = Array1::default(len);
 
     let snow = handler.get_values("SNOW", &time);
 
-    maybe_replace(&mut snow_cover, &snow);
+    maybe_replace(&mut data.iter_mut().map(|i| i.snow_cover).collect(), &snow);
 
     // Observed relative humidity
     let h = handler.get_values("F", &time);
-    maybe_replace(&mut humidity, &h);
+    maybe_replace(&mut data.iter_mut().map(|i| i.humidity).collect(), &h);
 
     // forecasted relative humidity
     let h = handler.get_values("H", &time);
-    maybe_replace(&mut humidity, &h);
+    maybe_replace(&mut data.iter_mut().map(|i| i.humidity).collect(), &h);
 
     // Observed temperature
     let t = handler.get_values("K", &time);
 
     if let Some(t) = t {
         let t = t.mapv(|_t| if _t > 200.0 { _t - 273.15 } else { _t });
-        replace(&mut temperature, &t);
+        replace(&mut data.iter_mut().map(|i| i.temperature).collect(), &t);
     }
 
     // Forecasted temperature
@@ -65,7 +58,7 @@ pub fn get_input(
 
     if let Some(t) = t {
         let t = t.mapv(|_t| if _t > 200.0 { _t - 273.15 } else { _t });
-        replace(&mut temperature, &t);
+        replace(&mut data.iter_mut().map(|i| i.temperature).collect(), &t);
         // Forecasted dew point temperature
         let r = handler.get_values("R", &time);
         if let Some(r) = r {
@@ -83,16 +76,16 @@ pub fn get_input(
                     *h = 100.0*(f32::exp((17.67 * r)/(r + 243.5))/f32::exp((17.67 * t)/(t + 243.5)));
                 }
             });
-            replace(&mut humidity, &h);
+            replace(&mut data.iter_mut().map(|i| i.humidity).collect(), &h);
         }
     }
 
     // Observed precipitation
     let op = handler.get_values("O", &time);
-    maybe_replace(&mut precipitation, &op);
+    maybe_replace(&mut data.iter_mut().map(|i| i.rain).collect(), &op);
     // Forecast precipitation
     let fp = handler.get_values("P", &time);
-    maybe_replace(&mut precipitation, &fp);
+    maybe_replace(&mut data.iter_mut().map(|i| i.rain).collect(), &fp);
 
     // wind speed
     let ws = handler.get_values("W", &time);
@@ -110,7 +103,7 @@ pub fn get_input(
                 NODATAVAL
             }
         });
-        replace(&mut wind_speed, &ws);
+        replace(&mut data.iter_mut().map(|i| i.wind_speed).collect(), &ws);
     }
 
     if let Some(wd) = wd {
@@ -121,7 +114,7 @@ pub fn get_input(
             }
             _wd
         });
-        replace(&mut wind_dir, &wd);
+        replace(&mut data.iter_mut().map(|i| i.wind_dir).collect(), &wd);
     }
 
     if let (Some(u), Some(v)) = (u, v) {
@@ -150,34 +143,24 @@ pub fn get_input(
             })
             .collect::<Array1<f32>>();
 
-        replace(&mut wind_dir, &wd);
-        replace(&mut wind_speed, &ws);
+        replace(&mut data.iter_mut().map(|i| i.wind_dir).collect(), &wd);
+        replace(&mut data.iter_mut().map(|i| i.wind_speed).collect(), &ws);
     }
 
     let _swi = handler.get_values("SWI", &time);
-    maybe_replace(&mut swi, &_swi);
-
+    maybe_replace(&mut data.iter_mut().map(|i| i.swi).collect(), &_swi);
 
     let _ndvi = handler.get_values("NDVI", &time);
-    maybe_replace(&mut ndvi, &_ndvi);
+    maybe_replace(&mut data.iter_mut().map(|i| i.ndvi).collect(), &_ndvi);
 
     let _ndwi = handler.get_values("NDWI", &time);
-    maybe_replace(&mut ndwi, &_ndwi);
+    maybe_replace(&mut data.iter_mut().map(|i| i.ndwi).collect(), &_ndwi);
 
     let _msi = handler.get_values("M", &time);
-    maybe_replace(&mut msi, &_msi);
+    maybe_replace(&mut data.iter_mut().map(|i| i.msi).collect(), &_msi);
 
     Input {
         time: time.to_owned(),
-        temperature: temperature,
-        wind_speed: wind_speed,
-        wind_dir: wind_dir,
-        humidity: humidity,
-        rain: precipitation,
-        snow_cover: snow_cover,
-        ndvi: ndvi,
-        ndwi: ndwi,
-        swi: swi,
-        msi: msi,
+        data: data,
     }
 }
