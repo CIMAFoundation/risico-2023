@@ -2,7 +2,7 @@ name: MUSL build after release
 
 on:
   release:
-    types: [created]
+    types: [created, published, released]
 
 jobs:
   build:
