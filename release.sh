@@ -72,20 +72,23 @@ else
     fi
 fi
 
+short_commit_hash=$(git rev-parse --short HEAD)
 
-# write file "version.py" containing two variables: VERSION = "x.x.x" and REVISION containing the git revision
-echo "VERSION = \"$new_tag\"" > version.py
-# replace version number in Cargo.toml
-sed -i "s/^version = \".*\"/version = \"$new_tag\"/" Cargo.toml
-
-# replace GIT_COMMIT_SHORT_HASH in Dockerfile
-sed -i "s/GIT_COMMIT_SHORT_HASH=.*/GIT_COMMIT_SHORT_HASH=$new_tag/" Dockerfile
+# replace version number in Cargo.toml and add environment variable in Dockerfile
+if [[ "$OSTYPE" == "darwin"* ]]; then
+  # Mac OS
+  sed -i '' 's/^version = \".*\"/version = \"'$new_tag'\"/' Cargo.toml
+  sed -i '' 's/GIT_COMMIT_SHORT_HASH=.*/GIT_COMMIT_SHORT_HASH=$short_commit_hash/' Dockerfile
+else
+  # Linux
+  sed -i 's/^version = \".*\"/version = \"'$new_tag'\"/' Cargo.toml
+  sed -i 's/GIT_COMMIT_SHORT_HASH=.*/GIT_COMMIT_SHORT_HASH=$short_commit_hash/' Dockerfile
+fi
 
 # commit the changes
 git add Cargo.toml Dockerfile
+
 #git commit -m "Bump version to v$new_tag"
-
-
 #git push
 #git tag v$new_tag
 #git push origin v$new_tag
