@@ -2,7 +2,7 @@ use std::f32::consts::PI;
 
 use chrono::{DateTime, Utc};
 use itertools::izip;
-use ndarray::{azip, Array1};
+use ndarray::{azip, Array1, Zip};
 
 use super::{
     config::models::InputDataHandler,
@@ -12,20 +12,26 @@ use super::{
     },
 };
 
-fn replace(dst: &mut Array1<f32>, src: &Array1<f32>) {
-    azip!((
-        dst in dst,
-        src in src,
-    ) {
-        if *dst <= (NODATAVAL+1.0) {
-            *dst = *src;
+fn replace<'a>(
+    dst: &'a mut Array1<InputElement>,
+    src: &Array1<f32>,
+    fun: fn(&'a mut InputElement) -> &'a mut f32,
+) {
+    Zip::from(dst).and(src).par_for_each(|dst, &src| {
+        let dst = fun(dst);
+        if *dst <= (NODATAVAL + 1.0) {
+            *dst = src;
         }
-    })
+    });
 }
 
-fn maybe_replace(dst: &mut Array1<f32>, src: &Option<Array1<f32>>) {
+fn maybe_replace<'a>(
+    dst: &'a mut Array1<InputElement>,
+    src: &Option<Array1<f32>>,
+    fun: fn(&'a mut InputElement) -> &'a mut f32,
+) {
     match src {
-        Some(src) => replace(dst, src),
+        Some(src) => replace(dst, src, fun),
         None => (),
     }
 }
@@ -35,22 +41,22 @@ pub fn get_input(handler: &InputDataHandler, time: &DateTime<Utc>, len: usize) -
 
     let snow = handler.get_values("SNOW", &time);
 
-    maybe_replace(&mut data.iter_mut().map(|i| i.snow_cover).collect(), &snow);
+    maybe_replace(&mut data, &snow, |i| &mut i.snow_cover);
 
     // Observed relative humidity
     let h = handler.get_values("F", &time);
-    maybe_replace(&mut data.iter_mut().map(|i| i.humidity).collect(), &h);
+    maybe_replace(&mut data, &h, |i| &mut i.humidity);
 
     // forecasted relative humidity
     let h = handler.get_values("H", &time);
-    maybe_replace(&mut data.iter_mut().map(|i| i.humidity).collect(), &h);
+    maybe_replace(&mut data, &h, |i| &mut i.humidity);
 
     // Observed temperature
     let t = handler.get_values("K", &time);
 
     if let Some(t) = t {
         let t = t.mapv(|_t| if _t > 200.0 { _t - 273.15 } else { _t });
-        replace(&mut data.iter_mut().map(|i| i.temperature).collect(), &t);
+        replace(&mut data, &t, |i| &mut i.temperature);
     }
 
     // Forecasted temperature
@@ -58,7 +64,7 @@ pub fn get_input(handler: &InputDataHandler, time: &DateTime<Utc>, len: usize) -
 
     if let Some(t) = t {
         let t = t.mapv(|_t| if _t > 200.0 { _t - 273.15 } else { _t });
-        replace(&mut data.iter_mut().map(|i| i.temperature).collect(), &t);
+        replace(&mut data, &t, |i| &mut i.temperature);
         // Forecasted dew point temperature
         let r = handler.get_values("R", &time);
         if let Some(r) = r {
@@ -76,16 +82,16 @@ pub fn get_input(handler: &InputDataHandler, time: &DateTime<Utc>, len: usize) -
                     *h = 100.0*(f32::exp((17.67 * r)/(r + 243.5))/f32::exp((17.67 * t)/(t + 243.5)));
                 }
             });
-            replace(&mut data.iter_mut().map(|i| i.humidity).collect(), &h);
+            replace(&mut data, &h, |i| &mut i.humidity);
         }
     }
 
     // Observed precipitation
     let op = handler.get_values("O", &time);
-    maybe_replace(&mut data.iter_mut().map(|i| i.rain).collect(), &op);
+    maybe_replace(&mut data, &op, |i| &mut i.rain);
     // Forecast precipitation
     let fp = handler.get_values("P", &time);
-    maybe_replace(&mut data.iter_mut().map(|i| i.rain).collect(), &fp);
+    maybe_replace(&mut data, &fp, |i| &mut i.rain);
 
     // wind speed
     let ws = handler.get_values("W", &time);
@@ -103,7 +109,7 @@ pub fn get_input(handler: &InputDataHandler, time: &DateTime<Utc>, len: usize) -
                 NODATAVAL
             }
         });
-        replace(&mut data.iter_mut().map(|i| i.wind_speed).collect(), &ws);
+        replace(&mut data, &ws, |i| &mut i.wind_speed);
     }
 
     if let Some(wd) = wd {
@@ -114,7 +120,7 @@ pub fn get_input(handler: &InputDataHandler, time: &DateTime<Utc>, len: usize) -
             }
             _wd
         });
-        replace(&mut data.iter_mut().map(|i| i.wind_dir).collect(), &wd);
+        replace(&mut data, &wd, |i| &mut i.wind_dir);
     }
 
     if let (Some(u), Some(v)) = (u, v) {
@@ -142,25 +148,24 @@ pub fn get_input(handler: &InputDataHandler, time: &DateTime<Utc>, len: usize) -
                 ws
             })
             .collect::<Array1<f32>>();
-
-        replace(&mut data.iter_mut().map(|i| i.wind_dir).collect(), &wd);
-        replace(&mut data.iter_mut().map(|i| i.wind_speed).collect(), &ws);
+        replace(&mut data, &wd, |i| &mut i.wind_dir);
+        replace(&mut data, &ws, |i| &mut i.wind_speed);
     }
 
-    let _swi = handler.get_values("SWI", &time);
-    maybe_replace(&mut data.iter_mut().map(|i| i.swi).collect(), &_swi);
+    let swi = handler.get_values("SWI", &time);
+    maybe_replace(&mut data, &swi, |i| &mut i.swi);
 
-    let _ndvi = handler.get_values("NDVI", &time);
-    maybe_replace(&mut data.iter_mut().map(|i| i.ndvi).collect(), &_ndvi);
+    let ndvi = handler.get_values("NDVI", &time);
+    maybe_replace(&mut data, &ndvi, |i| &mut i.ndvi);
 
-    let _ndwi = handler.get_values("NDWI", &time);
-    maybe_replace(&mut data.iter_mut().map(|i| i.ndwi).collect(), &_ndwi);
+    let ndwi = handler.get_values("NDWI", &time);
+    maybe_replace(&mut data, &ndwi, |i| &mut i.ndwi);
 
-    let _msi = handler.get_values("M", &time);
-    maybe_replace(&mut data.iter_mut().map(|i| i.msi).collect(), &_msi);
+    let msi = handler.get_values("M", &time);
+    maybe_replace(&mut data, &msi, |i| &mut i.msi);
 
     Input {
         time: time.to_owned(),
-        data: data,
+        data,
     }
 }

@@ -28,7 +28,7 @@ use crate::library::{
     },
 };
 
-use super::data::{self, read_cells_properties, read_vegetation};
+use super::data::{read_cells_properties, read_vegetation};
 
 pub type PaletteMap = HashMap<String, Box<Palette>>;
 pub type ConfigMap = HashMap<String, Vec<String>>;
