@@ -14,20 +14,16 @@ use super::{config::ModelConfig, constants::SATELLITE_DATA_SECONDS_VALIDITY};
 
 //const UPDATE_TIME: i64 = 100;
 
-fn get_derived(a: &Array1<f32>, b: &Array1<f32>, c: Option<&Array1<f32>>) -> Array1<f32> {
-    let mut r = Array1::ones(a.len()) * NODATAVAL;
-    for i in 0..a.len() {
-        if b[i] != NODATAVAL {
-            r[i] = a[i] * b[i];
-        } else {
-            r[i] = a[i];
-        }
+fn get_derived(a: &f32, b: &f32, c: Option<&f32>) -> f32 {
+    let mut r = *a;
+
+    if *b != NODATAVAL {
+        r = a * b;
     }
+
     if let Some(c) = c {
-        for i in 0..a.len() {
-            if c[i] != NODATAVAL {
-                r[i] = r[i] * c[i];
-            }
+        if *c != NODATAVAL {
+            r = r * c;
         }
     }
     r
@@ -212,18 +208,18 @@ impl Output {
             "NDWI" => Some(self.get_array(&|o| o.NDVI)),
 
             // //Derived variables
-            // "VPPF" => Some(get_derived(&self.V, &self.PPF, None)),
-            // "IPPF" => Some(get_derived(&self.I, &self.PPF, None)),
+            "VPPF" => Some(self.get_array(&|o| get_derived(&o.V, &o.PPF, None))),
+            "IPPF" => Some(self.get_array(&|o| get_derived(&o.I, &o.PPF, None))),
 
-            // "INDWI" => Some(get_derived(&self.I, &self.NDWI, None)),
-            // "VNDWI" => Some(get_derived(&self.V, &self.NDWI, None)),
-            // "INDVI" => Some(get_derived(&self.I, &self.NDVI, None)),
-            // "VNDVI" => Some(get_derived(&self.V, &self.NDVI, None)),
+            "INDWI" => Some(self.get_array(&|o| get_derived(&o.I, &o.NDWI, None))),
+            "VNDWI" => Some(self.get_array(&|o| get_derived(&o.V, &o.NDWI, None))),
+            "INDVI" => Some(self.get_array(&|o| get_derived(&o.I, &o.NDVI, None))),
+            "VNDVI" => Some(self.get_array(&|o| get_derived(&o.V, &o.NDVI, None))),
 
-            // "VPPFNDWI" => Some(get_derived(&self.V, &self.NDWI, Some(&self.PPF))),
-            // "IPPFNDWI" => Some(get_derived(&self.I, &self.NDWI, Some(&self.PPF))),
-            // "VPPFNDVI" => Some(get_derived(&self.V, &self.NDVI, Some(&self.PPF))),
-            // "IPPFNDVI" => Some(get_derived(&self.I, &self.NDVI, Some(&self.PPF))),
+            "VPPFNDWI" => Some(self.get_array(&|o| get_derived(&o.I, &o.NDWI, Some(&o.PPF)))),
+            "IPPFNDWI" => Some(self.get_array(&|o| get_derived(&o.V, &o.NDWI, Some(&o.PPF)))),
+            "VPPFNDVI" => Some(self.get_array(&|o| get_derived(&o.I, &o.NDVI, Some(&o.PPF)))),
+            "IPPFNDVI" => Some(self.get_array(&|o| get_derived(&o.V, &o.NDVI, Some(&o.PPF)))),
             _ => None,
         }
     }
