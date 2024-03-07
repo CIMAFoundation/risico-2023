@@ -291,7 +291,7 @@ impl Config {
 
         let (warm_state, warm_state_time) = read_warm_state(&warm_state_path, date).unwrap_or((
             vec![WarmState::default(); n_cells],
-            date.clone() - Duration::days(1),
+            date.clone() - Duration::try_days(1).expect("Should be a valid duration"),
         ));
 
         let ppf = match ppf_file {
@@ -359,7 +359,7 @@ impl Config {
 
     #[allow(non_snake_case)]
     pub fn write_warm_state(&self, state: &State) -> Result<(), RISICOError> {
-        let warm_state_time = state.time.clone() + Duration::days(1);
+        let warm_state_time = state.time.clone() + Duration::try_days(1).expect("Should be valid");
         let date_string = warm_state_time.format("%Y%m%d%H%M").to_string();
         let warm_state_name = format!("{}{}", self.warm_state_path, date_string);
         let mut warm_state_file = File::create(&warm_state_name)
@@ -677,7 +677,7 @@ fn read_warm_state(
     let mut current_date = date.clone();
 
     for days_before in 0..4 {
-        current_date = date.clone() - Duration::days(days_before);
+        current_date = date.clone() - Duration::try_days(days_before).expect("Should be valid");
 
         let filename = format!("{}{}", base_warm_file, current_date.format("%Y%m%d%H%M"));
 
@@ -762,7 +762,7 @@ fn read_warm_state(
         });
     }
 
-    let current_date = current_date - Duration::days(1);
+    let current_date = current_date - Duration::try_days(1).expect("Should be valid");
     Some((warm_state, current_date))
 }
 

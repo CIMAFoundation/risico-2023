@@ -1,10 +1,5 @@
 use chrono::prelude::*;
-
-use ndarray::parallel::prelude::*;
-use ndarray::Zip;
-use ndarray::{azip, Array1};
-
-use std::default;
+use ndarray::{Array1, Zip};
 use std::{collections::HashMap, sync::Arc};
 
 use crate::library::{
