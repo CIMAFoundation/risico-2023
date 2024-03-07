@@ -52,8 +52,8 @@ fn main() {
     let props = config.get_properties();
     let mut state = config.new_state();
 
-    let lats = config.properties.lats.as_slice().expect("should unwrap");
-    let lons = config.properties.lons.as_slice().expect("should unwrap");
+    let (lats, lons) = config.properties.get_coords();
+    let (lats, lons) = (lats.as_slice(), lons.as_slice());
 
     let c = Utc::now();
     info!("Loading input data from {}", input_path);
