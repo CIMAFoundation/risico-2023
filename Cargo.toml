@@ -8,6 +8,7 @@ edition = "2021"
 default = []
 gdal_bindgen = ["gdal/bindgen"]
 gdal = ["dep:gdal"]
+static_deps = ["netcdf-sys/static", "hdf5-sys/static"]
 
 [dependencies]
 log = "0.4.17"
@@ -17,7 +18,7 @@ chrono = "0.4"
 serde = "1.0"
 libflate = "2.0.0"
 netcdf = "0.8.1"
-netcdf-sys = { version = "0.5.1", features = ["static"] }
+netcdf-sys = { version = "0.5.1" }
 rayon = "1.6.0"
 ndarray = "0.15.6"
 ndarray-stats = "0.5.1"
@@ -25,4 +26,4 @@ png = "0.17.7"
 gdal = { version = "0.15.0", default-features = false, optional = true }
 rstar = "0.11.0"
 hdf5 = "0.8.1"
-hdf5-sys = { version = "0.8.1", features = ["static"] }
+hdf5-sys = { version = "0.8.1" }
