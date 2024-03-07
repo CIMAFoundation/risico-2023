@@ -28,7 +28,7 @@ use crate::library::{
     },
 };
 
-use super::data::{read_cells_properties, read_vegetation};
+use super::data::{self, read_cells_properties, read_vegetation};
 
 pub type PaletteMap = HashMap<String, Box<Palette>>;
 pub type ConfigMap = HashMap<String, Vec<String>>;
@@ -595,10 +595,11 @@ impl InputDataHandler {
             .get(&file.grid_name)
             .expect(&format!("there should be a grid named {}", file.grid_name));
 
-        let data = indexes
-            .iter()
+        let data: Vec<f32> = indexes
+            .par_iter()
             .map(|index| index.and_then(|idx| Some(data[idx])).unwrap_or(NODATAVAL))
             .collect();
+        let data = Array1::from(data);
         Some(data)
     }
 

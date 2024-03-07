@@ -1,4 +1,5 @@
 #[cfg(feature = "gdal")]
+#[cfg(feature = "gdal")]
 use gdal::raster::{Buffer, RasterCreationOption};
 
 use libflate::gzip;
@@ -188,7 +189,11 @@ pub fn write_to_geotiff(
 
 const COMPRESSION_RATE: i32 = 4;
 
-pub fn create_nc_file(file_name: &str, grid: &RegularGrid, variable_name: &str) -> Result<netcdf::MutableFile, RISICOError> {
+pub fn create_nc_file(
+    file_name: &str,
+    grid: &RegularGrid,
+    variable_name: &str,
+) -> Result<netcdf::MutableFile, RISICOError> {
     let n_lats = grid.nrows;
     let n_lons = grid.ncols;
 
@@ -257,4 +262,3 @@ pub fn create_nc_file(file_name: &str, grid: &RegularGrid, variable_name: &str) 
 
     Ok(file)
 }
-
