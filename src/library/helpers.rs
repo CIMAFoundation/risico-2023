@@ -2,6 +2,7 @@ use std::f32::consts::PI;
 
 use chrono::{DateTime, Utc};
 use itertools::izip;
+
 use ndarray::{azip, Array1, Zip};
 
 use super::{
@@ -17,10 +18,10 @@ fn replace<'a>(
     src: &Array1<f32>,
     fun: fn(&'a mut InputElement) -> &'a mut f32,
 ) {
-    Zip::from(dst).and(src).par_for_each(|dst, &src| {
-        let dst = fun(dst);
-        if *dst <= (NODATAVAL + 1.0) {
-            *dst = src;
+    Zip::from(dst).and(src).par_for_each(|d, s| {
+        let result = fun(d);
+        if *result <= (NODATAVAL + 1.0) {
+            *result = *s;
         }
     });
 }
@@ -65,6 +66,7 @@ pub fn get_input(handler: &InputDataHandler, time: &DateTime<Utc>, len: usize) -
     if let Some(t) = t {
         let t = t.mapv(|_t| if _t > 200.0 { _t - 273.15 } else { _t });
         replace(&mut data, &t, |i| &mut i.temperature);
+
         // Forecasted dew point temperature
         let r = handler.get_values("R", &time);
         if let Some(r) = r {
@@ -149,6 +151,7 @@ pub fn get_input(handler: &InputDataHandler, time: &DateTime<Utc>, len: usize) -
             })
             .collect::<Array1<f32>>();
         replace(&mut data, &wd, |i| &mut i.wind_dir);
+
         replace(&mut data, &ws, |i| &mut i.wind_speed);
     }
 

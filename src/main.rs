@@ -10,10 +10,10 @@ use pretty_env_logger;
 use crate::library::{
     config::models::{Config, InputDataHandler},
     helpers::get_input,
+    version::GIT_VERSION,
 };
 
-const VERSION: &str = env!("CARGO_PKG_VERSION");
-const GIT_VERSION: &str = "699c768";
+pub const VERSION: &str = env!("CARGO_PKG_VERSION");
 
 // parse command line arguments: first argument is model date in the form YYYYMMDDHHMM, second is configuration path, third is input path
 fn main() {
@@ -22,7 +22,7 @@ fn main() {
     }
     pretty_env_logger::init();
 
-    if GIT_VERSION == "699c768" {
+    if GIT_VERSION == "__COMMIT__" {
         info!("RISICO.rs {}", VERSION);
     } else {
         info!("RISICO.rs {}-{}", VERSION, GIT_VERSION);

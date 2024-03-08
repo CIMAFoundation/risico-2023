@@ -1,16 +1,18 @@
 use chrono::prelude::*;
 use ndarray::{Array1, Zip};
+use rayon::prelude::*;
 use std::{collections::HashMap, sync::Arc};
 
 use crate::library::{
     config::models::WarmState,
-    state::{
-        constants::{MAXRAIN, NODATAVAL, SNOW_COVER_THRESHOLD, SNOW_SECONDS_VALIDITY},
-        functions::{get_intensity, get_lhv_dff, get_lhv_l1, get_ppf, get_t_effect},
-    },
+    state::constants::{NODATAVAL, SNOW_SECONDS_VALIDITY},
 };
 
-use super::{config::ModelConfig, constants::SATELLITE_DATA_SECONDS_VALIDITY};
+use super::{
+    config::ModelConfig,
+    constants::SATELLITE_DATA_SECONDS_VALIDITY,
+    functions::{get_output_fn, update_moisture_fn},
+};
 
 //const UPDATE_TIME: i64 = 100;
 
@@ -132,7 +134,6 @@ impl Default for Vegetation {
 
 #[allow(non_snake_case)]
 pub struct OutputElement {
-    pub time: DateTime<Utc>,
     pub dffm: f32,
     pub W: f32,
     pub V: f32,
@@ -153,7 +154,6 @@ pub struct OutputElement {
 impl Default for OutputElement {
     fn default() -> Self {
         Self {
-            time: Utc::now(),
             dffm: NODATAVAL,
             W: NODATAVAL,
             V: NODATAVAL,
@@ -184,42 +184,43 @@ impl Output {
         Self { time, data }
     }
 
-    pub fn get_array(&self, func: &dyn Fn(&OutputElement) -> f32) -> Array1<f32> {
-        self.data.iter().map(func).collect()
+    pub fn get_array(&self, func: fn(&OutputElement) -> f32) -> Array1<f32> {
+        let vec = self.data.par_iter().map(func).collect::<Vec<_>>();
+        Array1::from_vec(vec)
     }
 
     pub fn get(&self, variable: &str) -> Option<Array1<f32>> {
         match variable {
             // Output variables
-            "dffm" => Some(self.get_array(&|o| o.dffm)),
-            "W" => Some(self.get_array(&|o| o.W)),
-            "V" => Some(self.get_array(&|o| o.V)),
-            "I" => Some(self.get_array(&|o| o.I)),
+            "dffm" => Some(self.get_array(|o| o.dffm)),
+            "W" => Some(self.get_array(|o| o.W)),
+            "V" => Some(self.get_array(|o| o.V)),
+            "I" => Some(self.get_array(|o| o.I)),
 
-            "contrT" => Some(self.get_array(&|o| o.t_effect)),
+            "contrT" => Some(self.get_array(|o| o.t_effect)),
             // "SWI" => self.SWI,
-            "temperature" => Some(self.get_array(&|o| o.temperature)),
-            "rain" => Some(self.get_array(&|o| o.rain)),
-            "windSpeed" => Some(self.get_array(&|o| o.wind_speed)),
-            "windDir" => Some(self.get_array(&|o| o.wind_dir)),
-            "humidity" => Some(self.get_array(&|o| o.humidity)),
-            "snowCover" => Some(self.get_array(&|o| o.snow_cover)),
-            "NDVI" => Some(self.get_array(&|o| o.NDVI)),
-            "NDWI" => Some(self.get_array(&|o| o.NDVI)),
+            "temperature" => Some(self.get_array(|o| o.temperature)),
+            "rain" => Some(self.get_array(|o| o.rain)),
+            "windSpeed" => Some(self.get_array(|o| o.wind_speed)),
+            "windDir" => Some(self.get_array(|o| o.wind_dir)),
+            "humidity" => Some(self.get_array(|o| o.humidity)),
+            "snowCover" => Some(self.get_array(|o| o.snow_cover)),
+            "NDVI" => Some(self.get_array(|o| o.NDVI)),
+            "NDWI" => Some(self.get_array(|o| o.NDVI)),
 
             // //Derived variables
-            "VPPF" => Some(self.get_array(&|o| get_derived(&o.V, &o.PPF, None))),
-            "IPPF" => Some(self.get_array(&|o| get_derived(&o.I, &o.PPF, None))),
+            "VPPF" => Some(self.get_array(|o| get_derived(&o.V, &o.PPF, None))),
+            "IPPF" => Some(self.get_array(|o| get_derived(&o.I, &o.PPF, None))),
 
-            "INDWI" => Some(self.get_array(&|o| get_derived(&o.I, &o.NDWI, None))),
-            "VNDWI" => Some(self.get_array(&|o| get_derived(&o.V, &o.NDWI, None))),
-            "INDVI" => Some(self.get_array(&|o| get_derived(&o.I, &o.NDVI, None))),
-            "VNDVI" => Some(self.get_array(&|o| get_derived(&o.V, &o.NDVI, None))),
+            "INDWI" => Some(self.get_array(|o| get_derived(&o.I, &o.NDWI, None))),
+            "VNDWI" => Some(self.get_array(|o| get_derived(&o.V, &o.NDWI, None))),
+            "INDVI" => Some(self.get_array(|o| get_derived(&o.I, &o.NDVI, None))),
+            "VNDVI" => Some(self.get_array(|o| get_derived(&o.V, &o.NDVI, None))),
 
-            "VPPFNDWI" => Some(self.get_array(&|o| get_derived(&o.I, &o.NDWI, Some(&o.PPF)))),
-            "IPPFNDWI" => Some(self.get_array(&|o| get_derived(&o.V, &o.NDWI, Some(&o.PPF)))),
-            "VPPFNDVI" => Some(self.get_array(&|o| get_derived(&o.I, &o.NDVI, Some(&o.PPF)))),
-            "IPPFNDVI" => Some(self.get_array(&|o| get_derived(&o.V, &o.NDVI, Some(&o.PPF)))),
+            "VPPFNDWI" => Some(self.get_array(|o| get_derived(&o.I, &o.NDWI, Some(&o.PPF)))),
+            "IPPFNDWI" => Some(self.get_array(|o| get_derived(&o.V, &o.NDWI, Some(&o.PPF)))),
+            "VPPFNDVI" => Some(self.get_array(|o| get_derived(&o.I, &o.NDVI, Some(&o.PPF)))),
+            "IPPFNDVI" => Some(self.get_array(|o| get_derived(&o.V, &o.NDVI, Some(&o.PPF)))),
             _ => None,
         }
     }
@@ -412,47 +413,8 @@ impl State {
             .and(&props.data)
             .and(&input.data)
             .par_for_each(|state, props, input_data| {
-                let veg = &props.vegetation;
-                let d0 = veg.d0;
-                let sat = veg.sat;
-                let temperature = input_data.temperature;
-                let humidity = input_data.humidity;
-                let wind_speed = input_data.wind_speed;
-                let rain = input_data.rain;
-                let T0 = veg.T0;
-
-                if d0 <= 0.0 {
-                    state.dffm = NODATAVAL;
-                    return;
-                } else if state.snow_cover > SNOW_COVER_THRESHOLD {
-                    state.dffm = sat;
-                    return;
-                } else if temperature == NODATAVAL || humidity == NODATAVAL {
-                    // keep current humidity if we don't have all the data
-                    return;
-                }
-
-                let t = if temperature > 0.0 { temperature } else { 0.0 };
-
-                let h = if humidity <= 100.0 { humidity } else { 100.0 };
-                let w = if wind_speed != NODATAVAL {
-                    wind_speed
-                } else {
-                    0.0
-                };
-                let r = if rain != NODATAVAL { rain } else { 0.0 };
-
-                if r > MAXRAIN {
-                    state.dffm = self.config.ffmc_rain(r, state.dffm, sat);
-                } else {
-                    state.dffm = self.config.ffmc_no_rain(state.dffm, sat, t, w, h, T0, dt);
-                }
-
-                // limit dffm to [0, sat]
-
-                state.dffm = f32::max(0.0, f32::min(sat, state.dffm));
+                update_moisture_fn(state, props, input_data, &self.config, dt)
             });
-        // create a par_iter on indexes
     }
 
     #[allow(non_snake_case)]
@@ -460,65 +422,12 @@ impl State {
         let mut output_data: Array1<OutputElement> = Array1::default(self.len());
         let time = &self.time;
 
-        let use_t_effect = false;
-
         Zip::from(&mut output_data)
             .and(&self.data)
             .and(&props.data)
             .and(&input.data)
             .par_for_each(|output, state, props, input| {
-                let veg = &props.vegetation;
-
-                let wind_dir = input.wind_dir;
-                let wind_speed = input.wind_speed;
-                let slope = props.slope;
-                let aspect = props.aspect;
-
-                let temperature = input.temperature;
-
-                output.NDWI = 1.0;
-                if veg.use_ndvi && state.NDVI != NODATAVAL {
-                    output.NDVI = f32::max(f32::min(1.0 - state.NDVI, 1.0), 0.0);
-                }
-
-                output.NDWI = 1.0;
-                if state.NDWI != NODATAVAL {
-                    output.NDWI = f32::max(f32::min(1.0 - state.NDWI, 1.0), 0.0);
-                }
-
-                output.t_effect = 1.0;
-                if use_t_effect {
-                    output.t_effect = get_t_effect(temperature);
-                }
-
-                if state.dffm == NODATAVAL {
-                    return;
-                }
-                (output.V, output.W) = self.config.ros(
-                    veg.v0,
-                    veg.d0,
-                    veg.d1,
-                    state.dffm,
-                    state.snow_cover,
-                    slope,
-                    aspect,
-                    wind_speed,
-                    wind_dir,
-                    output.t_effect,
-                );
-                output.PPF = get_ppf(time, props.ppf_summer, props.ppf_winter);
-
-                if veg.hhv == NODATAVAL || state.dffm == NODATAVAL {
-                    output.I = NODATAVAL;
-                    return;
-                }
-                let LHVdff = get_lhv_dff(veg.hhv, state.dffm);
-                // calcolo LHV per la vegetazione viva
-
-                let LHVl1 = get_lhv_l1(veg.umid, state.MSI, veg.hhv);
-                // Calcolo Intensità
-
-                output.I = get_intensity(veg.d0, veg.d1, output.V, state.NDVI, LHVdff, LHVl1);
+                get_output_fn(state, props, input, output, &self.config, time)
             });
 
         Output::new(time.clone(), output_data)

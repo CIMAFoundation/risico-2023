@@ -15,16 +15,18 @@
                     "risico-2023"
                     // "--features",
                     // "default"
-
                 ]
             },
             "args": [
-                "202301020000",
-                "/opt/risico/RISICO2015/configuration.txt",
-                "/opt/risico/RISICO2015/INPUT/202301020842/input.txt",
+                "202403010000",
+                "/opt/risico/RISICO2023/configuration.txt",
+                "/opt/risico/RISICO2023/INPUT/202403011443/input.txt"
             ],
+            "env": {
+                "RUST_LOG": "debug",
+                "RAYON_NUM_THREADS": "1",
+            }
             //"visualizerFile": "${workspaceFolder}/.vscode/custom.natvis"
         }
-        
     ]
 }

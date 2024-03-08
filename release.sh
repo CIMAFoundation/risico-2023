@@ -78,13 +78,13 @@ short_commit_hash=$(git rev-parse --short HEAD)
 if [[ "$OSTYPE" == "darwin"* ]]; then
   # Mac OS
   sed -i '' 's/^version = \".*\"/version = \"'$new_tag'\"/' Cargo.toml
-  # replace __COMMIT__ with the short commit hash in src/main.rs
-  sed -i '' 's/__COMMIT__/'$short_commit_hash'/' src/main.rs
 else
   # Linux
   sed -i 's/^version = \".*\"/version = \"'$new_tag'\"/' Cargo.toml
-  sed -i 's/__COMMIT__/'$short_commit_hash'/' src/main.rs
 fi
+
+# overwrite the file src/library/version.rs
+echo "pub const GIT_VERSION: &str = \"$short_commit_hash\";" > ./src/library/version.rs
 
 # commit the changes
 git add Cargo.toml Dockerfile

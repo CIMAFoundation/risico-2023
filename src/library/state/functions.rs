@@ -4,7 +4,11 @@ use std::f32::consts::PI;
 ///functions to work on the state of the risico model
 use chrono::{DateTime, Datelike, Utc};
 
-use super::constants::*;
+use super::{
+    config::ModelConfig,
+    constants::*,
+    models::{InputElement, OutputElement, PropertiesElement, StateElement},
+};
 
 ///calculate PPF from the date and the two values
 pub fn get_ppf(time: &DateTime<Utc>, ppf_summer: f32, ppf_winter: f32) -> f32 {
@@ -390,4 +394,128 @@ mod tests {
     //     let ppf = get_ppf(&date, 0.0, 1.0);
     //     assert_eq!(ppf, 0.5);
     // }
+}
+
+#[allow(non_snake_case)]
+pub fn update_moisture_fn(
+    state: &mut StateElement,
+    props: &PropertiesElement,
+    input_data: &InputElement,
+    config: &ModelConfig,
+    dt: f32,
+) {
+    let veg = &props.vegetation;
+    let d0 = veg.d0;
+    let sat = veg.sat;
+    let temperature = input_data.temperature;
+    let humidity = input_data.humidity;
+    let wind_speed = input_data.wind_speed;
+    let rain = input_data.rain;
+    let T0 = veg.T0;
+
+    if d0 <= 0.0 {
+        state.dffm = NODATAVAL;
+        return;
+    } else if state.snow_cover > SNOW_COVER_THRESHOLD {
+        state.dffm = sat;
+        return;
+    } else if temperature == NODATAVAL || humidity == NODATAVAL {
+        // keep current humidity if we don't have all the data
+        return;
+    }
+
+    let t = if temperature > 0.0 { temperature } else { 0.0 };
+
+    let h = if humidity <= 100.0 { humidity } else { 100.0 };
+    let w = if wind_speed != NODATAVAL {
+        wind_speed
+    } else {
+        0.0
+    };
+    let r = if rain != NODATAVAL { rain } else { 0.0 };
+
+    if r > MAXRAIN {
+        state.dffm = config.ffmc_rain(r, state.dffm, sat);
+    } else {
+        state.dffm = config.ffmc_no_rain(state.dffm, sat, t, w, h, T0, dt);
+    }
+
+    // limit dffm to [0, sat]
+
+    state.dffm = f32::max(0.0, f32::min(sat, state.dffm));
+}
+
+#[allow(non_snake_case)]
+pub fn get_output_fn(
+    state: &StateElement,
+    props: &PropertiesElement,
+    input: &InputElement,
+    output: &mut OutputElement,
+    config: &ModelConfig,
+    time: &DateTime<Utc>,
+) {
+    let veg = &props.vegetation;
+
+    let wind_dir = input.wind_dir;
+    let wind_speed = input.wind_speed;
+    let humidity = input.humidity;
+    let rain = input.rain;
+
+    let slope = props.slope;
+    let aspect = props.aspect;
+
+    let temperature = input.temperature;
+    let snow_cover = state.snow_cover;
+    let NDVI = state.NDVI;
+    let NDWI = state.NDWI;
+
+    let dffm = state.dffm;
+
+    let mut ndvi = 1.0;
+    if veg.use_ndvi && NDVI != NODATAVAL {
+        ndvi = f32::max(f32::min(1.0 - NDVI, 1.0), 0.0);
+    }
+
+    let mut ndwi = 1.0;
+    if NDWI != NODATAVAL {
+        ndwi = f32::max(f32::min(1.0 - NDWI, 1.0), 0.0);
+    }
+
+    let mut t_effect = 1.0;
+    if config.use_t_effect {
+        t_effect = get_t_effect(temperature);
+    }
+
+    if state.dffm == NODATAVAL {
+        return;
+    }
+    let (ros, wind_effect) = config.ros(
+        veg.v0, veg.d0, veg.d1, dffm, snow_cover, slope, aspect, wind_speed, wind_dir, t_effect,
+    );
+    let ppf = get_ppf(time, props.ppf_summer, props.ppf_winter);
+
+    if veg.hhv == NODATAVAL || state.dffm == NODATAVAL {
+        return;
+    }
+
+    let LHVdff = get_lhv_dff(veg.hhv, dffm);
+    // calcolo LHV per la vegetazione viva
+    let LHVl1 = get_lhv_l1(veg.umid, state.MSI, veg.hhv);
+    // Calcolo Intensità
+    let intensity = get_intensity(veg.d0, veg.d1, ros, state.NDVI, LHVdff, LHVl1);
+
+    output.V = ros;
+    output.W = wind_effect;
+    output.PPF = ppf;
+    output.I = intensity;
+    output.temperature = temperature;
+    output.humidity = humidity;
+    output.wind_speed = wind_speed;
+    output.wind_dir = wind_dir;
+    output.rain = rain;
+    output.snow_cover = snow_cover;
+    output.dffm = dffm;
+    output.t_effect = t_effect;
+    output.NDWI = ndwi;
+    output.NDVI = ndvi;
 }
