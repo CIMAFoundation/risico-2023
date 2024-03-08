@@ -74,7 +74,7 @@ fi
 
 short_commit_hash=$(git rev-parse --short HEAD)
 
-# replace version number in Cargo.toml and add environment variable in Dockerfile
+# replace version number in Cargo.toml
 if [[ "$OSTYPE" == "darwin"* ]]; then
   # Mac OS
   sed -i '' 's/^version = \".*\"/version = \"'$new_tag'\"/' Cargo.toml
@@ -87,7 +87,7 @@ fi
 echo "pub const GIT_VERSION: &str = \"$short_commit_hash\";" > ./src/library/version.rs
 
 # commit the changes
-git add Cargo.toml Dockerfile
+git add Cargo.toml src/library/version.rs
 
 git commit -m "Bump version to v$new_tag"
 git push
