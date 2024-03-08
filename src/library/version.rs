@@ -1,1 +1,1 @@
-pub const GIT_VERSION: &str = "17b69db";
+pub const GIT_VERSION: &str = "ff05df8";
