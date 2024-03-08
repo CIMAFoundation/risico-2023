@@ -76,6 +76,12 @@ impl From<String> for RISICOError {
     }
 }
 
+impl Into<String> for RISICOError {
+    fn into(self) -> String {
+        self.msg
+    }
+}
+
 impl From<&str> for RISICOError {
     fn from(msg: &str) -> Self {
         RISICOError { msg: msg.into() }

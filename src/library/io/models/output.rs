@@ -1,9 +1,11 @@
-use std::{collections::HashMap, path::PathBuf};
+use std::{collections::HashMap, path::PathBuf, sync::Mutex};
 
 use chrono::{DateTime, Utc};
-use itertools::izip;
-use ndarray::Array1;
+
+use log::debug;
+use ndarray::{Array1, Zip};
 use netcdf::{extent::Extents, MutableFile};
+use rayon::prelude::*;
 
 use crate::library::{
     config::models::{PaletteMap, RISICOError},
@@ -15,6 +17,30 @@ use crate::library::{
 use crate::library::io::writers::write_to_geotiff;
 
 use super::grid::{ClusterMode, Grid, RegularGrid};
+
+/// Extract error message generated from writing variables to files
+fn extract_errors(
+    error_message: &str,
+    results: Vec<Result<(), RISICOError>>,
+) -> Result<(), RISICOError> {
+    let error_messages: Vec<_> = results
+        .iter()
+        .filter_map(|r| match r {
+            Ok(_) => None,
+            Err(e) => Some(e.to_string()),
+        })
+        .collect();
+
+    if !error_messages.is_empty() {
+        let all_messages = error_messages.join("\n");
+        Err(RISICOError::from(format!(
+            "{}: {}",
+            error_message, all_messages
+        )))
+    } else {
+        Ok(())
+    }
+}
 
 #[derive(Debug)]
 pub struct OutputVariable {
@@ -52,33 +78,57 @@ impl OutputVariable {
 
         let n_pixels = grid.nrows * grid.ncols as usize;
         let mut grid_values: Array1<f32> = Array1::ones(n_pixels) * NODATAVAL;
-        let mut grid_count: Array1<f32> = Array1::ones(n_pixels);
 
-        izip!(lats, lons, values).for_each(|(lat, lon, value)| {
-            if let Some(idx) = grid.index(&lat, &lon) {
-                if value == NODATAVAL {
-                    return;
+        let indexes_and_values: Vec<(usize, f32)> = Zip::from(lats)
+            .and(lons)
+            .and(&values)
+            .into_par_iter()
+            .filter_map(|(lat, lon, value)| {
+                if *value == NODATAVAL {
+                    return None;
                 }
 
-                let prev_value = grid_values[idx];
+                match grid.index(lat, lon) {
+                    Some(idx) => Some((idx, *value)),
+                    None => None,
+                }
+            })
+            .collect();
 
-                if prev_value == NODATAVAL {
-                    grid_values[idx] = value;
-                } else {
-                    match self.cluster_mode {
-                        ClusterMode::Mean => {
-                            grid_values[idx] += value;
-                            grid_count[idx] += 1.0;
-                        }
-                        ClusterMode::Min => grid_values[idx] = f32::min(prev_value, value),
-                        ClusterMode::Max => grid_values[idx] = f32::max(prev_value, value),
-                        _ => unimplemented!("Median mode not implemented yet"),
-                    }
+        if indexes_and_values.is_empty() {
+            return None;
+        }
+
+        indexes_and_values.iter().for_each(|(idx, value)| {
+            let idx = *idx;
+            let value = *value;
+            let prev_value = grid_values[idx];
+
+            if prev_value == NODATAVAL {
+                grid_values[idx] = value;
+            } else {
+                match self.cluster_mode {
+                    ClusterMode::Mean => grid_values[idx] += value,
+                    ClusterMode::Min => grid_values[idx] = f32::min(prev_value, value),
+                    ClusterMode::Max => grid_values[idx] = f32::max(prev_value, value),
+                    _ => unimplemented!("Median mode not implemented yet"),
                 }
             }
         });
 
-        let grid_values = grid_values / grid_count;
+        match self.cluster_mode {
+            ClusterMode::Mean => {
+                let mut grid_count: Array1<f32> = Array1::zeros(n_pixels);
+                indexes_and_values
+                    .iter()
+                    .for_each(|(idx, _)| grid_count[*idx] += 1.0);
+
+                let grid_count = grid_count.mapv(|v| if v == 0.0 { 1.0 } else { v });
+                grid_values = grid_values / grid_count;
+            }
+            _ => {}
+        }
+
         // apply cutval
         let grid_values = grid_values.mapv(|v| {
             if v == NODATAVAL {
@@ -150,8 +200,12 @@ impl OutputType {
         lons: &[f32],
         output: &Output,
     ) -> Result<(), RISICOError> {
-        self.writer
-            .write(output, lats, lons, &self.grid, &self.variables)
+        debug!("Writing variables for {}, {}", self.name, self.format);
+        let res = self
+            .writer
+            .write(output, lats, lons, &self.grid, &self.variables);
+        debug!("Done Writing variables for {}, {}", self.name, self.format);
+        res
     }
 }
 
@@ -160,7 +214,7 @@ struct NetcdfWriter {
     path: PathBuf,
     name: String,
     run_date: DateTime<Utc>,
-    files: HashMap<String, MutableFile>,
+    files: HashMap<String, Mutex<MutableFile>>,
 }
 
 impl NetcdfWriter {
@@ -228,49 +282,69 @@ impl Writer for NetcdfWriter {
         grid: &RegularGrid,
         variables: &[OutputVariable],
     ) -> Result<(), RISICOError> {
+        let n_lats = grid.nrows;
+        let n_lons = grid.ncols;
+
         for variable in variables {
-            let n_lats = grid.nrows;
-            let n_lons = grid.ncols;
-
-            if !self.files.contains_key(&variable.name) {
-                let path = self.path.as_os_str().to_str().expect("Invalid path");
-
-                let file_name = format!("{}/{}.nc", path, variable.name);
-                let file = create_nc_file(&file_name, grid, &variable.name)?;
-                self.files.insert(variable.name.clone(), file);
-            }
-
-            let file = self
-                .files
-                .get_mut(&variable.name)
-                .expect("there should be file");
-
-            let mut time_var = file
-                .variable_mut("time")
-                .ok_or_else(|| format!("variable not found: time"))?;
-            let time: i64 = output.time.timestamp() as i64;
-            let len = time_var.len();
-            let extents: Extents = (&[len], &[1]).try_into().unwrap();
-
-            time_var
-                .put_values(&[time], extents)
-                .unwrap_or_else(|_| panic!("Add time failed"));
-
-            let mut variable_var = file
-                .variable_mut(&variable.name)
-                .ok_or_else(|| format!("variable not found: {}", variable.name))?;
-
-            let values = variable.get_variable_on_grid(&output, lats, lons, &grid);
-            let extents: Extents = (&[len, 0, 0], &[1, n_lats, n_lons]).try_into().unwrap();
-            if let Some(values) = values {
-                variable_var
-                    .put_values(values.as_slice().expect("Should unwrap"), extents)
-                    .unwrap_or_else(|err| panic!("Add variable failed: {err}"));
-            } else {
+            if self.files.contains_key(&variable.name) {
                 continue;
             }
+            let path = self.path.as_os_str().to_str().expect("Invalid path");
+
+            let file_name = format!("{}/{}.nc", path, variable.name);
+            let file = create_nc_file(&file_name, grid, &variable.name)?;
+            self.files.insert(variable.name.clone(), Mutex::new(file));
         }
-        Ok(())
+
+        let results: Vec<Result<(), RISICOError>> = variables
+            .par_iter()
+            .map(|variable| {
+                let mutex = self
+                    .files
+                    .get(&variable.name)
+                    .expect("there should be a file");
+
+                let mut file = mutex.lock().expect("");
+
+                debug!(
+                    "[NC] Writing variable {} to {:?}",
+                    variable.name,
+                    file.path().unwrap()
+                );
+
+                let mut time_var = file
+                    .variable_mut("time")
+                    .ok_or_else(|| format!("variable not found: time"))?;
+                let time: i64 = output.time.timestamp() as i64;
+                let len = time_var.len();
+                let extents: Extents = (&[len], &[1]).try_into().unwrap();
+
+                time_var
+                    .put_values(&[time], extents)
+                    .unwrap_or_else(|_| panic!("Add time failed"));
+
+                let mut variable_var = file
+                    .variable_mut(&variable.name)
+                    .ok_or_else(|| format!("variable not found: {}", variable.name))?;
+
+                let values = variable.get_variable_on_grid(&output, lats, lons, &grid);
+                let extents: Extents = (&[len, 0, 0], &[1, n_lats, n_lons]).try_into().unwrap();
+                if let Some(values) = values {
+                    variable_var
+                        .put_values(values.as_slice().expect("Should unwrap"), extents)
+                        .unwrap_or_else(|err| panic!("Add variable failed: {err}"));
+
+                    debug!(
+                        "[NC] Done Writing variable {} to {:?}",
+                        variable.name,
+                        file.path().unwrap()
+                    );
+                }
+                Ok(())
+            })
+            .collect();
+
+        extract_errors("NC Errors", results)
     }
 }
 
@@ -288,22 +362,34 @@ impl Writer for ZBinWriter {
             .as_os_str()
             .to_str()
             .expect("Should be a valid path");
-        for variable in variables {
-            let date_string = output.time.format("%Y%m%d%H%M").to_string();
-            //todo!("get run date from config");
-            let run_date = &self.run_date.format("%Y%m%d%H%M").to_string();
-            let file = format!(
-                "{}/{}_{}_{}_{}.zbin",
-                path, self.name, run_date, date_string, variable.name
-            );
-            let values = variable.get_variable_on_grid(&output, lats, lons, grid);
 
-            if let Some(values) = values {
-                write_to_zbin_file(&file, &grid, values.as_slice().expect("Should unwrap"))
-                    .map_err(|err| format!("Cannot write file {}: error {err}", file))?;
-            }
-        }
-        Ok(())
+        let results: Vec<Result<(), RISICOError>> = variables
+            .par_iter()
+            .map(|variable| {
+                let date_string = output.time.format("%Y%m%d%H%M").to_string();
+                //todo!("get run date from config");
+                let run_date = &self.run_date.format("%Y%m%d%H%M").to_string();
+                let file = format!(
+                    "{}/{}_{}_{}_{}.zbin",
+                    path, self.name, run_date, date_string, variable.name
+                );
+
+                debug!("[ZBIN] Writing variable {} to {:?}", variable.name, file);
+                let values = variable.get_variable_on_grid(&output, lats, lons, grid);
+
+                if let Some(values) = values {
+                    write_to_zbin_file(&file, &grid, values.as_slice().expect("Should unwrap"))
+                        .map_err(|err| format!("Cannot write file {}: error {err}", file))?;
+
+                    debug!(
+                        "[ZBIN] Done writing variable {} to {:?}",
+                        variable.name, file
+                    );
+                }
+                Ok(())
+            })
+            .collect();
+        extract_errors("ZBIN Errors", results)
     }
 }
 
@@ -321,33 +407,48 @@ impl Writer for PngWriter {
             .as_os_str()
             .to_str()
             .expect("Should be a valid path");
-        for variable in variables {
-            let date_string = output.time.format("%Y%m%d%H%M").to_string();
-            //todo!("get run date from config");
-            let run_date = &self.run_date.format("%Y%m%d%H%M").to_string();
-            let file = format!(
-                "{}/{}_{}_{}_{}.png",
-                path, self.name, run_date, date_string, variable.name
-            );
-            let values = variable.get_variable_on_grid(&output, lats, lons, grid);
-            let palette = self
-                .palettes
-                .get(&variable.name)
-                .ok_or(format!("No palette found for variable {}", variable.name))?;
 
-            if let Some(values) = values {
-                write_to_pngwjson(
-                    &file,
-                    &grid,
-                    values.as_slice().expect("Should unwrap"),
-                    &palette,
-                )
-                .map_err(|err| format!("Cannot write file {}: error {err}", file))?;
-            }
-        }
-        Ok(())
+        let results: Vec<Result<(), RISICOError>> = variables
+            .par_iter()
+            .map(|variable| {
+                let date_string = output.time.format("%Y%m%d%H%M").to_string();
+                //todo!("get run date from config");
+                let run_date = &self.run_date.format("%Y%m%d%H%M").to_string();
+                let file = format!(
+                    "{}/{}_{}_{}_{}.png",
+                    path, self.name, run_date, date_string, variable.name
+                );
+
+                debug!("[PNG] Writing variable {} to {:?}", variable.name, file);
+
+                let values = variable.get_variable_on_grid(&output, lats, lons, grid);
+                let palette = self
+                    .palettes
+                    .get(&variable.name)
+                    .ok_or(format!("No palette found for variable {}", variable.name))?;
+
+                if let Some(values) = values {
+                    write_to_pngwjson(
+                        &file,
+                        &grid,
+                        values.as_slice().expect("Should unwrap"),
+                        &palette,
+                    )
+                    .map_err(|err| format!("Cannot write file {}: error {err}", file))?;
+
+                    debug!(
+                        "[PNG] Done writing variable {} to {:?}",
+                        variable.name, file
+                    );
+                }
+                Ok(())
+            })
+            .collect();
+        // check if there are any errors
+        extract_errors("PNG Errors", results)
     }
 }
+
 #[cfg(feature = "gdal")]
 pub struct GeotiffWriter {
     path: PathBuf,
@@ -379,7 +480,8 @@ impl Writer for GeotiffWriter {
             .as_os_str()
             .to_str()
             .expect("Should be a valid path");
-        for variable in variables {
+
+        let results: Vec<Result<(), RISICOError>> = variables.par_iter().map(|variable| {
             let date_string = output.time.format("%Y%m%d%H%M").to_string();
             //todo!("get run date from config");
             let run_date = &self.run_date.format("%Y%m%d%H%M").to_string();
@@ -387,13 +489,21 @@ impl Writer for GeotiffWriter {
                 "{}/{}_{}_{}_{}.tif",
                 path, self.name, run_date, date_string, variable.name
             );
+
+            debug!("[GEOTIFF] Writing variable {} to {:?}", variable.name, file);
             let values = variable.get_variable_on_grid(&output, lats, lons, grid);
 
             if let Some(values) = values {
                 write_to_geotiff(&file, &grid, values.as_slice().expect("Should unwrap"))
                     .map_err(|err| format!("Cannot write file {}: error {err}", file))?;
+
+                debug!(
+                    "[GEOTIFF] Done writing variable {} to {:?}",
+                    variable.name, file
+                );
             }
-        }
-        Ok(())
+            Ok(())
+        });
+        extract_errors("GEOTiff Errors", results)
     }
 }
