@@ -3,8 +3,11 @@ FROM rust:latest
 
 # install hdf5, netcdf, zlib
 RUN apt-get update && apt-get install -y \
-    curl libhdf5-dev libnetcdf-dev \
-    build-essential cmake \
+    libc6-dev \
+    curl libhdf5-dev\ 
+    libnetcdf-dev \
+    build-essential\
+    cmake \
     zlib1g-dev
 
 WORKDIR /app
@@ -12,6 +15,5 @@ WORKDIR /app
 # Copy the local application code into the container
 COPY . .
 
-ENV GIT_COMMIT_SHORT_HASH=43d6f36
-
-ENTRYPOINT ["cargo", "build", "--release"]
+ENV RUSTFLAGS="-C target-feature=+crt-static"
+ENTRYPOINT ["cargo", "build", "--release", "--features", "static_deps", "--target", "x86_64-unknown-linux-gnu"]
