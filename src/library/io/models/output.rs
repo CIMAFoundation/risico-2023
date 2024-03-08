@@ -96,7 +96,7 @@ impl OutputVariable {
             .collect();
 
         if indexes_and_values.is_empty() {
-            return None;
+            return Some(grid_values);
         }
 
         indexes_and_values.iter().for_each(|(idx, value)| {
