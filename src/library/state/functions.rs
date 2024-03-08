@@ -82,13 +82,19 @@ pub fn get_v_legacy(
     wind_dir: f32,
     t_effect: f32,
 ) -> (f32, f32) {
-    if snow_cover > 0.0 || d0 == NODATAVAL {
-        return (0.0, 0.0);
-    }
-    let moist_eff: f32 = get_moisture_effect_legacy(dffm);
     let w_effect: f32 = get_wind_effect_legacy(wind_speed, wind_dir, slope, aspect);
+    if snow_cover > 0.0 || d0 == NODATAVAL {
+        return (0.0, w_effect);
+    }
+
+    if dffm == NODATAVAL {
+        return (0.0, w_effect);
+    }
+
+    let moist_eff: f32 = get_moisture_effect_legacy(dffm);
     let s_effect: f32 = get_slope_effect_legacy(slope);
-    (v0 * moist_eff * w_effect * s_effect * t_effect, w_effect)
+    let ros = v0 * moist_eff * w_effect * s_effect * t_effect;
+    (ros, w_effect)
 }
 
 // NEW FORMULATION ROS
@@ -175,14 +181,18 @@ pub fn get_v(
     wind_dir: f32,
     t_effect: f32,
 ) -> (f32, f32) {
+    let w_s_eff: f32 = get_wind_slope_effect(slope, aspect, wind_speed, wind_dir);
     if snow_cover > 0.0 || d0 == NODATAVAL {
-        return (0.0, 0.0);
+        return (0.0, w_s_eff);
+    }
+    if dffm == NODATAVAL {
+        return (0.0, w_s_eff);
     }
     // moisture effect
     let moist_coeff: f32 = get_moisture_effect(dffm);
     // wind-slope contribution
-    let w_s_eff: f32 = get_wind_slope_effect(slope, aspect, wind_speed, wind_dir);
-    (v0 * moist_coeff * w_s_eff * t_effect, w_s_eff)
+    let ros = v0 * moist_coeff * w_s_eff * t_effect;
+    (ros, w_s_eff)
 }
 
 /// DEPRECATED
@@ -450,10 +460,9 @@ pub fn get_output_fn(
     state: &StateElement,
     props: &PropertiesElement,
     input: &InputElement,
-    output: &mut OutputElement,
     config: &ModelConfig,
     time: &DateTime<Utc>,
-) {
+) -> OutputElement {
     let veg = &props.vegetation;
 
     let wind_dir = input.wind_dir;
@@ -471,51 +480,53 @@ pub fn get_output_fn(
 
     let dffm = state.dffm;
 
-    let mut ndvi = 1.0;
-    if veg.use_ndvi && NDVI != NODATAVAL {
-        ndvi = f32::max(f32::min(1.0 - NDVI, 1.0), 0.0);
-    }
+    let ndvi = if veg.use_ndvi && NDVI != NODATAVAL {
+        f32::max(f32::min(1.0 - NDVI, 1.0), 0.0)
+    } else {
+        1.0
+    };
 
-    let mut ndwi = 1.0;
-    if NDWI != NODATAVAL {
-        ndwi = f32::max(f32::min(1.0 - NDWI, 1.0), 0.0);
-    }
+    let ndwi = if NDWI != NODATAVAL {
+        f32::max(f32::min(1.0 - NDWI, 1.0), 0.0)
+    } else {
+        1.0
+    };
 
-    let mut t_effect = 1.0;
-    if config.use_t_effect {
-        t_effect = get_t_effect(temperature);
-    }
+    let t_effect = if config.use_t_effect {
+        get_t_effect(temperature)
+    } else {
+        1.0
+    };
 
-    if state.dffm == NODATAVAL {
-        return;
-    }
     let (ros, wind_effect) = config.ros(
         veg.v0, veg.d0, veg.d1, dffm, snow_cover, slope, aspect, wind_speed, wind_dir, t_effect,
     );
     let ppf = get_ppf(time, props.ppf_summer, props.ppf_winter);
 
-    if veg.hhv == NODATAVAL || state.dffm == NODATAVAL {
-        return;
+    let intensity = if ros != NODATAVAL && veg.hhv != NODATAVAL {
+        let LHVdff = get_lhv_dff(veg.hhv, dffm);
+        // calcolo LHV per la vegetazione viva
+        let LHVl1 = get_lhv_l1(veg.umid, state.MSI, veg.hhv);
+        // Calcolo Intensità
+        get_intensity(veg.d0, veg.d1, ros, state.NDVI, LHVdff, LHVl1)
+    } else {
+        NODATAVAL
+    };
+
+    OutputElement {
+        V: ros,
+        W: wind_effect,
+        PPF: ppf,
+        I: intensity,
+        temperature: temperature,
+        humidity: humidity,
+        wind_speed: wind_speed,
+        wind_dir: wind_dir,
+        rain: rain,
+        snow_cover: snow_cover,
+        dffm: dffm,
+        t_effect: t_effect,
+        NDWI: ndwi,
+        NDVI: ndvi,
     }
-
-    let LHVdff = get_lhv_dff(veg.hhv, dffm);
-    // calcolo LHV per la vegetazione viva
-    let LHVl1 = get_lhv_l1(veg.umid, state.MSI, veg.hhv);
-    // Calcolo Intensità
-    let intensity = get_intensity(veg.d0, veg.d1, ros, state.NDVI, LHVdff, LHVl1);
-
-    output.V = ros;
-    output.W = wind_effect;
-    output.PPF = ppf;
-    output.I = intensity;
-    output.temperature = temperature;
-    output.humidity = humidity;
-    output.wind_speed = wind_speed;
-    output.wind_dir = wind_dir;
-    output.rain = rain;
-    output.snow_cover = snow_cover;
-    output.dffm = dffm;
-    output.t_effect = t_effect;
-    output.NDWI = ndwi;
-    output.NDVI = ndvi;
 }

@@ -419,15 +419,13 @@ impl State {
 
     #[allow(non_snake_case)]
     pub fn get_output(self: &State, props: &Properties, input: &Input) -> Output {
-        let mut output_data: Array1<OutputElement> = Array1::default(self.len());
         let time = &self.time;
 
-        Zip::from(&mut output_data)
-            .and(&self.data)
+        let output_data = Zip::from(&self.data)
             .and(&props.data)
             .and(&input.data)
-            .par_for_each(|output, state, props, input| {
-                get_output_fn(state, props, input, output, &self.config, time)
+            .par_map_collect(|state, props, input| {
+                get_output_fn(state, props, input, &self.config, time)
             });
 
         Output::new(time.clone(), output_data)
