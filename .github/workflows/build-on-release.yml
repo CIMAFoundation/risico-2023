@@ -9,7 +9,9 @@ jobs:
     name: release x86_64-unknown-linux-musl
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@master
+      - name: checkout repo
+        uses: actions/checkout@master
+
       - name: Compile and release
         uses: rust-build/rust-build.action@v1.4.5
         env:
@@ -23,6 +25,9 @@ jobs:
     name: release x86_64-unknown-linux-gnu
     runs-on: ubuntu-latest
     steps:
+      - name: checkout repo
+        uses: actions/checkout@master
+
       - name: Build with docker
         run: |
           ./build-with-docker.sh
