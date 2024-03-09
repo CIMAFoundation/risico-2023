@@ -18,7 +18,7 @@ jobs:
           token: ${{ github.token }}
           tag: ${{ github.ref_name }}
           writeToFile: false
-          includeInvalidCommits: false
+          includeInvalidCommits: true
 
       - name: Create Release
         id: create_release
