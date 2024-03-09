@@ -5,13 +5,9 @@ on:
     types: [published]
 
 jobs:
-  build:
-    name: release ${{ matrix.target }}
+  build-with-musl:
+    name: release x86_64-unknown-linux-musl
     runs-on: ubuntu-latest
-    strategy:
-      fail-fast: false
-      matrix:
-        target: [x86_64-unknown-linux-musl]
     steps:
       - uses: actions/checkout@master
       - name: Compile and release
@@ -19,6 +15,21 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
-          RUSTTARGET: ${{ matrix.target }}
+          RUSTTARGET: x86_64-unknown-linux-musl
           EXTRA_FILES: "README.md"
           FEATURES: "static_deps"
+
+  build-with-linux-gnu:
+    name: release x86_64-unknown-linux-gnu
+    runs-on: ubuntu-latest
+    steps:
+      - name: Build with docker
+        run: |
+          ./build-with-docker.sh
+
+      - name: Add file to release
+        uses: meeDamian/github-release@2.0
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          files: risico-2023-linux-gnu:target/x86_64-unknown-linux-gnu/release/risico-2023
+          tag: ${{ github.ref_name }}
