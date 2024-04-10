@@ -1,4 +1,4 @@
-use ndarray::Array;
+use ndarray::{Array, Array1};
 use std::f32::consts::PI;
 
 ///functions to work on the state of the risico model
@@ -97,8 +97,15 @@ pub fn get_v_legacy(
     (ros, w_effect)
 }
 
-// NEW FORMULATION ROS
+// ---------------- v2023 FORMULATION ROS ---------------- //
 
+/// Get the wind effect on the fire propagation at the desired angle
+/// # Arguments
+/// * `wind_speed` - Wind speed [m/h]
+/// * `wind_dir` - Wind direction [radians]
+/// * `angle` - Angle [radians]
+/// # Returns
+/// * `w_eff_on_dir` - Wind effect in angle direction
 pub fn get_wind_effect_angle(wind_speed: f32, wind_dir: f32, angle: f32) -> f32 {
     // convert from m/h to km/h
     let ws_kph: f32 = wind_speed * 0.001;
@@ -114,6 +121,13 @@ pub fn get_wind_effect_angle(wind_speed: f32, wind_dir: f32, angle: f32) -> f32 
     w_eff_on_dir
 }
 
+/// Get the slope effect on the fire propagation at the desired angle
+/// # Arguments
+/// * `slope` - Slope [radians]
+/// * `aspect` - Aspect [radians]
+/// * `angle` - Angle [radians]
+/// # Returns
+/// * `h_eff_on_dir` - Slope effect in angle direction
 pub fn get_slope_effect_angle(slope: f32, aspect: f32, angle: f32) -> f32 {
     // slope in angle direction
     let s: f32 = f32::atan(f32::cos(aspect - angle) * f32::tan(slope));
@@ -122,6 +136,15 @@ pub fn get_slope_effect_angle(slope: f32, aspect: f32, angle: f32) -> f32 {
     h_eff_on_dir
 }
 
+/// Get the combined effect of wind and slope on the fire propagation at the desired angle
+/// # Arguments
+/// * `slope` - Slope [radians]
+/// * `aspect` - Aspect [radians]
+/// * `wind_speed` - Wind speed [m/h]
+/// * `wind_dir` - Wind direction [radians]
+/// * `angle` - Angle [radians]
+/// # Returns
+/// * `wh` - Combined effect of wind and slope in angle direction
 pub fn get_wind_slope_effect_angle(
     slope: f32,
     aspect: f32,
@@ -133,30 +156,28 @@ pub fn get_wind_slope_effect_angle(
     let s_eff: f32 = get_slope_effect_angle(slope, aspect, angle);
     let wh: f32 = s_eff * w_eff;
     wh
-    // DEPRECATED - normalization
-    // wh = wh - 1.0;
-    // if wh > 0. {
-    //     wh = wh / 2.13;
-    // } else if wh < 0. {
-    //     wh = wh / 1.12;
-    // }
-    // wh + 1.
 }
 
+/// Get the wind and slope effect on the fire propagation considering all angles
+/// # Arguments
+/// * `slope` - Slope [radians]
+/// * `aspect` - Aspect [radians]
+/// * `wind_speed` - Wind speed [m/h]
+/// * `wind_dir` - Wind direction [radians]
+/// # Returns
+/// * `ws_effect` - Wind and slope effect [adimensional]
 pub fn get_wind_slope_effect(slope: f32, aspect: f32, wind_speed: f32, wind_dir: f32) -> f32 {
-    let angles: ndarray::prelude::ArrayBase<
-        ndarray::OwnedRepr<f32>,
-        ndarray::prelude::Dim<[usize; 1]>,
-    > = Array::linspace(0., 2. * PI, N_ANGLES_ROS);
-    let ws_all = angles
+    let angles: Array1<f32> = Array::linspace(0., 2. * PI, N_ANGLES_ROS);
+    let ws_effect: f32 = angles
         .iter()
-        .map(|x| get_wind_slope_effect_angle(slope, aspect, wind_speed, wind_dir, *x));
-    let ws_effect: f32 = ws_all.reduce(f32::max).unwrap_or(NODATAVAL);
+        .map(|x| get_wind_slope_effect_angle(slope, aspect, wind_speed, wind_dir, *x))
+        .reduce(f32::max)
+        .unwrap_or(NODATAVAL);
     ws_effect
 }
 
 pub fn get_moisture_effect(dffm: f32) -> f32 {
-    // noramlize in [0, 1] and divide by moisture of extintion
+    // normalize in [0, 1] and divide by moisture of extintion
     let x: f32 = (dffm / 100.) / MX;
     // moisture effect
     let moist_eff: f32 = M5 * f32::powf(x, 5.)

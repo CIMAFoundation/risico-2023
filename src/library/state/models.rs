@@ -228,12 +228,19 @@ impl Output {
 
 #[derive(Debug)]
 pub struct InputElement {
+    /// temperature in celsius
     pub temperature: f32,
+    /// rain in mm
     pub rain: f32,
+    /// wind speed in m/h
     pub wind_speed: f32,
+    /// wind direction in radians
     pub wind_dir: f32,
+    /// relative humidity in %
     pub humidity: f32,
+    /// snow cover
     pub snow_cover: f32,
+
     // satellite variables
     pub ndvi: f32,
     pub ndwi: f32,
