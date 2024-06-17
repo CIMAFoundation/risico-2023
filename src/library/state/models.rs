@@ -134,20 +134,34 @@ impl Default for Vegetation {
 
 #[allow(non_snake_case)]
 pub struct OutputElement {
+    /// Fine fuel moisture content
     pub dffm: f32,
+    /// Wind effect on fire spread
     pub W: f32,
+    /// Rate of spread
     pub V: f32,
+    /// Intensity
     pub I: f32,
+    /// NDVI effect
     pub NDVI: f32,
+    /// NDWI effect
     pub NDWI: f32,
+    /// Probability of ignition
     pub PPF: f32,
+    /// Temperature effect on fire spread
     pub t_effect: f32,
     // pub SWI: f32,
+    /// Input temperature in celsius
     pub temperature: f32,
+    /// Input rain in mm
     pub rain: f32,
+    /// Input wind speed in m/h
     pub wind_speed: f32,
+    /// Input wind direction in radians
     pub wind_dir: f32,
+    /// Input relative humidity in %
     pub humidity: f32,
+    /// Input snow cover
     pub snow_cover: f32,
 }
 
