@@ -163,6 +163,8 @@ pub struct OutputElement {
     pub humidity: f32,
     /// Input snow cover
     pub snow_cover: f32,
+    /// Meteorological index
+    pub meteo_index: f32,
 }
 
 impl Default for OutputElement {
@@ -183,6 +185,7 @@ impl Default for OutputElement {
             wind_dir: NODATAVAL,
             humidity: NODATAVAL,
             snow_cover: NODATAVAL,
+            meteo_index: NODATAVAL,
         }
     }
 }
@@ -221,6 +224,7 @@ impl Output {
             "snowCover" => Some(self.get_array(|o| o.snow_cover)),
             "NDVI" => Some(self.get_array(|o| o.NDVI)),
             "NDWI" => Some(self.get_array(|o| o.NDVI)),
+            "meteoIndex2" => Some(self.get_array(|o| o.meteo_index)),
 
             // //Derived variables
             "VPPF" => Some(self.get_array(|o| get_derived(&o.V, &o.PPF, None))),
@@ -235,6 +239,7 @@ impl Output {
             "IPPFNDWI" => Some(self.get_array(|o| get_derived(&o.V, &o.NDWI, Some(&o.PPF)))),
             "VPPFNDVI" => Some(self.get_array(|o| get_derived(&o.I, &o.NDVI, Some(&o.PPF)))),
             "IPPFNDVI" => Some(self.get_array(|o| get_derived(&o.V, &o.NDVI, Some(&o.PPF)))),
+
             _ => None,
         }
     }

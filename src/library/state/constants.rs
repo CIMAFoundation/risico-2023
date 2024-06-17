@@ -10,9 +10,9 @@ pub const MAXRAIN: f32 = 0.1;
 
 /// old constants for legacy ffmc functions
 pub const A1_LEGACY: f32 = 1.0; //OLD
-pub const R1_LEGACY:f32 = 12.119; //OLD
-pub const R2_LEGACY:f32 = 20.77;  //OLD
-pub const R3_LEGACY:f32 = 3.2;    //OLD
+pub const R1_LEGACY: f32 = 12.119; //OLD
+pub const R2_LEGACY: f32 = 20.77; //OLD
+pub const R3_LEGACY: f32 = 3.2; //OLD
 
 // pub const R1: f32 = 68.8371;
 // pub const R2: f32 = 53.4436;
@@ -94,3 +94,12 @@ pub const M3: f32 = -17.331;
 pub const M4: f32 = 22.963;
 pub const M5: f32 = -11.507;
 pub const MX: f32 = 0.3;
+
+pub const FWI_TABLE: [f32; 30] = [
+    //5   12    20    30    40    40+
+    4.0, 3.0, 2.0, 1.0, 0.0, 0.0, // 1 < 1.5
+    4.0, 3.0, 2.0, 1.0, 1.0, 0.0, // 1.5 < 1.8
+    4.0, 3.0, 2.0, 2.0, 1.0, 0.0, // 1.8 < 2.2
+    4.0, 3.0, 3.0, 2.0, 1.0, 0.0, // 2.2 < 2.5
+    4.0, 4.0, 3.0, 2.0, 1.0, 0.0, // 2.5 < 3
+];

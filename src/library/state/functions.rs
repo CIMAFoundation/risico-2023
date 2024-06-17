@@ -476,6 +476,42 @@ pub fn update_moisture_fn(
     state.dffm = f32::max(0.0, f32::min(sat, state.dffm));
 }
 
+/// Get the Meteorological Index by using dffm and w_effect
+///  
+pub fn get_meteo_index(dffm: f32, w_effect: f32) -> f32 {
+    if dffm <= NODATAVAL || w_effect < 1.0 {
+        return NODATAVAL;
+    };
+
+    let col = if dffm <= 5.0 && dffm >= 0.0 {
+        0
+    } else if dffm <= 12.0 && dffm > 5.0 {
+        1
+    } else if dffm <= 20.0 && dffm > 12.0 {
+        2
+    } else if dffm <= 30.0 && dffm > 20.0 {
+        3
+    } else if dffm <= 40.0 && dffm > 30.0 {
+        4
+    } else {
+        5
+    };
+
+    let row = if w_effect >= 1.0 && w_effect <= 1.5 {
+        0
+    } else if w_effect > 1.5 && w_effect <= 1.8 {
+        1
+    } else if w_effect > 1.8 && w_effect <= 2.2 {
+        2
+    } else if w_effect > 2.2 && w_effect <= 2.5 {
+        3
+    } else {
+        4
+    };
+
+    FWI_TABLE[col + row * 6]
+}
+
 #[allow(non_snake_case)]
 pub fn get_output_fn(
     state: &StateElement,
@@ -522,6 +558,12 @@ pub fn get_output_fn(
     let (ros, wind_effect) = config.ros(
         veg.v0, veg.d0, veg.d1, dffm, snow_cover, slope, aspect, wind_speed, wind_dir, t_effect,
     );
+
+    let mut meteo_index = NODATAVAL;
+    if config.model_version == "legacy" {
+        meteo_index = get_meteo_index(dffm, wind_effect);
+    }
+
     let ppf = get_ppf(time, props.ppf_summer, props.ppf_winter);
 
     let intensity = if ros != NODATAVAL && veg.hhv != NODATAVAL {
@@ -549,5 +591,6 @@ pub fn get_output_fn(
         t_effect: t_effect,
         NDWI: ndwi,
         NDVI: ndvi,
+        meteo_index: meteo_index,
     }
 }

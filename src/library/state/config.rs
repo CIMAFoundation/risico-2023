@@ -9,7 +9,7 @@ use super::functions::{
 
 #[derive(Debug)]
 pub struct ModelConfig {
-    model_version: String,
+    pub model_version: String,
 
     pub use_t_effect: bool,
     ffmc_no_rain_fn: fn(f32, f32, f32, f32, f32, f32, f32) -> f32,
