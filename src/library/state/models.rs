@@ -223,7 +223,7 @@ impl Output {
             "humidity" => Some(self.get_array(|o| o.humidity)),
             "snowCover" => Some(self.get_array(|o| o.snow_cover)),
             "NDVI" => Some(self.get_array(|o| o.NDVI)),
-            "NDWI" => Some(self.get_array(|o| o.NDVI)),
+            "NDWI" => Some(self.get_array(|o| o.NDWI)),
             "meteoIndex2" => Some(self.get_array(|o| o.meteo_index)),
 
             // //Derived variables
@@ -235,10 +235,10 @@ impl Output {
             "INDVI" => Some(self.get_array(|o| get_derived(&o.I, &o.NDVI, None))),
             "VNDVI" => Some(self.get_array(|o| get_derived(&o.V, &o.NDVI, None))),
 
-            "VPPFNDWI" => Some(self.get_array(|o| get_derived(&o.I, &o.NDWI, Some(&o.PPF)))),
-            "IPPFNDWI" => Some(self.get_array(|o| get_derived(&o.V, &o.NDWI, Some(&o.PPF)))),
-            "VPPFNDVI" => Some(self.get_array(|o| get_derived(&o.I, &o.NDVI, Some(&o.PPF)))),
-            "IPPFNDVI" => Some(self.get_array(|o| get_derived(&o.V, &o.NDVI, Some(&o.PPF)))),
+            "VPPFNDWI" => Some(self.get_array(|o| get_derived(&o.V, &o.NDWI, Some(&o.PPF)))),
+            "IPPFNDWI" => Some(self.get_array(|o| get_derived(&o.I, &o.NDWI, Some(&o.PPF)))),
+            "VPPFNDVI" => Some(self.get_array(|o| get_derived(&o.V, &o.NDVI, Some(&o.PPF)))),
+            "IPPFNDVI" => Some(self.get_array(|o| get_derived(&o.I, &o.NDVI, Some(&o.PPF)))),
 
             _ => None,
         }
