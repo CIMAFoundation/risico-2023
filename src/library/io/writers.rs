@@ -12,7 +12,7 @@ use std::{
 };
 
 use crate::library::config::models::RISICOError;
-use crate::library::state::constants::NODATAVAL;
+use crate::library::modules::risico::constants::NODATAVAL;
 
 use super::models::{grid::RegularGrid, palette::Palette};
 

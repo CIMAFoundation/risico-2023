@@ -10,7 +10,7 @@ use rayon::prelude::*;
 use crate::library::{
     config::models::{PaletteMap, RISICOError},
     io::writers::{create_nc_file, write_to_pngwjson, write_to_zbin_file},
-    state::{constants::NODATAVAL, models::Output},
+    modules::risico::{constants::NODATAVAL, models::Output},
 };
 
 #[cfg(feature = "gdal")]

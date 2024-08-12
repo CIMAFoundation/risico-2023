@@ -12,7 +12,7 @@ use log::{info, warn};
 use ndarray::Array1;
 use rayon::prelude::*;
 
-use crate::library::{io::models::grid::ClusterMode, state::models::State};
+use crate::library::{io::models::grid::ClusterMode, modules::risico::models::State};
 use crate::library::{
     io::{
         models::{
@@ -21,7 +21,7 @@ use crate::library::{
         },
         readers::{read_grid_from_file, read_values_from_file},
     },
-    state::{
+    modules::risico::{
         config::ModelConfig,
         constants::NODATAVAL,
         models::{Output, Properties},

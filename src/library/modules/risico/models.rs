@@ -5,7 +5,7 @@ use std::{collections::HashMap, sync::Arc};
 
 use crate::library::{
     config::models::WarmState,
-    state::constants::{NODATAVAL, SNOW_SECONDS_VALIDITY},
+    modules::risico::constants::{NODATAVAL, SNOW_SECONDS_VALIDITY},
 };
 
 use super::{

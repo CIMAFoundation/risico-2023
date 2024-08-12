@@ -7,7 +7,7 @@ use ndarray::{azip, Array1, Zip};
 
 use super::{
     config::models::InputDataHandler,
-    state::{
+    modules::risico::{
         constants::NODATAVAL,
         models::{Input, InputElement},
     },
