@@ -5,13 +5,11 @@ use itertools::izip;
 
 use ndarray::{azip, Array1, Zip};
 
-use super::{
-    config::models::InputDataHandler,
-    modules::risico::{
-        constants::NODATAVAL,
-        models::{Input, InputElement},
-    },
+use super::modules::risico::{
+    constants::NODATAVAL,
+    models::{Input, InputElement},
 };
+use crate::library::io::readers::binary::BinaryInputDataHandler;
 
 fn replace<'a>(
     dst: &'a mut Array1<InputElement>,
@@ -37,7 +35,7 @@ fn maybe_replace<'a>(
     }
 }
 
-pub fn get_input(handler: &InputDataHandler, time: &DateTime<Utc>, len: usize) -> Input {
+pub fn get_input(handler: &BinaryInputDataHandler, time: &DateTime<Utc>, len: usize) -> Input {
     let mut data: Array1<InputElement> = Array1::default(len);
 
     let snow = handler.get_values("SNOW", &time);

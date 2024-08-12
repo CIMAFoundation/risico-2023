@@ -7,11 +7,8 @@ use chrono::prelude::*;
 use log::{info, trace, warn};
 use pretty_env_logger;
 
-use crate::library::{
-    config::models::{Config, InputDataHandler},
-    helpers::get_input,
-    version::GIT_VERSION,
-};
+use crate::library::io::readers::binary::BinaryInputDataHandler;
+use crate::library::{config::models::Config, helpers::get_input, version::GIT_VERSION};
 
 pub const VERSION: &str = env!("CARGO_PKG_VERSION");
 
@@ -57,7 +54,7 @@ fn main() {
 
     let c = Utc::now();
     info!("Loading input data from {}", input_path);
-    let handler = InputDataHandler::new(input_path, lats, lons);
+    let handler = BinaryInputDataHandler::new(input_path, lats, lons);
     trace!(
         "Loading input configuration took {} seconds",
         Utc::now() - c

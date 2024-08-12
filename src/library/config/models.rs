@@ -3,23 +3,18 @@ use std::{
     fmt::Display,
     fs::File,
     io::{self, BufRead, BufWriter, Write},
-    path::Path,
 };
 
 use chrono::*;
 use chrono::{DateTime, Utc};
 use log::{info, warn};
-use ndarray::Array1;
 use rayon::prelude::*;
 
 use crate::library::{io::models::grid::ClusterMode, modules::risico::models::State};
 use crate::library::{
-    io::{
-        models::{
-            output::{OutputType, OutputVariable},
-            palette::Palette,
-        },
-        readers::{read_grid_from_file, read_values_from_file},
+    io::models::{
+        output::{OutputType, OutputVariable},
+        palette::Palette,
     },
     modules::risico::{
         config::ModelConfig,
@@ -436,203 +431,6 @@ impl OutputWriter {
             }
         });
         Ok(())
-    }
-}
-
-#[derive(Debug, Clone)]
-pub struct InputFileParseError {
-    message: String,
-}
-
-impl From<std::io::Error> for InputFileParseError {
-    fn from(err: std::io::Error) -> Self {
-        Self {
-            message: err.to_string(),
-        }
-    }
-}
-
-impl From<&str> for InputFileParseError {
-    fn from(err: &str) -> Self {
-        Self {
-            message: err.to_string(),
-        }
-    }
-}
-
-impl From<String> for InputFileParseError {
-    fn from(err: String) -> Self {
-        Self { message: err }
-    }
-}
-
-/// Parse an input filename and return a tuple with grid_name, variable and datetime
-fn parse_line(line: &str) -> Result<(String, String, DateTime<Utc>), InputFileParseError> {
-    let filename = Path::new(&line)
-        .file_name()
-        .ok_or(format!("Invalid line in input file list: {line}"))?
-        .to_str()
-        .expect("Should be a valid string");
-
-    let name_and_ext = filename.split('.').collect::<Vec<&str>>();
-
-    if name_and_ext.len() == 0 || name_and_ext.len() > 2 {
-        return Err(format!("Error parsing filename {line}").into());
-    }
-
-    let name = name_and_ext[0];
-    let components: Vec<&str> = name.split('_').collect();
-
-    if components.len() != 3 {
-        return Err(format!("Error parsing filename {name}").into());
-    }
-
-    let date = components[0];
-    let grid_name = components[1].to_string();
-    let variable = components[2].to_string();
-
-    // parse the date
-
-    let date = NaiveDateTime::parse_from_str(date, "%Y%m%d%H%M")
-        .map_err(|error| format!("Error parsing date: {error}"))?;
-
-    let date = DateTime::from_naive_utc_and_offset(date, Utc);
-
-    Ok((grid_name, variable, date))
-}
-
-#[derive(Debug)]
-pub struct InputFile {
-    pub grid_name: String,
-    pub path: String,
-}
-
-#[derive(Debug)]
-pub struct InputDataHandler {
-    pub grid_registry: HashMap<String, Array1<Option<usize>>>,
-    pub data_map: HashMap<DateTime<Utc>, HashMap<String, InputFile>>,
-}
-
-impl InputDataHandler {
-    pub fn new(file_path: &str, lats: &[f32], lons: &[f32]) -> InputDataHandler {
-        let mut grid_registry = HashMap::new();
-        let mut data_map = HashMap::new();
-
-        let file = File::open(file_path).expect(&format!("Can't open input file {}", file_path));
-
-        // file is a text file in which each line is a file with the following structure:
-        // directory/<YYYYmmDDHHMM>_<grid_name>_<variable>.<extension>
-        // read the file and parse the lines
-        let reader = io::BufReader::new(file);
-
-        for line in reader.lines() {
-            let line = match line {
-                Ok(line) => line,
-                Err(e) => {
-                    warn!("Error reading line: {}", e);
-                    continue;
-                }
-            };
-
-            if !line.ends_with(".zbin") {
-                continue;
-            }
-
-            let (grid_name, variable, date) = match parse_line(&line) {
-                Ok(parsed) => parsed,
-                Err(err) => {
-                    warn!("Error parsing filename {line}: {err:?}");
-                    continue;
-                }
-            };
-
-            let date = date.with_timezone(&Utc);
-            let input_file = InputFile {
-                grid_name,
-                path: line,
-            };
-
-            if !grid_registry.contains_key(&input_file.grid_name) {
-                let mut grid = match read_grid_from_file(input_file.path.as_str()) {
-                    Ok(grid) => grid,
-                    Err(e) => {
-                        warn!("Error reading grid: {}", e);
-                        continue;
-                    }
-                };
-
-                let indexes = grid.indexes(lats, lons);
-                grid_registry.insert(input_file.grid_name.clone(), indexes);
-            }
-
-            // add the data to the data map
-            if !data_map.contains_key(&date) {
-                data_map.insert(date, HashMap::new());
-            }
-
-            if let Some(data_map_for_date) = data_map.get_mut(&date) {
-                data_map_for_date.insert(variable.to_string(), input_file);
-            }
-        }
-
-        InputDataHandler {
-            grid_registry,
-            data_map,
-        }
-    }
-
-    /// Returns the data for the given date and variable on the selected coordinates
-    pub fn get_values(&self, var: &str, date: &DateTime<Utc>) -> Option<Array1<f32>> {
-        let data_map = match self.data_map.get(date) {
-            Some(data_map) => data_map,
-            None => return None,
-        };
-
-        let file = match data_map.get(var) {
-            Some(file) => file,
-            None => return None,
-        };
-
-        let data = read_values_from_file(file.path.as_str())
-            .expect(&format!("Error reading file {}", file.path));
-
-        let indexes = self
-            .grid_registry
-            .get(&file.grid_name)
-            .expect(&format!("there should be a grid named {}", file.grid_name));
-
-        let data: Vec<f32> = indexes
-            .par_iter()
-            .map(|index| index.and_then(|idx| Some(data[idx])).unwrap_or(NODATAVAL))
-            .collect();
-        let data = Array1::from(data);
-        Some(data)
-    }
-
-    /// Returns the timeline
-    pub fn get_timeline(&self) -> Vec<DateTime<Utc>> {
-        let mut timeline: Vec<DateTime<Utc>> = Vec::new();
-        for date in self.data_map.keys() {
-            timeline.push(*date);
-        }
-        // sort the timeline
-        timeline.sort();
-        timeline
-    }
-
-    // returns the variables at given time
-    fn get_variables(&self, time: &DateTime<Utc>) -> Vec<String> {
-        let mut variables: Vec<String> = Vec::new();
-
-        let data_map = self
-            .data_map
-            .get(time)
-            .expect("there should be data for this time");
-
-        for var in data_map.keys() {
-            variables.push(var.to_string());
-        }
-        variables
     }
 }
 
