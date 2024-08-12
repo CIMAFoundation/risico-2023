@@ -14,6 +14,8 @@ use crate::library::{io::models::grid::Grid, modules::risico::constants::NODATAV
 use crate::library::io::models::grid::{IrregularGrid, RegularGrid};
 use rayon::prelude::*;
 
+use super::prelude::InputHandler;
+
 fn read_header_from_file<T>(decoder: &mut Decoder<T>) -> Result<(u32, u32, u32), io::Error>
 where
     T: Read,
@@ -268,9 +270,11 @@ impl BinaryInputDataHandler {
             data_map,
         }
     }
+}
 
+impl InputHandler for BinaryInputDataHandler {
     /// Returns the data for the given date and variable on the selected coordinates
-    pub fn get_values(&self, var: &str, date: &DateTime<Utc>) -> Option<Array1<f32>> {
+    fn get_values(&self, var: &str, date: &DateTime<Utc>) -> Option<Array1<f32>> {
         let data_map = match self.data_map.get(date) {
             Some(data_map) => data_map,
             None => return None,
@@ -298,7 +302,7 @@ impl BinaryInputDataHandler {
     }
 
     /// Returns the timeline
-    pub fn get_timeline(&self) -> Vec<DateTime<Utc>> {
+    fn get_timeline(&self) -> Vec<DateTime<Utc>> {
         let mut timeline: Vec<DateTime<Utc>> = Vec::new();
         for date in self.data_map.keys() {
             timeline.push(*date);

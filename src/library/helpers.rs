@@ -10,6 +10,7 @@ use super::modules::risico::{
     models::{Input, InputElement},
 };
 use crate::library::io::readers::binary::BinaryInputDataHandler;
+use crate::library::io::readers::prelude::InputHandler;
 
 fn replace<'a>(
     dst: &'a mut Array1<InputElement>,

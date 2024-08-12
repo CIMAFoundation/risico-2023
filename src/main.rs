@@ -8,6 +8,7 @@ use log::{info, trace, warn};
 use pretty_env_logger;
 
 use crate::library::io::readers::binary::BinaryInputDataHandler;
+use crate::library::io::readers::prelude::InputHandler;
 use crate::library::{config::models::Config, helpers::get_input, version::GIT_VERSION};
 
 pub const VERSION: &str = env!("CARGO_PKG_VERSION");
