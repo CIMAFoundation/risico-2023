@@ -71,9 +71,9 @@ impl From<String> for RISICOError {
     }
 }
 
-impl Into<String> for RISICOError {
-    fn into(self) -> String {
-        self.msg
+impl From<RISICOError> for String {
+    fn from(value: RISICOError) -> String {
+        value.msg
     }
 }
 
