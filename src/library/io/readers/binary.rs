@@ -17,7 +17,6 @@ use crate::library::io::models::grid::{IrregularGrid, RegularGrid};
 use rayon::prelude::*;
 
 use super::prelude::InputHandler;
-use std::str::FromStr;
 
 fn read_header_from_file<T>(decoder: &mut Decoder<T>) -> Result<(u32, u32, u32), io::Error>
 where
@@ -265,7 +264,7 @@ impl BinaryInputDataHandler {
 
             if let Some(data_map_for_date) = data_map.get_mut(&date) {
                 data_map_for_date
-                    .insert(InputVariableName::from_str(&variable).unwrap(), input_file);
+                    .insert(variable.parse::<InputVariableName>().unwrap(), input_file);
             }
         }
 
@@ -317,8 +316,8 @@ impl InputHandler for BinaryInputDataHandler {
     }
 
     // returns the variables at given time
-    fn get_variables(&self, time: &DateTime<Utc>) -> Vec<String> {
-        let mut variables: Vec<String> = Vec::new();
+    fn get_variables(&self, time: &DateTime<Utc>) -> Vec<InputVariableName> {
+        let mut variables: Vec<InputVariableName> = Vec::new();
 
         let data_map = self
             .data_map
@@ -326,7 +325,7 @@ impl InputHandler for BinaryInputDataHandler {
             .expect("there should be data for this time");
 
         for var in data_map.keys() {
-            variables.push(var.to_string());
+            variables.push(*var);
         }
         variables
     }

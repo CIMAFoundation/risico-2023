@@ -12,5 +12,5 @@ pub trait InputHandler {
     fn get_timeline(&self) -> Vec<DateTime<Utc>>;
 
     // returns the variables available at a given time
-    fn get_variables(&self, time: &DateTime<Utc>) -> Vec<String>;
+    fn get_variables(&self, time: &DateTime<Utc>) -> Vec<InputVariableName>;
 }

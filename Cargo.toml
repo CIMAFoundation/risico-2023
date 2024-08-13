@@ -12,6 +12,8 @@ static_deps = ["netcdf-sys/static", "hdf5-sys/static"]
 
 [dependencies]
 log = "0.4.17"
+strum = "0.26.3"
+strum_macros = "0.26.4"
 pretty_env_logger = "0.5.0"
 itertools = "0.11.0"
 chrono = "0.4"

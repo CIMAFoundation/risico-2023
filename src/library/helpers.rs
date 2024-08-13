@@ -1,9 +1,11 @@
-use std::{f32::consts::PI, fmt};
+use std::f32::consts::PI;
 
 use chrono::{DateTime, Utc};
 use itertools::izip;
 
 use ndarray::{azip, Array1, Zip};
+
+use strum_macros::EnumString;
 
 use super::modules::risico::{
     constants::NODATAVAL,
@@ -171,9 +173,7 @@ pub fn get_input(handler: &dyn InputHandler, time: &DateTime<Utc>, len: usize) -
     }
 }
 
-use core::str::FromStr;
-
-#[derive(Hash, PartialEq, Eq, Debug, Clone)]
+#[derive(Debug, PartialEq, Eq, EnumString, Hash, Copy, Clone)]
 pub enum InputVariableName {
     /// Air Humidity
     H,
@@ -209,53 +209,53 @@ pub enum InputVariableName {
     SWI,
 }
 
-// Implement FromStr for InputVariable
-impl FromStr for InputVariableName {
-    type Err = ();
+// // Implement FromStr for InputVariable
+// impl FromStr for InputVariableName {
+//     type Err = ();
 
-    fn from_str(input: &str) -> Result<InputVariableName, Self::Err> {
-        match input {
-            "H" => Ok(InputVariableName::H),
-            "K" => Ok(InputVariableName::K),
-            "T" => Ok(InputVariableName::T),
-            "SNOW" => Ok(InputVariableName::SNOW),
-            "F" => Ok(InputVariableName::F),
-            "R" => Ok(InputVariableName::R),
-            "O" => Ok(InputVariableName::O),
-            "P" => Ok(InputVariableName::P),
-            "W" => Ok(InputVariableName::W),
-            "NDWI" => Ok(InputVariableName::NDWI),
-            "NDVI" => Ok(InputVariableName::NDVI),
-            "M" => Ok(InputVariableName::M),
-            "U" => Ok(InputVariableName::U),
-            "V" => Ok(InputVariableName::V),
-            "SWI" => Ok(InputVariableName::SWI),
-            _ => Err(()),
-        }
-    }
-}
+//     fn from_str(input: &str) -> Result<InputVariableName, Self::Err> {
+//         match input {
+//             "H" => Ok(InputVariableName::H),
+//             "K" => Ok(InputVariableName::K),
+//             "T" => Ok(InputVariableName::T),
+//             "SNOW" => Ok(InputVariableName::SNOW),
+//             "F" => Ok(InputVariableName::F),
+//             "R" => Ok(InputVariableName::R),
+//             "O" => Ok(InputVariableName::O),
+//             "P" => Ok(InputVariableName::P),
+//             "W" => Ok(InputVariableName::W),
+//             "NDWI" => Ok(InputVariableName::NDWI),
+//             "NDVI" => Ok(InputVariableName::NDVI),
+//             "M" => Ok(InputVariableName::M),
+//             "U" => Ok(InputVariableName::U),
+//             "V" => Ok(InputVariableName::V),
+//             "SWI" => Ok(InputVariableName::SWI),
+//             _ => Err(()),
+//         }
+//     }
+// }
 
-// Implement Display for InputVariableName
-impl fmt::Display for InputVariableName {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        let value = match self {
-            InputVariableName::D => "D",
-            InputVariableName::H => "H",
-            InputVariableName::K => "K",
-            InputVariableName::T => "T",
-            InputVariableName::SNOW => "SNOW",
-            InputVariableName::F => "F",
-            InputVariableName::R => "R",
-            InputVariableName::O => "O",
-            InputVariableName::P => "P",
-            InputVariableName::W => "W",
-            InputVariableName::NDWI => "NDWI",
-            InputVariableName::NDVI => "NDVI",
-            InputVariableName::M => "M",
-            InputVariableName::U => "U",
-            InputVariableName::V => "V",
-            InputVariableName::SWI => "SWI",
-        };
-        write!(f, "{}", value)
-    }
-}
+// // Implement Display for InputVariableName
+// impl fmt::Display for InputVariableName {
+//     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+//         let value = match self {
+//             InputVariableName::D => "D",
+//             InputVariableName::H => "H",
+//             InputVariableName::K => "K",
+//             InputVariableName::T => "T",
+//             InputVariableName::SNOW => "SNOW",
+//             InputVariableName::F => "F",
+//             InputVariableName::R => "R",
+//             InputVariableName::O => "O",
+//             InputVariableName::P => "P",
+//             InputVariableName::W => "W",
+//             InputVariableName::NDWI => "NDWI",
+//             InputVariableName::NDVI => "NDVI",
+//             InputVariableName::M => "M",
+//             InputVariableName::U => "U",
+//             InputVariableName::V => "V",
+//             InputVariableName::SWI => "SWI",
+//         };
+//         write!(f, "{}", value)
+//     }
+// }
