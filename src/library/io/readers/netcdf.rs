@@ -5,12 +5,17 @@ use itertools::Itertools;
 use log::warn;
 use ndarray::Array1;
 use netcdf::extent::Extents;
+use rayon::prelude::*;
 use std::fs;
 
-use crate::library::io::models::grid::{Grid, RegularGrid};
+use crate::library::{
+    io::models::grid::{Grid, RegularGrid},
+    modules::risico::constants::NODATAVAL,
+};
 
 use super::prelude::{InputHandler, InputVariableName};
 
+#[derive(Clone)]
 pub struct NetCdfInputConfiguration {
     pub variable_map: HashMap<InputVariableName, String>,
     pub lat_name: String,
@@ -146,8 +151,30 @@ fn register_nc_file(
     Ok(record)
 }
 
+/// read a slice of a variable from a netcdf file
+fn read_variable_from_file(
+    file: &str,
+    variable: &str,
+    time_index: usize,
+) -> Result<Array1<f32>, Box<dyn Error>> {
+    let nc_file = netcdf::open(file)?;
+
+    let var = nc_file
+        .variable(variable)
+        .expect(&format!("Could not find variable '{}'", variable));
+
+    let extent: Extents = (&[time_index], &[1]).try_into().unwrap();
+    let values = var
+        .values::<f32, _>(extent)?
+        .into_iter()
+        .collect::<Array1<f32>>();
+
+    Ok(values)
+}
+
 struct NetCdfInputHandler {
     records: Vec<NetCdfFileInputRecord>,
+    config: NetCdfInputConfiguration,
 }
 
 impl NetCdfInputHandler {
@@ -178,7 +205,10 @@ impl NetCdfInputHandler {
             }
         }
 
-        Ok(NetCdfInputHandler { records })
+        Ok(NetCdfInputHandler {
+            records,
+            config: config.clone(),
+        })
     }
 }
 
@@ -187,8 +217,30 @@ impl InputHandler for NetCdfInputHandler {
         for record in &self.records {
             let time_index = record.timeline.iter().position(|t| t == date);
 
-            if time_index.is_some() && record.variables.contains(&var) {
-                unimplemented!("need to implement projection to the grid");
+            if time_index.is_none() || !record.variables.contains(&var) {
+                continue;
+            }
+            let time_index = time_index.unwrap();
+            let variable = self.config.variable_map.get(&var).unwrap();
+
+            let values = read_variable_from_file(&record.file, variable, time_index);
+
+            match values {
+                Err(err) => {
+                    let file = &record.file;
+                    warn!("Error reading variable {variable} from file {file}: {err}");
+                    continue;
+                }
+                Ok(values) => {
+                    let data: Vec<f32> = record
+                        .indexes
+                        .par_iter()
+                        .map(|index| index.and_then(|idx| Some(values[idx])).unwrap_or(NODATAVAL))
+                        .collect();
+
+                    let data = Array1::from(data);
+                    return Some(data);
+                }
             }
         }
         None
@@ -198,8 +250,8 @@ impl InputHandler for NetCdfInputHandler {
         self.records
             .iter()
             .flat_map(|record| record.timeline.iter())
-            .cloned()
             .unique()
+            .cloned()
             .sorted()
             .collect()
     }
