@@ -10,7 +10,6 @@ use chrono::{DateTime, Utc};
 use log::{info, warn};
 use rayon::prelude::*;
 
-use crate::library::{io::models::grid::ClusterMode, modules::risico::models::State};
 use crate::library::{
     io::models::{
         output::{OutputType, OutputVariable},
@@ -21,6 +20,10 @@ use crate::library::{
         constants::NODATAVAL,
         models::{Output, Properties},
     },
+};
+use crate::library::{
+    io::{models::grid::ClusterMode, readers::netcdf::NetCdfInputConfiguration},
+    modules::risico::models::State,
 };
 
 use super::data::{read_cells_properties, read_vegetation};
@@ -328,6 +331,7 @@ impl Config {
             use_ndvi,
             output_time_resolution,
             model_version,
+            netcdf_input_configuration: None,
         };
 
         Ok(config)
@@ -407,6 +411,8 @@ pub struct Config {
     use_ndvi: bool,
     output_time_resolution: u32,
     model_version: String,
+
+    netcdf_input_configuration: Option<NetCdfInputConfiguration>,
 }
 
 pub struct OutputWriter {

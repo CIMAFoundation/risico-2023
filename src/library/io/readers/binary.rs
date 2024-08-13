@@ -9,12 +9,15 @@ use std::{
     path::Path,
 };
 
-use crate::library::{io::models::grid::Grid, modules::risico::constants::NODATAVAL};
+use crate::library::{
+    helpers::InputVariableName, io::models::grid::Grid, modules::risico::constants::NODATAVAL,
+};
 
 use crate::library::io::models::grid::{IrregularGrid, RegularGrid};
 use rayon::prelude::*;
 
 use super::prelude::InputHandler;
+use std::str::FromStr;
 
 fn read_header_from_file<T>(decoder: &mut Decoder<T>) -> Result<(u32, u32, u32), io::Error>
 where
@@ -200,7 +203,7 @@ pub struct BinaryInputFile {
 #[derive(Debug)]
 pub struct BinaryInputDataHandler {
     pub grid_registry: HashMap<String, Array1<Option<usize>>>,
-    pub data_map: HashMap<DateTime<Utc>, HashMap<String, BinaryInputFile>>,
+    pub data_map: HashMap<DateTime<Utc>, HashMap<InputVariableName, BinaryInputFile>>,
 }
 
 impl BinaryInputDataHandler {
@@ -261,7 +264,8 @@ impl BinaryInputDataHandler {
             }
 
             if let Some(data_map_for_date) = data_map.get_mut(&date) {
-                data_map_for_date.insert(variable.to_string(), input_file);
+                data_map_for_date
+                    .insert(InputVariableName::from_str(&variable).unwrap(), input_file);
             }
         }
 
@@ -274,7 +278,7 @@ impl BinaryInputDataHandler {
 
 impl InputHandler for BinaryInputDataHandler {
     /// Returns the data for the given date and variable on the selected coordinates
-    fn get_values(&self, var: &str, date: &DateTime<Utc>) -> Option<Array1<f32>> {
+    fn get_values(&self, var: &InputVariableName, date: &DateTime<Utc>) -> Option<Array1<f32>> {
         let data_map = match self.data_map.get(date) {
             Some(data_map) => data_map,
             None => return None,

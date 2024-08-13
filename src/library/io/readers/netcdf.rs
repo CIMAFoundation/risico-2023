@@ -1,4 +1,4 @@
-use std::error::Error;
+use std::{collections::HashMap, error::Error, str::FromStr};
 
 use chrono::{DateTime, Utc};
 use itertools::Itertools;
@@ -7,9 +7,69 @@ use ndarray::Array1;
 use netcdf::extent::Extents;
 use std::fs;
 
-use crate::library::io::models::grid::{Grid, RegularGrid};
+use crate::library::{
+    helpers::InputVariableName,
+    io::models::grid::{Grid, RegularGrid},
+};
 
 use super::prelude::InputHandler;
+
+pub struct NetCdfInputConfiguration {
+    variable_map: HashMap<InputVariableName, String>,
+    lat_name: String,
+    lon_name: String,
+    time_name: String,
+}
+
+impl<T> From<T> for NetCdfInputConfiguration
+where
+    T: Into<String>,
+{
+    /// extracts the configruation from a string of key:value pairs
+    /// example:
+    ///
+    fn from(s: T) -> Self {
+        let string: String = s.into();
+        let parts: Vec<&str> = string.split(',').collect();
+        let variable_map: HashMap<String, String> = parts
+            .iter()
+            .map(|part| {
+                let kv: Vec<&str> = part.split(':').collect();
+                let key = kv[0].trim().to_owned();
+                let value = kv[1].trim().to_owned();
+                (key, value)
+            })
+            .collect();
+
+        let lat_name = variable_map
+            .get("lat_name")
+            .cloned()
+            .unwrap_or_else(|| "latitude".to_owned());
+
+        let lon_name = variable_map
+            .get("lon_name")
+            .cloned()
+            .unwrap_or_else(|| "longitude".to_owned());
+
+        let time_name = variable_map
+            .get("time_name")
+            .cloned()
+            .unwrap_or_else(|| "time".to_owned());
+
+        let variable_map = variable_map
+            .iter()
+            .filter(|(k, _)| *k != "lat_name" && *k != "lon_name" && *k != "time_name")
+            .map(|(k, v)| (InputVariableName::from_str(k).unwrap(), v.clone()))
+            .collect();
+
+        NetCdfInputConfiguration {
+            variable_map,
+            lat_name,
+            lon_name,
+            time_name,
+        }
+    }
+}
 
 pub struct NetCdfFileInputRecord {
     file: String,
@@ -115,7 +175,7 @@ impl NetCdfInputHandler {
 }
 
 impl InputHandler for NetCdfInputHandler {
-    fn get_values(&self, var: &str, date: &DateTime<Utc>) -> Option<Array1<f32>> {
+    fn get_values(&self, var: &InputVariableName, date: &DateTime<Utc>) -> Option<Array1<f32>> {
         for record in &self.records {
             let time_index = record.timeline.iter().position(|t| t == date);
 
