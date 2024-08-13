@@ -4,6 +4,7 @@ mod library;
 use std::env::{args, set_var, var};
 
 use chrono::prelude::*;
+use library::io::readers::netcdf::NetCdfInputHandler;
 use log::{info, trace, warn};
 use pretty_env_logger;
 
@@ -55,7 +56,24 @@ fn main() {
 
     let c = Utc::now();
     info!("Loading input data from {}", input_path);
-    let handler = BinaryInputDataHandler::new(input_path, lats, lons);
+
+    let handler: Box<dyn InputHandler> = match &config.netcdf_input_configuration {
+        Some(nc_config) => {
+            let maybe_handler = NetCdfInputHandler::new(input_path, lats, lons, nc_config);
+            if maybe_handler.is_err() {
+                panic!("Could not load input data");
+            }
+            Box::new(maybe_handler.unwrap())
+        }
+        None => {
+            let maybe_handler = BinaryInputDataHandler::new(input_path, lats, lons);
+            if maybe_handler.is_err() {
+                panic!("Could not load input data");
+            }
+            Box::new(maybe_handler.unwrap())
+        }
+    };
+
     trace!(
         "Loading input configuration took {} seconds",
         Utc::now() - c
@@ -66,7 +84,7 @@ fn main() {
     for time in timeline {
         let step_time = Utc::now();
         info!("Processing {}", time.format("%Y-%m-%d %H:%M"));
-        let input = get_input(&handler, &time, len);
+        let input = get_input(handler.as_ref(), &time, len);
 
         let c = Utc::now();
         state.update(props, &input);

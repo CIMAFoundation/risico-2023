@@ -172,7 +172,7 @@ fn read_variable_from_file(
     Ok(values)
 }
 
-struct NetCdfInputHandler {
+pub struct NetCdfInputHandler {
     records: Vec<NetCdfFileInputRecord>,
     config: NetCdfInputConfiguration,
 }

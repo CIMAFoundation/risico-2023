@@ -4,6 +4,7 @@ use log::warn;
 use ndarray::Array1;
 use std::{
     collections::HashMap,
+    error::Error,
     fs::File,
     io::{self, BufRead, Read},
     path::Path,
@@ -204,11 +205,11 @@ pub struct BinaryInputDataHandler {
 }
 
 impl BinaryInputDataHandler {
-    pub fn new(file_path: &str, lats: &[f32], lons: &[f32]) -> BinaryInputDataHandler {
+    pub fn new(file_path: &str, lats: &[f32], lons: &[f32]) -> Result<Self, Box<dyn Error>> {
         let mut grid_registry = HashMap::new();
         let mut data_map = HashMap::new();
 
-        let file = File::open(file_path).expect(&format!("Can't open input file {}", file_path));
+        let file = File::open(file_path)?;
 
         // file is a text file in which each line is a file with the following structure:
         // directory/<YYYYmmDDHHMM>_<grid_name>_<variable>.<extension>
@@ -266,10 +267,10 @@ impl BinaryInputDataHandler {
             }
         }
 
-        BinaryInputDataHandler {
+        Ok(BinaryInputDataHandler {
             grid_registry,
             data_map,
-        }
+        })
     }
 }
 

@@ -43,6 +43,7 @@ const MODEL_VERSION_KEY: &str = "MODEL_VERSION";
 const USE_TEMPERATURE_EFFECT_KEY: &str = "USETCONTR";
 const USE_NDVI_KEY: &str = "USENDVI";
 const OUTPUTS_KEY: &str = "MODEL";
+const NETCDF_INPUT_CONFIG: &str = "NETCDFINPUTCONFIG";
 const VARIABLES_KEY: &str = "VARIABLE";
 const PALETTE_KEY: &str = "PALETTE";
 const KEY_HOURSRESOLUTION: &str = "OUTPUTHRES";
@@ -306,6 +307,11 @@ impl Config {
         let ppf_summer = ppf.iter().map(|(s, _)| *s).collect();
         let ppf_winter = ppf.iter().map(|(_, w)| *w).collect();
 
+        let netcdf_input_configuration = config_map
+            .first(NETCDF_INPUT_CONFIG)
+            .and_then(|line| Some(NetCdfInputConfiguration::from(&line)))
+            .or(None);
+
         let props = Properties::new(
             lats,
             lons,
@@ -331,7 +337,7 @@ impl Config {
             use_ndvi,
             output_time_resolution,
             model_version,
-            netcdf_input_configuration: None,
+            netcdf_input_configuration,
         };
 
         Ok(config)
@@ -412,7 +418,7 @@ pub struct Config {
     output_time_resolution: u32,
     model_version: String,
 
-    netcdf_input_configuration: Option<NetCdfInputConfiguration>,
+    pub netcdf_input_configuration: Option<NetCdfInputConfiguration>,
 }
 
 pub struct OutputWriter {
