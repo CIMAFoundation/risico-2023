@@ -1,6 +1,7 @@
 use std::error::Error;
 
 use chrono::{DateTime, Utc};
+use itertools::Itertools;
 use log::warn;
 use ndarray::Array1;
 use netcdf::extent::Extents;
@@ -130,6 +131,8 @@ impl InputHandler for NetCdfInputHandler {
             .iter()
             .flat_map(|record| record.timeline.iter())
             .cloned()
+            .unique()
+            .sorted()
             .collect()
     }
 
