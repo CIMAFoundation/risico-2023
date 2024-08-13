@@ -9,14 +9,12 @@ use std::{
     path::Path,
 };
 
-use crate::library::{
-    helpers::InputVariableName, io::models::grid::Grid, modules::risico::constants::NODATAVAL,
-};
+use crate::library::{io::models::grid::Grid, modules::risico::constants::NODATAVAL};
 
 use crate::library::io::models::grid::{IrregularGrid, RegularGrid};
 use rayon::prelude::*;
 
-use super::prelude::InputHandler;
+use super::prelude::{InputHandler, InputVariableName};
 
 fn read_header_from_file<T>(decoder: &mut Decoder<T>) -> Result<(u32, u32, u32), io::Error>
 where
@@ -277,13 +275,13 @@ impl BinaryInputDataHandler {
 
 impl InputHandler for BinaryInputDataHandler {
     /// Returns the data for the given date and variable on the selected coordinates
-    fn get_values(&self, var: &InputVariableName, date: &DateTime<Utc>) -> Option<Array1<f32>> {
+    fn get_values(&self, var: InputVariableName, date: &DateTime<Utc>) -> Option<Array1<f32>> {
         let data_map = match self.data_map.get(date) {
             Some(data_map) => data_map,
             None => return None,
         };
 
-        let file = match data_map.get(var) {
+        let file = match data_map.get(&var) {
             Some(file) => file,
             None => return None,
         };

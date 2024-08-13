@@ -7,12 +7,9 @@ use ndarray::Array1;
 use netcdf::extent::Extents;
 use std::fs;
 
-use crate::library::{
-    helpers::InputVariableName,
-    io::models::grid::{Grid, RegularGrid},
-};
+use crate::library::io::models::grid::{Grid, RegularGrid};
 
-use super::prelude::InputHandler;
+use super::prelude::{InputHandler, InputVariableName};
 
 pub struct NetCdfInputConfiguration {
     pub variable_map: HashMap<InputVariableName, String>,
@@ -186,7 +183,7 @@ impl NetCdfInputHandler {
 }
 
 impl InputHandler for NetCdfInputHandler {
-    fn get_values(&self, var: &InputVariableName, date: &DateTime<Utc>) -> Option<Array1<f32>> {
+    fn get_values(&self, var: InputVariableName, date: &DateTime<Utc>) -> Option<Array1<f32>> {
         for record in &self.records {
             let time_index = record.timeline.iter().position(|t| t == date);
 

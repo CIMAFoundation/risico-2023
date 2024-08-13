@@ -5,13 +5,11 @@ use itertools::izip;
 
 use ndarray::{azip, Array1, Zip};
 
-use strum_macros::EnumString;
-
 use super::modules::risico::{
     constants::NODATAVAL,
     models::{Input, InputElement},
 };
-use crate::library::io::readers::prelude::InputHandler;
+use crate::library::io::readers::prelude::{InputHandler, InputVariableName::*};
 
 fn replace<'a>(
     dst: &'a mut Array1<InputElement>,
@@ -40,20 +38,20 @@ fn maybe_replace<'a>(
 pub fn get_input(handler: &dyn InputHandler, time: &DateTime<Utc>, len: usize) -> Input {
     let mut data: Array1<InputElement> = Array1::default(len);
 
-    let snow = handler.get_values(&InputVariableName::SNOW, &time);
+    let snow = handler.get_values(SNOW, &time);
 
     maybe_replace(&mut data, &snow, |i| &mut i.snow_cover);
 
     // Observed relative humidity
-    let h = handler.get_values(&InputVariableName::F, &time);
+    let h = handler.get_values(F, &time);
     maybe_replace(&mut data, &h, |i| &mut i.humidity);
 
     // forecasted relative humidity
-    let h = handler.get_values(&InputVariableName::H, &time);
+    let h = handler.get_values(H, &time);
     maybe_replace(&mut data, &h, |i| &mut i.humidity);
 
     // Observed temperature
-    let t = handler.get_values(&InputVariableName::K, &time);
+    let t = handler.get_values(K, &time);
 
     if let Some(t) = t {
         let t = t.mapv(|_t| if _t > 200.0 { _t - 273.15 } else { _t });
@@ -61,14 +59,14 @@ pub fn get_input(handler: &dyn InputHandler, time: &DateTime<Utc>, len: usize) -
     }
 
     // Forecasted temperature
-    let t = handler.get_values(&InputVariableName::T, &time);
+    let t = handler.get_values(T, &time);
 
     if let Some(t) = t {
         let t = t.mapv(|_t| if _t > 200.0 { _t - 273.15 } else { _t });
         replace(&mut data, &t, |i| &mut i.temperature);
 
         // Forecasted dew point temperature
-        let r = handler.get_values(&InputVariableName::R, &time);
+        let r = handler.get_values(R, &time);
         if let Some(r) = r {
             let mut h: Array1<f32> = Array1::ones(len) * NODATAVAL;
             azip!((
@@ -89,19 +87,19 @@ pub fn get_input(handler: &dyn InputHandler, time: &DateTime<Utc>, len: usize) -
     }
 
     // Observed precipitation
-    let op = handler.get_values(&InputVariableName::O, &time);
+    let op = handler.get_values(O, &time);
     maybe_replace(&mut data, &op, |i| &mut i.rain);
     // Forecast precipitation
-    let fp = handler.get_values(&InputVariableName::P, &time);
+    let fp = handler.get_values(P, &time);
     maybe_replace(&mut data, &fp, |i| &mut i.rain);
 
     // wind speed
-    let ws = handler.get_values(&InputVariableName::W, &time);
+    let ws = handler.get_values(W, &time);
     // wind direction
-    let wd = handler.get_values(&InputVariableName::D, &time);
+    let wd = handler.get_values(D, &time);
 
-    let u = handler.get_values(&InputVariableName::U, &time);
-    let v = handler.get_values(&InputVariableName::V, &time);
+    let u = handler.get_values(U, &time);
+    let v = handler.get_values(V, &time);
 
     if let Some(ws) = ws {
         let ws = ws.mapv(|_ws| {
@@ -155,16 +153,16 @@ pub fn get_input(handler: &dyn InputHandler, time: &DateTime<Utc>, len: usize) -
         replace(&mut data, &ws, |i| &mut i.wind_speed);
     }
 
-    let swi = handler.get_values(&InputVariableName::SWI, &time);
+    let swi = handler.get_values(SWI, &time);
     maybe_replace(&mut data, &swi, |i| &mut i.swi);
 
-    let ndvi = handler.get_values(&InputVariableName::NDVI, &time);
+    let ndvi = handler.get_values(NDVI, &time);
     maybe_replace(&mut data, &ndvi, |i| &mut i.ndvi);
 
-    let ndwi = handler.get_values(&InputVariableName::NDWI, &time);
+    let ndwi = handler.get_values(NDWI, &time);
     maybe_replace(&mut data, &ndwi, |i| &mut i.ndwi);
 
-    let msi = handler.get_values(&InputVariableName::M, &time);
+    let msi = handler.get_values(M, &time);
     maybe_replace(&mut data, &msi, |i| &mut i.msi);
 
     Input {
@@ -172,90 +170,3 @@ pub fn get_input(handler: &dyn InputHandler, time: &DateTime<Utc>, len: usize) -
         data,
     }
 }
-
-#[derive(Debug, PartialEq, Eq, EnumString, Hash, Copy, Clone)]
-pub enum InputVariableName {
-    /// Air Humidity
-    H,
-    /// Observed Temperature
-    K,
-    /// Forecasted Temperature
-    T,
-    /// SNOW Cover
-    SNOW,
-    /// Observed Air Humidity
-    F,
-    // Forecasted dew point temperature
-    R,
-    /// Observed Precipitation
-    O,
-    /// Forecasted Precipitation
-    P,
-    /// Wind Speed
-    W,
-    /// Wind Direction
-    D,
-    /// NDWI Value
-    NDWI,
-    /// NDVI Value
-    NDVI,
-    /// MSI Value
-    M,
-    /// U component of the wind
-    U,
-    /// V value of the wind
-    V,
-    /// SWI Value
-    SWI,
-}
-
-// // Implement FromStr for InputVariable
-// impl FromStr for InputVariableName {
-//     type Err = ();
-
-//     fn from_str(input: &str) -> Result<InputVariableName, Self::Err> {
-//         match input {
-//             "H" => Ok(InputVariableName::H),
-//             "K" => Ok(InputVariableName::K),
-//             "T" => Ok(InputVariableName::T),
-//             "SNOW" => Ok(InputVariableName::SNOW),
-//             "F" => Ok(InputVariableName::F),
-//             "R" => Ok(InputVariableName::R),
-//             "O" => Ok(InputVariableName::O),
-//             "P" => Ok(InputVariableName::P),
-//             "W" => Ok(InputVariableName::W),
-//             "NDWI" => Ok(InputVariableName::NDWI),
-//             "NDVI" => Ok(InputVariableName::NDVI),
-//             "M" => Ok(InputVariableName::M),
-//             "U" => Ok(InputVariableName::U),
-//             "V" => Ok(InputVariableName::V),
-//             "SWI" => Ok(InputVariableName::SWI),
-//             _ => Err(()),
-//         }
-//     }
-// }
-
-// // Implement Display for InputVariableName
-// impl fmt::Display for InputVariableName {
-//     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-//         let value = match self {
-//             InputVariableName::D => "D",
-//             InputVariableName::H => "H",
-//             InputVariableName::K => "K",
-//             InputVariableName::T => "T",
-//             InputVariableName::SNOW => "SNOW",
-//             InputVariableName::F => "F",
-//             InputVariableName::R => "R",
-//             InputVariableName::O => "O",
-//             InputVariableName::P => "P",
-//             InputVariableName::W => "W",
-//             InputVariableName::NDWI => "NDWI",
-//             InputVariableName::NDVI => "NDVI",
-//             InputVariableName::M => "M",
-//             InputVariableName::U => "U",
-//             InputVariableName::V => "V",
-//             InputVariableName::SWI => "SWI",
-//         };
-//         write!(f, "{}", value)
-//     }
-// }
