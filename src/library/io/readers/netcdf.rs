@@ -15,10 +15,10 @@ use crate::library::{
 use super::prelude::InputHandler;
 
 pub struct NetCdfInputConfiguration {
-    variable_map: HashMap<InputVariableName, String>,
-    lat_name: String,
-    lon_name: String,
-    time_name: String,
+    pub variable_map: HashMap<InputVariableName, String>,
+    pub lat_name: String,
+    pub lon_name: String,
+    pub time_name: String,
 }
 
 impl<T> From<T> for NetCdfInputConfiguration
@@ -74,36 +74,42 @@ where
 pub struct NetCdfFileInputRecord {
     file: String,
     timeline: Array1<DateTime<Utc>>,
-    variables: Vec<String>,
+    variables: Vec<InputVariableName>,
     indexes: Array1<Option<usize>>,
 }
 
 /// inspect a single netcdf file and builds a record
 fn register_nc_file(
     file: &str,
-    lat_name: &str,
-    lon_name: &str,
-    time_name: &str,
+    config: &NetCdfInputConfiguration,
     lats: &[f32],
     lons: &[f32],
 ) -> Result<NetCdfFileInputRecord, Box<dyn Error>> {
     let nc_file = netcdf::open(file)?;
 
     let lats_var = &nc_file
-        .variable(lat_name)
+        .variable(&config.lat_name)
         .expect("Could not find variable 'latitude'");
     let lons_var = &nc_file
-        .variable(lon_name)
+        .variable(&config.lon_name)
         .expect("Could not find variable 'longitude'");
 
     let time_var = &nc_file
-        .variable(time_name)
+        .variable(&config.time_name)
         .expect("Could not find variable 'longitude'");
 
     let variables = nc_file
         .variables()
-        .map(|var| var.name().to_owned())
-        .collect::<Vec<String>>();
+        .filter_map(|var| {
+            let nc_var = var.name().to_owned();
+            let var_name = config
+                .variable_map
+                .iter()
+                .find(|(_, v)| *v == &nc_var)
+                .map(|(k, _)| k.clone());
+            var_name
+        })
+        .collect::<Vec<InputVariableName>>();
 
     let timeline = time_var
         .values::<i64, _>(Extents::All)?
@@ -148,7 +154,12 @@ struct NetCdfInputHandler {
 }
 
 impl NetCdfInputHandler {
-    pub fn new(path: &str, lats: &[f32], lons: &[f32]) -> Result<Self, Box<dyn Error>> {
+    pub fn new(
+        path: &str,
+        lats: &[f32],
+        lons: &[f32],
+        config: &NetCdfInputConfiguration,
+    ) -> Result<Self, Box<dyn Error>> {
         let mut records = Vec::new();
 
         // Iterate over the files in the specified directory
@@ -164,7 +175,7 @@ impl NetCdfInputHandler {
             let file_path_str = file_path.to_string_lossy().into_owned();
 
             // Call the inspect_nc_file function to build the record
-            match register_nc_file(&file_path_str, "latitude", "longitude", "time", lats, lons) {
+            match register_nc_file(&file_path_str, config, lats, lons) {
                 Ok(record) => records.push(record),
                 Err(e) => warn!("Error inspecting file {}: {}", file_path_str, e),
             }
@@ -179,7 +190,7 @@ impl InputHandler for NetCdfInputHandler {
         for record in &self.records {
             let time_index = record.timeline.iter().position(|t| t == date);
 
-            if time_index.is_some() && record.variables.contains(&var.to_string()) {
+            if time_index.is_some() && record.variables.contains(&var) {
                 unimplemented!("need to implement projection to the grid");
             }
         }
@@ -196,7 +207,7 @@ impl InputHandler for NetCdfInputHandler {
             .collect()
     }
 
-    fn get_variables(&self, time: &DateTime<Utc>) -> Vec<String> {
+    fn get_variables(&self, time: &DateTime<Utc>) -> Vec<InputVariableName> {
         let mut variables = Vec::new();
 
         for record in &self.records {
