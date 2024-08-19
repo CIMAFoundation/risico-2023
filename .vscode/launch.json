@@ -25,7 +25,6 @@
             "env": {
                 "RUST_LOG": "debug",
                 "RAYON_NUM_THREADS": "1",
-                "LC_RPATH": ".venv/lib"
             }
             //"visualizerFile": "${workspaceFolder}/.vscode/custom.natvis"
         }
