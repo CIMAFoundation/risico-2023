@@ -3,6 +3,7 @@ use std::{
     fmt::Display,
     fs::File,
     io::{self, BufRead, BufWriter, Write},
+    str::FromStr,
 };
 
 use chrono::*;
@@ -11,19 +12,22 @@ use log::{info, warn};
 use rayon::prelude::*;
 
 use crate::library::{
-    io::models::{
-        output::{OutputType, OutputVariable},
-        palette::Palette,
+    io::{models::grid::ClusterMode, readers::netcdf::NetCdfInputConfiguration},
+    modules::risico::models::State,
+};
+use crate::library::{
+    io::{
+        models::{
+            output::{OutputType, OutputVariable},
+            palette::Palette,
+        },
+        writers::OutputVariableName,
     },
     modules::risico::{
         config::ModelConfig,
         constants::NODATAVAL,
         models::{Output, Properties},
     },
-};
-use crate::library::{
-    io::{models::grid::ClusterMode, readers::netcdf::NetCdfInputConfiguration},
-    modules::risico::models::State,
 };
 
 use super::data::{read_cells_properties, read_vegetation};
@@ -185,6 +189,7 @@ impl Config {
                 .iter_mut()
                 .filter(|_type| _type.internal_name == output_type)
                 .for_each(|_type| {
+                    let internal_name = OutputVariableName::from_str(internal_name).unwrap();
                     _type.add_variable(OutputVariable::new(
                         internal_name,
                         name,

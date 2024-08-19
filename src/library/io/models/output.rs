@@ -9,7 +9,7 @@ use rayon::prelude::*;
 
 use crate::library::{
     config::models::{PaletteMap, RISICOError},
-    io::writers::{create_nc_file, write_to_pngwjson, write_to_zbin_file},
+    io::writers::{create_nc_file, write_to_pngwjson, write_to_zbin_file, OutputVariableName},
     modules::risico::{constants::NODATAVAL, models::Output},
 };
 
@@ -44,16 +44,21 @@ fn extract_errors(
 
 #[derive(Debug)]
 pub struct OutputVariable {
-    internal_name: String,
+    internal_name: OutputVariableName,
     name: String,
     cluster_mode: ClusterMode,
     precision: i32,
 }
 
 impl OutputVariable {
-    pub fn new(internal_name: &str, name: &str, cluster_mode: ClusterMode, precision: i32) -> Self {
+    pub fn new(
+        internal_name: OutputVariableName,
+        name: &str,
+        cluster_mode: ClusterMode,
+        precision: i32,
+    ) -> Self {
         Self {
-            internal_name: internal_name.to_string(),
+            internal_name,
             name: name.to_string(),
             cluster_mode,
             precision,
@@ -292,7 +297,7 @@ impl Writer for NetcdfWriter {
             let path = self.path.as_os_str().to_str().expect("Invalid path");
 
             let file_name = format!("{}/{}.nc", path, variable.name);
-            let file = create_nc_file(&file_name, grid, &variable.name)?;
+            let file = create_nc_file(&file_name, grid, &variable.name, variable.internal_name)?;
             self.files.insert(variable.name.clone(), Mutex::new(file));
         }
 

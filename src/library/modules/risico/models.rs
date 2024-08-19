@@ -2,9 +2,11 @@ use chrono::prelude::*;
 use ndarray::{Array1, Zip};
 use rayon::prelude::*;
 use std::{collections::HashMap, sync::Arc};
+use OutputVariableName::*;
 
 use crate::library::{
     config::models::WarmState,
+    io::writers::OutputVariableName,
     modules::risico::constants::{NODATAVAL, SNOW_SECONDS_VALIDITY},
 };
 
@@ -206,41 +208,38 @@ impl Output {
         Array1::from_vec(vec)
     }
 
-    pub fn get(&self, variable: &str) -> Option<Array1<f32>> {
+    pub fn get(&self, variable: &OutputVariableName) -> Option<Array1<f32>> {
         match variable {
             // Output variables
-            "dffm" => Some(self.get_array(|o| o.dffm)),
-            "W" => Some(self.get_array(|o| o.W)),
-            "V" => Some(self.get_array(|o| o.V)),
-            "I" => Some(self.get_array(|o| o.I)),
+            dffm => Some(self.get_array(|o| o.dffm)),
+            W => Some(self.get_array(|o| o.W)),
+            V => Some(self.get_array(|o| o.V)),
+            I => Some(self.get_array(|o| o.I)),
+            contrT => Some(self.get_array(|o| o.t_effect)),
 
-            "contrT" => Some(self.get_array(|o| o.t_effect)),
-            // "SWI" => self.SWI,
-            "temperature" => Some(self.get_array(|o| o.temperature)),
-            "rain" => Some(self.get_array(|o| o.rain)),
-            "windSpeed" => Some(self.get_array(|o| o.wind_speed)),
-            "windDir" => Some(self.get_array(|o| o.wind_dir)),
-            "humidity" => Some(self.get_array(|o| o.humidity)),
-            "snowCover" => Some(self.get_array(|o| o.snow_cover)),
-            "NDVI" => Some(self.get_array(|o| o.NDVI)),
-            "NDWI" => Some(self.get_array(|o| o.NDWI)),
-            "meteoIndex2" => Some(self.get_array(|o| o.meteo_index)),
+            NDVI => Some(self.get_array(|o| o.NDVI)),
+            NDWI => Some(self.get_array(|o| o.NDWI)),
+            meteoIndex2 => Some(self.get_array(|o| o.meteo_index)),
 
-            // //Derived variables
-            "VPPF" => Some(self.get_array(|o| get_derived(&o.V, &o.PPF, None))),
-            "IPPF" => Some(self.get_array(|o| get_derived(&o.I, &o.PPF, None))),
+            // Input variables
+            temperature => Some(self.get_array(|o| o.temperature)),
+            rain => Some(self.get_array(|o| o.rain)),
+            windSpeed => Some(self.get_array(|o| o.wind_speed)),
+            windDir => Some(self.get_array(|o| o.wind_dir)),
+            humidity => Some(self.get_array(|o| o.humidity)),
+            snowCover => Some(self.get_array(|o| o.snow_cover)),
 
-            "INDWI" => Some(self.get_array(|o| get_derived(&o.I, &o.NDWI, None))),
-            "VNDWI" => Some(self.get_array(|o| get_derived(&o.V, &o.NDWI, None))),
-            "INDVI" => Some(self.get_array(|o| get_derived(&o.I, &o.NDVI, None))),
-            "VNDVI" => Some(self.get_array(|o| get_derived(&o.V, &o.NDVI, None))),
-
-            "VPPFNDWI" => Some(self.get_array(|o| get_derived(&o.V, &o.NDWI, Some(&o.PPF)))),
-            "IPPFNDWI" => Some(self.get_array(|o| get_derived(&o.I, &o.NDWI, Some(&o.PPF)))),
-            "VPPFNDVI" => Some(self.get_array(|o| get_derived(&o.V, &o.NDVI, Some(&o.PPF)))),
-            "IPPFNDVI" => Some(self.get_array(|o| get_derived(&o.I, &o.NDVI, Some(&o.PPF)))),
-
-            _ => None,
+            //Derived variables
+            VPPF => Some(self.get_array(|o| get_derived(&o.V, &o.PPF, None))),
+            IPPF => Some(self.get_array(|o| get_derived(&o.I, &o.PPF, None))),
+            INDWI => Some(self.get_array(|o| get_derived(&o.I, &o.NDWI, None))),
+            VNDWI => Some(self.get_array(|o| get_derived(&o.V, &o.NDWI, None))),
+            INDVI => Some(self.get_array(|o| get_derived(&o.I, &o.NDVI, None))),
+            VNDVI => Some(self.get_array(|o| get_derived(&o.V, &o.NDVI, None))),
+            VPPFNDWI => Some(self.get_array(|o| get_derived(&o.V, &o.NDWI, Some(&o.PPF)))),
+            IPPFNDWI => Some(self.get_array(|o| get_derived(&o.I, &o.NDWI, Some(&o.PPF)))),
+            VPPFNDVI => Some(self.get_array(|o| get_derived(&o.V, &o.NDVI, Some(&o.PPF)))),
+            IPPFNDVI => Some(self.get_array(|o| get_derived(&o.I, &o.NDVI, Some(&o.PPF)))),
         }
     }
 }

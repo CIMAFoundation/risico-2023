@@ -1,3 +1,4 @@
+use chrono::Utc;
 #[cfg(feature = "gdal")]
 #[cfg(feature = "gdal")]
 use gdal::raster::{Buffer, RasterCreationOption};
@@ -10,9 +11,12 @@ use std::{
     fs::File,
     io::{self, Write},
 };
+use strum_macros::{Display, EnumProperty, EnumString};
 
 use crate::library::config::models::RISICOError;
 use crate::library::modules::risico::constants::NODATAVAL;
+use crate::library::version::GIT_VERSION;
+use strum::EnumProperty;
 
 use super::models::{grid::RegularGrid, palette::Palette};
 
@@ -192,7 +196,8 @@ const COMPRESSION_RATE: i32 = 4;
 pub fn create_nc_file(
     file_name: &str,
     grid: &RegularGrid,
-    variable_name: &str,
+    output_name: &str,
+    variable_name: OutputVariableName,
 ) -> Result<netcdf::MutableFile, RISICOError> {
     let n_lats = grid.nrows;
     let n_lons = grid.ncols;
@@ -201,6 +206,15 @@ pub fn create_nc_file(
 
     let mut file = netcdf::create_with(file_name, options)
         .map_err(|err| format!("can't create file {file_name}: {err}"))?;
+
+    file.add_attribute(
+        "risico_version",
+        format!("v{}.{}", env!("CARGO_PKG_VERSION"), GIT_VERSION).to_string(),
+    )
+    .expect("Should add attribute 'risico_version'");
+
+    file.add_attribute("creation_date", Utc::now().to_rfc3339())
+        .expect("Should add attribute 'creation_date'");
 
     file.add_attribute("missing_value", NODATAVAL)
         .expect("Should add attribute");
@@ -249,8 +263,8 @@ pub fn create_nc_file(
         .unwrap_or_else(|_| panic!("Add time units failed"));
 
     let mut variable_var = file
-        .add_variable::<f32>(variable_name, &["time", "latitude", "longitude"])
-        .unwrap_or_else(|_| panic!("Add {} failed", variable_name));
+        .add_variable::<f32>(output_name, &["time", "latitude", "longitude"])
+        .unwrap_or_else(|_| panic!("Add {} failed", output_name));
 
     variable_var
         .compression(COMPRESSION_RATE, false)
@@ -260,5 +274,114 @@ pub fn create_nc_file(
         .add_attribute("missing_value", NODATAVAL)
         .expect("Should add attribute");
 
+    variable_var
+        .add_attribute(
+            "units",
+            variable_name.get_str("units").unwrap_or(&"unknown"),
+        )
+        .expect("Should add attribute");
+
+    variable_var
+        .add_attribute(
+            "long_name",
+            variable_name
+                .get_str("long_name")
+                .unwrap_or(&variable_name.to_string()),
+        )
+        .expect("Should add attribute");
+
     Ok(file)
+}
+
+#[allow(non_camel_case_types)]
+#[derive(Debug, PartialEq, Eq, Hash, Copy, Clone, EnumString, EnumProperty, Display)]
+pub enum OutputVariableName {
+    /// Fine Fuel Moisture
+    #[strum(props(long_name = "Fine Fuel Moisture", units = "%"))]
+    dffm,
+    /// Wind Effect on Fire Spread
+    #[strum(props(long_name = "Wind Effect on Fire Spread", units = "-"))]
+    W,
+    /// Fire Spread Rate
+    #[strum(props(long_name = "Fire Spread Rate", units = "m/h"))]
+    V,
+    /// Fire Intensity
+    #[strum(props(long_name = "Fire Intensity", units = "kW/m"))]
+    I,
+
+    /// Temperature Effect on Fire Spread
+    #[strum(props(long_name = "Temperature Effect on Fire Spread", units = "-"))]
+    contrT,
+
+    /// Input Temperature
+    #[strum(props(long_name = "Input Temperature", units = "°C"))]
+    temperature,
+    /// Input Rain
+    #[strum(props(long_name = "Input Rain", units = "mm"))]
+    rain,
+
+    /// Input Wind Speed
+    #[strum(props(long_name = "Input Wind Speed", units = "m/s"))]
+    windSpeed,
+
+    /// Input Wind Direction
+    #[strum(props(long_name = "Input Wind Direction", units = "°"))]
+    windDir,
+
+    /// Input Relative Humidity
+    #[strum(props(long_name = "Input Relative Humidity", units = "%"))]
+    humidity,
+
+    /// Input Snow Cover
+    #[strum(props(long_name = "Input Snow Cover", units = "mm"))]
+    snowCover,
+
+    /// NDVI factor
+    #[strum(props(long_name = "NDVI factor", units = "-"))]
+    NDVI,
+
+    /// NDWI factor
+    #[strum(props(long_name = "NDWI factor", units = "-"))]
+    NDWI,
+
+    /// Meteorological Index
+    #[strum(props(long_name = "Meteorological Index", units = "-"))]
+    meteoIndex2,
+
+    /// Fire Spread Rate + PPF
+    #[strum(props(long_name = "Fire Spread Rate + PPF", units = "m/h"))]
+    VPPF,
+
+    /// Fire Intensity + PPF
+    #[strum(props(long_name = "Fire Intensity + PPF", units = "kW/m"))]
+    IPPF,
+
+    /// Fire Intensity + NDWI factor
+    #[strum(props(long_name = "Fire Intensity + NDWI factor", units = "kW/m"))]
+    INDWI,
+
+    /// Fire Spread rate + NDWI factor
+    #[strum(props(long_name = "Fire Spread rate + NDWI factor", units = "m/h"))]
+    VNDWI,
+
+    /// Fire Intensity + NDVI factor
+    #[strum(props(long_name = "Fire Intensity + NDVI factor", units = "kW/m"))]
+    INDVI,
+    /// Fire Spread rate + NDVI factor
+    #[strum(props(long_name = "Fire Spread rate + NDVI factor", units = "m/h"))]
+    VNDVI,
+
+    /// Fire Spread rate + PPF + NDWI factor
+    #[strum(props(long_name = "Fire Spread rate + PPF + NDWI factor", units = "m/h"))]
+    VPPFNDWI,
+    /// Fire Intensity + PPF + NDWI factor
+    #[strum(props(long_name = "Fire Intensity + PPF + NDWI factor", units = "kW/m"))]
+    IPPFNDWI,
+
+    /// Fire Spread rate + PPF + NDVI factor
+    #[strum(props(long_name = "Fire Spread rate + PPF + NDVI factor", units = "m/h"))]
+    VPPFNDVI,
+    /// Fire Intensity + PPF + NDVI factor
+    #[strum(props(long_name = "Fire Intensity + PPF + NDVI factor", units = "kW/m"))]
+    IPPFNDVI,
 }
