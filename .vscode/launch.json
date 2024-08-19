@@ -18,9 +18,9 @@
                 ]
             },
             "args": [
-                "202403010000",
+                "202408160000",
                 "/opt/risico/RISICO2023/configuration.txt",
-                "/opt/risico/RISICO2023/INPUT/202403011443/input.txt"
+                "/opt/risico/RISICO2023/INPUT-NC/ALL"
             ],
             "env": {
                 "RUST_LOG": "debug",
