@@ -262,8 +262,11 @@ impl BinaryInputDataHandler {
             }
 
             if let Some(data_map_for_date) = data_map.get_mut(&date) {
-                data_map_for_date
-                    .insert(variable.parse::<InputVariableName>().unwrap(), input_file);
+                if let Ok(var) = variable.parse::<InputVariableName>() {
+                    data_map_for_date.insert(var, input_file);
+                } else {
+                    warn!("Error parsing variable {variable}");
+                }
             }
         }
 

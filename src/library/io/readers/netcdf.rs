@@ -62,7 +62,14 @@ where
         let mut variable_map: HashMap<InputVariableName, String> = variable_map
             .iter()
             .filter(|(k, _)| *k != "lat_name" && *k != "lon_name" && *k != "time_name")
-            .map(|(k, v)| (InputVariableName::from_str(k).unwrap(), v.clone()))
+            .filter_map(|(k, v)| {
+                if let Ok(var) = InputVariableName::from_str(k) {
+                    Some((var, v.clone()))
+                } else {
+                    warn!("Variable {} not found in configuration", k);
+                    None
+                }
+            })
             .collect();
 
         // add defaults if missing
@@ -173,7 +180,9 @@ fn read_variable_from_file(
         .variable(variable)
         .expect(&format!("Could not find variable '{}'", variable));
 
-    let extent: Extents = (&[time_index], &[1]).try_into().unwrap();
+    let extent: Extents = (&[time_index], &[1])
+        .try_into()
+        .expect(&format!("Could not create extent '{}'", &time_index));
     let values = var
         .values::<f32, _>(extent)?
         .into_iter()
@@ -230,8 +239,11 @@ impl InputHandler for NetCdfInputHandler {
             if time_index.is_none() || !record.variables.contains(&var) {
                 continue;
             }
-            let time_index = time_index.unwrap();
-            let variable = self.config.variable_map.get(&var).unwrap();
+            let time_index = time_index.expect("Could not find time index");
+            let variable = self.config.variable_map.get(&var).expect(&format!(
+                "Could not find variable mapping for variable '{}'",
+                var
+            ));
 
             let values = read_variable_from_file(&record.file, variable, time_index);
 

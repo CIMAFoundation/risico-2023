@@ -309,7 +309,7 @@ impl Writer for NetcdfWriter {
                 debug!(
                     "[NC] Writing variable {} to {:?}",
                     variable.name,
-                    file.path().unwrap()
+                    file.path().expect("Should have a path")
                 );
 
                 let mut time_var = file
@@ -317,7 +317,7 @@ impl Writer for NetcdfWriter {
                     .ok_or_else(|| format!("variable not found: time"))?;
                 let time: i64 = output.time.timestamp() as i64;
                 let len = time_var.len();
-                let extents: Extents = (&[len], &[1]).try_into().unwrap();
+                let extents: Extents = (&[len], &[1]).try_into().expect("Should convert");
 
                 time_var
                     .put_values(&[time], extents)
@@ -328,7 +328,9 @@ impl Writer for NetcdfWriter {
                     .ok_or_else(|| format!("variable not found: {}", variable.name))?;
 
                 let values = variable.get_variable_on_grid(&output, lats, lons, &grid);
-                let extents: Extents = (&[len, 0, 0], &[1, n_lats, n_lons]).try_into().unwrap();
+                let extents: Extents = (&[len, 0, 0], &[1, n_lats, n_lons])
+                    .try_into()
+                    .expect("Should convert");
                 if let Some(values) = values {
                     variable_var
                         .put_values(values.as_slice().expect("Should unwrap"), extents)
@@ -337,7 +339,7 @@ impl Writer for NetcdfWriter {
                     debug!(
                         "[NC] Done Writing variable {} to {:?}",
                         variable.name,
-                        file.path().unwrap()
+                        file.path().expect("Should have a path")
                     );
                 }
                 Ok(())

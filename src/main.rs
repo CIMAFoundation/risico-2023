@@ -57,21 +57,16 @@ fn main() {
     let c = Utc::now();
     info!("Loading input data from {}", input_path);
 
-    let handler: Box<dyn InputHandler> = match &config.netcdf_input_configuration {
-        Some(nc_config) => {
-            let maybe_handler = NetCdfInputHandler::new(input_path, lats, lons, nc_config);
-            if maybe_handler.is_err() {
-                panic!("Could not load input data");
-            }
-            Box::new(maybe_handler.unwrap())
-        }
-        None => {
-            let maybe_handler = BinaryInputDataHandler::new(input_path, lats, lons);
-            if maybe_handler.is_err() {
-                panic!("Could not load input data");
-            }
-            Box::new(maybe_handler.unwrap())
-        }
+    let handler: Box<dyn InputHandler> = if let Some(nc_config) = &config.netcdf_input_configuration
+    {
+        Box::new(
+            NetCdfInputHandler::new(input_path, lats, lons, nc_config)
+                .expect("Could not load input data"),
+        )
+    } else {
+        Box::new(
+            BinaryInputDataHandler::new(input_path, lats, lons).expect("Could not load input data"),
+        )
     };
 
     trace!(
