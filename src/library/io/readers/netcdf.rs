@@ -10,7 +10,7 @@ use std::fs;
 use strum::IntoEnumIterator;
 
 use crate::library::{
-    io::models::grid::{Grid, RegularGrid},
+    io::models::grid::{Grid, IrregularGrid},
     modules::risico::constants::NODATAVAL,
 };
 
@@ -61,12 +61,12 @@ where
 
         let mut variable_map: HashMap<InputVariableName, String> = variable_map
             .iter()
-            .filter(|(k, _)| *k != "lat_name" && *k != "lon_name" && *k != "time_name")
+            .filter(|(k, _)| *k != "latitude" && *k != "longitude" && *k != "time")
             .filter_map(|(k, v)| {
                 if let Ok(var) = InputVariableName::from_str(k) {
                     Some((var, v.clone()))
                 } else {
-                    warn!("Variable {} not found in configuration", k);
+                    warn!("Variable {} not recognized", k);
                     None
                 }
             })
@@ -109,6 +109,7 @@ fn register_nc_file(
     let lats_var = &nc_file
         .variable(&config.lat_name)
         .expect("Could not find variable 'latitude'");
+
     let lons_var = &nc_file
         .variable(&config.lon_name)
         .expect("Could not find variable 'longitude'");
@@ -133,7 +134,7 @@ fn register_nc_file(
     let timeline = time_var
         .values::<i64, _>(Extents::All)?
         .into_iter()
-        .map(|t| DateTime::from_timestamp_nanos(t).to_utc())
+        .filter_map(|t| DateTime::from_timestamp_millis(t * 1000))
         .collect::<Array1<DateTime<Utc>>>();
 
     let nc_lats = lats_var
@@ -146,15 +147,17 @@ fn register_nc_file(
         .into_iter()
         .collect::<Array1<f32>>();
 
-    let nrows = nc_lats.len();
-    let ncols = nc_lons.len();
+    // let's assume lats and lons are 2D arrays with the same dimensions
+    let dimensions = lats_var.dimensions();
+    let ndims = dimensions.len();
+    if ndims != 2 {
+        return Err("Latitude & Longitude variables must have 2 dimensions".into());
+    }
 
-    let min_lat = nc_lats[0] as f32;
-    let max_lat = nc_lats[nc_lats.len() - 1] as f32;
-    let min_lon = nc_lons[0] as f32;
-    let max_lon = nc_lons[nc_lons.len() - 1] as f32;
+    let nrows = dimensions[0].len();
+    let ncols = dimensions[1].len();
 
-    let mut grid = RegularGrid::new(nrows, ncols, min_lat, max_lat, min_lon, max_lon);
+    let mut grid = IrregularGrid::new(nrows, ncols, nc_lats, nc_lons);
 
     let indexes = grid.indexes(lats, lons);
 
@@ -180,7 +183,7 @@ fn read_variable_from_file(
         .variable(variable)
         .expect(&format!("Could not find variable '{}'", variable));
 
-    let extent: Extents = (&[time_index], &[1])
+    let extent: Extents = (time_index, .., ..)
         .try_into()
         .expect(&format!("Could not create extent '{}'", &time_index));
     let values = var
