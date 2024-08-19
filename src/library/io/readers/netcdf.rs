@@ -7,6 +7,7 @@ use ndarray::Array1;
 use netcdf::extent::Extents;
 use rayon::prelude::*;
 use std::fs;
+use strum::IntoEnumIterator;
 
 use crate::library::{
     io::models::grid::{Grid, RegularGrid},
@@ -44,25 +45,34 @@ where
             .collect();
 
         let lat_name = variable_map
-            .get("lat_name")
+            .get("latitude")
             .cloned()
             .unwrap_or_else(|| "latitude".to_owned());
 
         let lon_name = variable_map
-            .get("lon_name")
+            .get("longitude")
             .cloned()
             .unwrap_or_else(|| "longitude".to_owned());
 
         let time_name = variable_map
-            .get("time_name")
+            .get("time")
             .cloned()
             .unwrap_or_else(|| "time".to_owned());
 
-        let variable_map = variable_map
+        let mut variable_map: HashMap<InputVariableName, String> = variable_map
             .iter()
             .filter(|(k, _)| *k != "lat_name" && *k != "lon_name" && *k != "time_name")
             .map(|(k, v)| (InputVariableName::from_str(k).unwrap(), v.clone()))
             .collect();
+
+        // add defaults if missing
+        InputVariableName::iter().for_each(|var| {
+            if variable_map.contains_key(&var) {
+                return;
+            }
+            warn!("Variable {} not found in configuration", &var);
+            variable_map.insert(var, var.to_string());
+        });
 
         NetCdfInputConfiguration {
             variable_map,

@@ -1,6 +1,6 @@
 use chrono::{DateTime, Utc};
 use ndarray::Array1;
-use strum_macros::EnumString;
+use strum_macros::{Display, EnumIter, EnumString};
 
 /// Trait defining the behavior of an InputDataSupplier for RISICO
 pub trait InputHandler {
@@ -14,7 +14,7 @@ pub trait InputHandler {
     fn get_variables(&self, time: &DateTime<Utc>) -> Vec<InputVariableName>;
 }
 
-#[derive(Debug, PartialEq, Eq, Hash, Copy, Clone, EnumString)]
+#[derive(Debug, PartialEq, Eq, Hash, Copy, Clone, EnumString, EnumIter, Display)]
 pub enum InputVariableName {
     /// Air Humidity
     H,
