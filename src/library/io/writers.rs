@@ -16,7 +16,7 @@ use strum_macros::{Display, EnumProperty, EnumString};
 
 use crate::library::config::models::RISICOError;
 use crate::library::modules::risico::constants::NODATAVAL;
-use crate::library::version::GIT_VERSION;
+use crate::library::version::FULL_VERSION;
 use strum::EnumProperty;
 
 use super::models::{grid::RegularGrid, palette::Palette};
@@ -225,11 +225,8 @@ pub fn create_nc_file(
     let mut file = netcdf::create_with(file_name, options)
         .map_err(|err| format!("can't create file {file_name}: {err}"))?;
 
-    file.add_attribute(
-        "risico_version",
-        format!("v{}.{}", env!("CARGO_PKG_VERSION"), GIT_VERSION).to_string(),
-    )
-    .expect("Should add attribute 'risico_version'");
+    file.add_attribute("risico_version", FULL_VERSION)
+        .expect("Should add attribute 'risico_version'");
 
     file.add_attribute("creation_date", Utc::now().to_rfc3339())
         .expect("Should add attribute 'creation_date'");

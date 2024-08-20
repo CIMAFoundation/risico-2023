@@ -73,18 +73,27 @@ else
 fi
 
 short_commit_hash=$(git rev-parse --short HEAD)
+long_commit_hash=$(git rev-parse HEAD)
 
 # replace version number in Cargo.toml
 if [[ "$OSTYPE" == "darwin"* ]]; then
   # Mac OS
-  sed -i '' 's/^version = \".*\"/version = \"'$new_tag'\"/' Cargo.toml
+  sed -i '' 's/^version = \".*\"/version = \"'$©'\"/' Cargo.toml
 else
   # Linux
   sed -i 's/^version = \".*\"/version = \"'$new_tag'\"/' Cargo.toml
 fi
 
 # overwrite the file src/library/version.rs
-echo "pub const GIT_VERSION: &str = \"$short_commit_hash\";" > ./src/library/version.rs
+echo "pub const FULL_VERSION: &str = \"v$new_tag-$short_commit_hash\";" > ./src/library/version.rs
+TZ=UTC echo "pub const LONG_VERSION: &str = \"
+version: v$new_tag
+commit: $long_commit_hash
+branch: $current_branch
+released on: $(date -R)\";
+" >> ./src/library/version.rs
+
+
 
 # commit the changes
 git add Cargo.toml src/library/version.rs
@@ -92,7 +101,7 @@ git add Cargo.toml src/library/version.rs
 git commit -m "Bump version to v$new_tag"
 git push
 git tag v$new_tag
-git push origin v$new_tag
+#git push origin v$new_tag
 
 echo "Tag v$new_tag has been pushed to origin"
 echo "In order to trigger the release build, you need to remove the draft status from the release in GitHub"

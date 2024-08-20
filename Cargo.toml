@@ -11,6 +11,9 @@ gdal = ["dep:gdal"]
 static_deps = ["netcdf-sys/static", "hdf5-sys/static"]
 
 [dependencies]
+clap = { version = "4.5.16", features = ["cargo"] }
+
+
 log = "0.4.17"
 strum = "0.26.3"
 strum_macros = "0.26.4"
@@ -24,10 +27,13 @@ ndarray = { version = "0.16.0", features = ["rayon"] }
 ndarray-stats = "0.5.1"
 png = "0.17.7"
 rstar = "0.12.0"
-
 # Native dependencies
 gdal = { version = "0.17.0", default-features = false, optional = true }
 hdf5 = "0.8.1"
 hdf5-sys = { version = "0.8.1" }
 netcdf = "0.8.1"
 netcdf-sys = { version = "0.5.1" }
+
+
+[build-dependencies]
+built = "0.7.4"

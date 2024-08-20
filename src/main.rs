@@ -1,43 +1,74 @@
-#![allow(dead_code)]
-// import state from lib
 mod library;
-use std::env::{args, set_var, var};
+use std::env::{set_var, var};
 use std::path::Path;
 use std::process::exit;
 
+// use chrono::format::parse;
 use chrono::prelude::*;
+use clap::{arg, command, crate_version};
 use library::io::readers::netcdf::{NetCdfInputConfiguration, NetCdfInputHandler};
+use library::version::LONG_VERSION;
 use log::{error, info, trace, warn};
 
 use crate::library::io::readers::binary::BinaryInputDataHandler;
 use crate::library::io::readers::prelude::InputHandler;
-use crate::library::{config::models::Config, helpers::get_input, version::GIT_VERSION};
-pub const VERSION: &str = env!("CARGO_PKG_VERSION");
+use crate::library::{config::models::Config, helpers::get_input};
+
 
 // parse command line arguments: first argument is model date in the form YYYYMMDDHHMM, second is configuration path, third is input path
+fn parse_args() -> (String, String, String) {
+    let matches = command!()
+        .version(crate_version!())
+        .long_version(LONG_VERSION)
+        .author("Mirko D'Andrea <mirko.dandrea@cimafoundation.org>, Nicolò Perello <nicolo.perello@cimafoundation.org>")
+        .about("risico-2023 Wildfire Risk Assessment Model by CIMA Research Foundation")
+        .long_about("RISICO  (Rischio Incendi E Coordinamento) is a wildfire risk forecast model written in rust and developed by CIMA Research Foundation. 
+It is designed to predict the likelihood and potential impact of wildfires in a given region, given a set of input parameters.")
+        .arg(arg!([date] "Model date in the format YYYYMMDDHHMM")
+                .required(true)
+                .index(1)
+            )        
+        .arg(
+            arg!([config_path] "Path to the configuration file")
+                .required(true)
+                .index(2),
+        )
+        .arg(
+            arg!([input_path] "Path to the input data file")
+                .required(true)
+                .index(3),
+        )
+        .get_matches();
+
+    // Extracting the values
+    let date = matches
+        .get_one::<&str>("date")
+        .unwrap_or_else(|| panic!(""));
+    let config_path = matches
+        .get_one::<&str>("config_path")
+        .unwrap_or_else(|| panic!(""));
+    let input_path = matches
+        .get_one::<&str>("input_path")
+        .unwrap_or_else(|| panic!(""));
+    
+    (
+        date.to_string(),
+        config_path.to_string(),
+        input_path.to_string(),
+    )
+}
+
+/// main function
 fn main() {
     if var("RUST_LOG").is_err() {
         set_var("RUST_LOG", "info")
     }
     pretty_env_logger::init();
 
-    if GIT_VERSION == "__COMMIT__" {
-        info!("RISICO-2023 v{}", VERSION);
-    } else {
-        info!("RISICO-2023 v{}-{}", VERSION, GIT_VERSION);
-    }
-
-    let args: Vec<String> = args().collect();
-    if args.len() != 4 {
-        info!("Usage: {} YYYYMMDDHHMM config_path input_path", args[0]);
-        return;
-    }
-
     let start_time = Utc::now();
 
-    let date = &args[1];
-    let config_path_str = &args[2];
-    let input_path_str = &args[3];
+    let args = parse_args();
+    let (date, config_path_str, input_path_str) = &args;
 
     if !Path::new(&config_path_str).is_file() {
         error!("Config file {} is not a file", config_path_str);
