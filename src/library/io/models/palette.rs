@@ -26,7 +26,12 @@ impl Palette {
         };
 
         palette.bounds.push(-9999.0);
-        let mut c = Color { r: 0, g: 0, b: 0, a: 0 };
+        let mut c = Color {
+            r: 0,
+            g: 0,
+            b: 0,
+            a: 0,
+        };
         palette.colors.push(c);
 
         let step = (max - min) / 255.0;
@@ -50,12 +55,13 @@ impl Palette {
             .map_err(|err| format!("cannot open palette file {s_palette_file}: {err}."))?;
 
         let mut reader = std::io::BufReader::new(ifs);
-        
+
         let mut contents = String::new();
-        
-        reader.read_to_string(&mut contents)
+
+        reader
+            .read_to_string(&mut contents)
             .map_err(|err| format!("cannot read palette file {s_palette_file}: {err}."))?;
-        
+
         let mut bounds: Vec<f32> = Vec::new();
         let mut colors: Vec<Color> = Vec::new();
 
@@ -73,26 +79,28 @@ impl Palette {
                 warn!("warning skipping line: {}", line);
                 continue;
             }
-            let val: f32 = parts[0].parse()
+            let val: f32 = parts[0]
+                .parse()
                 .map_err(|err| format!("Cannot parse {line} {err}"))?;
 
-            let r: u8 = parts[1].parse()
+            let r: u8 = parts[1]
+                .parse()
                 .map_err(|err| format!("Cannot parse {line} {err}"))?;
-            let g: u8 = parts[2].parse()
+            let g: u8 = parts[2]
+                .parse()
                 .map_err(|err| format!("Cannot parse {line} {err}"))?;
-            let b: u8 = parts[3].parse()
+            let b: u8 = parts[3]
+                .parse()
                 .map_err(|err| format!("Cannot parse {line} {err}"))?;
-            let a: u8 = parts[4].parse()
+            let a: u8 = parts[4]
+                .parse()
                 .map_err(|err| format!("Cannot parse {line} {err}"))?;
 
             let c = Color { r, g, b, a };
             bounds.push(val);
             colors.push(c);
         }
-        Ok(Self {
-            bounds,
-            colors,
-        })
+        Ok(Self { bounds, colors })
     }
 
     pub fn get_color(&self, val: f32) -> Color {

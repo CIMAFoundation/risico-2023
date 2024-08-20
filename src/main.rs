@@ -2,16 +2,17 @@
 // import state from lib
 mod library;
 use std::env::{args, set_var, var};
+use std::path::Path;
+use std::process::exit;
 
 use chrono::prelude::*;
-use library::io::readers::netcdf::NetCdfInputHandler;
-use log::{info, trace, warn};
+use library::io::readers::netcdf::{NetCdfInputConfiguration, NetCdfInputHandler};
+use log::{error, info, trace, warn};
 use pretty_env_logger;
 
 use crate::library::io::readers::binary::BinaryInputDataHandler;
 use crate::library::io::readers::prelude::InputHandler;
 use crate::library::{config::models::Config, helpers::get_input, version::GIT_VERSION};
-
 pub const VERSION: &str = env!("CARGO_PKG_VERSION");
 
 // parse command line arguments: first argument is model date in the form YYYYMMDDHHMM, second is configuration path, third is input path
@@ -22,9 +23,9 @@ fn main() {
     pretty_env_logger::init();
 
     if GIT_VERSION == "__COMMIT__" {
-        info!("RISICO.rs {}", VERSION);
+        info!("RISICO-2023 v{}", VERSION);
     } else {
-        info!("RISICO.rs {}-{}", VERSION, GIT_VERSION);
+        info!("RISICO-2023 v{}-{}", VERSION, GIT_VERSION);
     }
 
     let args: Vec<String> = args().collect();
@@ -36,13 +37,20 @@ fn main() {
     let start_time = Utc::now();
 
     let date = &args[1];
-    let config_path = &args[2];
-    let input_path = &args[3];
+    let config_path_str = &args[2];
+    let input_path_str = &args[3];
 
-    let date = NaiveDateTime::parse_from_str(date, "%Y%m%d%H%M").expect("Could not parse date");
+    if !Path::new(&config_path_str).is_file() {
+        error!("Config file {} is not a file", config_path_str);
+        exit(1)
+    }
+
+    let date = NaiveDateTime::parse_from_str(date, "%Y%m%d%H%M")
+        .expect(&format!("Could not parse run date '{}'", date));
+
     let date = DateTime::from_naive_utc_and_offset(date, Utc);
 
-    let config = Config::new(&config_path, date).expect("Could not configure model");
+    let config = Config::new(&config_path_str, date).expect("Could not configure model");
 
     let mut output_writer = config
         .get_output_writer()
@@ -54,27 +62,39 @@ fn main() {
     let (lats, lons) = config.properties.get_coords();
     let (lats, lons) = (lats.as_slice(), lons.as_slice());
 
-    let c = Utc::now();
-    info!("Loading input data from {}", input_path);
+    let current_time = Utc::now();
+    info!("Loading input data from {}", input_path_str);
 
-    let handler: Box<dyn InputHandler> = if let Some(nc_config) = &config.netcdf_input_configuration
-    {
+    // check if input_path is a file or a directory
+    let input_path = Path::new(input_path_str);
+    let handler: Box<dyn InputHandler> = if input_path.is_file() {
+        // if it is a file, we are loading the legacy input.txt file and binary inputs
         Box::new(
-            NetCdfInputHandler::new(input_path, lats, lons, nc_config)
+            BinaryInputDataHandler::new(input_path_str, lats, lons)
+                .expect("Could not load input data"),
+        )
+    } else if input_path.is_dir() {
+        // we should load the netcdfs using the netcdfinputhandler
+        let nc_config = if let Some(nc_config) = &config.netcdf_input_configuration {
+            nc_config
+        } else {
+            &NetCdfInputConfiguration::default()
+        };
+        Box::new(
+            NetCdfInputHandler::new(input_path_str, lats, lons, nc_config)
                 .expect("Could not load input data"),
         )
     } else {
-        Box::new(
-            BinaryInputDataHandler::new(input_path, lats, lons).expect("Could not load input data"),
-        )
+        error!("Input path {} is not valid", input_path_str);
+        exit(1);
     };
 
     trace!(
         "Loading input configuration took {} seconds",
-        Utc::now() - c
+        Utc::now() - current_time
     );
-    let len = state.len();
 
+    let len = state.len();
     let timeline = handler.get_timeline();
     for time in timeline {
         let step_time = Utc::now();

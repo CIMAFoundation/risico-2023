@@ -24,6 +24,26 @@ pub struct NetCdfInputConfiguration {
     pub time_name: String,
 }
 
+impl Default for NetCdfInputConfiguration {
+    fn default() -> Self {
+        let mut variable_map: HashMap<InputVariableName, String> = HashMap::new();
+        InputVariableName::iter().for_each(|var| {
+            if variable_map.contains_key(&var) {
+                return;
+            }
+            warn!("Variable {} not found in configuration", &var);
+            variable_map.insert(var, var.to_string());
+        });
+
+        NetCdfInputConfiguration {
+            variable_map,
+            lat_name: "latitude".into(),
+            lon_name: "longitude".into(),
+            time_name: "time".into(),
+        }
+    }
+}
+
 impl<T> From<T> for NetCdfInputConfiguration
 where
     T: Into<String>,
@@ -206,6 +226,11 @@ impl NetCdfInputHandler {
         lons: &[f32],
         config: &NetCdfInputConfiguration,
     ) -> Result<Self, Box<dyn Error>> {
+        assert!(
+            lats.len() == lons.len(),
+            "lats and lons have different lenght, aborting"
+        );
+
         let mut records = Vec::new();
 
         // Iterate over the files in the specified directory

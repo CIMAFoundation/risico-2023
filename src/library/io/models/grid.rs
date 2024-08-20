@@ -1,12 +1,9 @@
-use std::{fmt::Debug};
+use std::fmt::Debug;
 
-use crate::library::{
-    config::models::{read_config, RISICOError}
-};
+use crate::library::config::models::{read_config, RISICOError};
 use itertools::izip;
 use ndarray::Array1;
-use rstar::{RTree, primitives::GeomWithData};
-
+use rstar::{primitives::GeomWithData, RTree};
 
 #[derive(Debug)]
 pub enum ClusterMode {
@@ -73,24 +70,24 @@ impl RegularGrid {
         }
     }
 
-    pub fn project_to_grid(
-        &self,
-        lats: &[f32],
-        lons: &[f32],
-    ) -> Vec<Array1<usize>> {
+    pub fn project_to_grid(&self, lats: &[f32], lons: &[f32]) -> Vec<Array1<usize>> {
         let (nrows, ncols) = self.shape();
 
         let mut grid_indexes = vec![vec![]; nrows * ncols];
-        
-        izip!(lats, lons).enumerate().for_each(|(index, (lat, lon))| {
-            if let Some(idx) = self.index(&lat, &lon) {
-                grid_indexes[idx].push(index);               
-            }
-        });
 
-        let indexes = grid_indexes.iter().map(|v| Array1::from(v.to_owned())).collect();
+        izip!(lats, lons)
+            .enumerate()
+            .for_each(|(index, (lat, lon))| {
+                if let Some(idx) = self.index(&lat, &lon) {
+                    grid_indexes[idx].push(index);
+                }
+            });
+
+        let indexes = grid_indexes
+            .iter()
+            .map(|v| Array1::from(v.to_owned()))
+            .collect();
         indexes
-
     }
 
     pub fn from_txt_file(grid_file: &str) -> Result<RegularGrid, RISICOError> {
@@ -148,10 +145,11 @@ impl RegularGrid {
 
 impl Grid for RegularGrid {
     fn index(&self, lat: &f32, lon: &f32) -> Option<usize> {
-        if lat < &(self.min_lat - self.step_lat/2.0) ||
-        lat > &(self.max_lat + self.step_lat/2.0) || 
-        lon < &(self.min_lon - self.step_lon/2.0) ||
-        lon > &(self.max_lon + self.step_lon/2.0) {
+        if lat < &(self.min_lat - self.step_lat / 2.0)
+            || lat > &(self.max_lat + self.step_lat / 2.0)
+            || lon < &(self.min_lon - self.step_lon / 2.0)
+            || lon > &(self.max_lon + self.step_lon / 2.0)
+        {
             return None;
         }
         let i = ((lat - self.min_lat) / self.step_lat).round() as usize;
@@ -165,9 +163,7 @@ impl Grid for RegularGrid {
 
     fn indexes(&mut self, lats: &[f32], lons: &[f32]) -> Array1<Option<usize>> {
         izip!(lats, lons)
-            .map(|(lat, lon)| {
-                self.index(lat, lon)
-            })
+            .map(|(lat, lon)| self.index(lat, lon))
             .collect::<Array1<_>>()
     }
 }
@@ -184,9 +180,9 @@ pub struct IrregularGrid {
 impl IrregularGrid {
     pub fn new(nrows: usize, ncols: usize, lats: Array1<f32>, lons: Array1<f32>) -> IrregularGrid {
         let points = izip!(&lats, &lons)
-                .enumerate()
-                .map(|(index, (lat, lon))| PointWithIndex::new([*lat, *lon], index))
-                .collect::<Vec<_>>();
+            .enumerate()
+            .map(|(index, (lat, lon))| PointWithIndex::new([*lat, *lon], index))
+            .collect::<Vec<_>>();
         let tree = RTree::bulk_load(points);
 
         IrregularGrid {
@@ -203,7 +199,8 @@ type PointWithIndex = GeomWithData<[f32; 2], usize>;
 
 impl Grid for IrregularGrid {
     fn index(&self, lat: &f32, lon: &f32) -> Option<usize> {
-        self.tree.nearest_neighbor(&[*lat, *lon])
+        self.tree
+            .nearest_neighbor(&[*lat, *lon])
             .and_then(|p| Some(p.data))
     }
 
@@ -216,10 +213,4 @@ impl Grid for IrregularGrid {
             .map(|(lat, lon)| self.index(lat, lon))
             .collect::<Array1<_>>()
     }
-
 }
-
-
-
-
-
