@@ -78,7 +78,7 @@ long_commit_hash=$(git rev-parse HEAD)
 # replace version number in Cargo.toml
 if [[ "$OSTYPE" == "darwin"* ]]; then
   # Mac OS
-  sed -i '' 's/^version = \".*\"/version = \"'$©'\"/' Cargo.toml
+  sed -i '' 's/^version = \".*\"/version = \"'$new_tag'\"/' Cargo.toml
 else
   # Linux
   sed -i 's/^version = \".*\"/version = \"'$new_tag'\"/' Cargo.toml
