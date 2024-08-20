@@ -5,7 +5,7 @@ use std::{collections::HashMap, sync::Arc};
 use OutputVariableName::*;
 
 use crate::library::{
-    config::models::WarmState,
+    config::{data::CellPropertiesContainer, models::WarmState},
     io::writers::OutputVariableName,
     modules::risico::constants::{NODATAVAL, SNOW_SECONDS_VALIDITY},
 };
@@ -27,7 +27,7 @@ fn get_derived(a: &f32, b: &f32, c: Option<&f32>) -> f32 {
 
     if let Some(c) = c {
         if *c != NODATAVAL {
-            r = r * c;
+            r *= c;
         }
     }
     r
@@ -53,11 +53,7 @@ pub struct Properties {
 
 impl Properties {
     pub fn new(
-        lats: Vec<f32>,
-        lons: Vec<f32>,
-        slopes: Vec<f32>,
-        aspects: Vec<f32>,
-        vegetations: Vec<String>,
+        props: CellPropertiesContainer,
         vegetations_dict: HashMap<String, Arc<Vegetation>>,
         ppf_summer: Vec<f32>,
         ppf_winter: Vec<f32>,
@@ -73,14 +69,15 @@ impl Properties {
         // }
 
         let default_veg = Arc::new(Vegetation::default());
-        let data: Array1<PropertiesElement> = vegetations
+        let data: Array1<PropertiesElement> = props
+            .vegetations
             .iter()
             .enumerate()
             .map(|(idx, v)| PropertiesElement {
-                lon: lons[idx],
-                lat: lats[idx],
-                slope: slopes[idx],
-                aspect: aspects[idx],
+                lon: props.lons[idx],
+                lat: props.lats[idx],
+                slope: props.slopes[idx],
+                aspect: props.aspects[idx],
                 ppf_summer: ppf_summer[idx],
                 ppf_winter: ppf_winter[idx],
                 vegetation: vegetations_dict.get(v).unwrap_or(&default_veg).clone(),
@@ -315,7 +312,7 @@ pub struct State {
 impl State {
     #[allow(dead_code, non_snake_case)]
     /// Create a new state.
-    pub fn new(warm_state: &Vec<WarmState>, time: &DateTime<Utc>, config: ModelConfig) -> State {
+    pub fn new(warm_state: &[WarmState], time: &DateTime<Utc>, config: ModelConfig) -> State {
         let data = Array1::from_vec(
             warm_state
                 .iter()
@@ -334,11 +331,11 @@ impl State {
         );
 
         State {
-            time: time.clone(),
+            time: *time,
             // props,
             data,
             len: warm_state.len(),
-            config: config,
+            config,
         }
     }
 
@@ -373,7 +370,7 @@ impl State {
             .par_for_each(|state, input| {
                 let i_msi = input.msi;
 
-                if i_msi < 0.0 || i_msi > 1.0 {
+                if !(0.0..=1.0).contains(&i_msi) {
                     if state.MSI > 0.0 {
                         state.MSI_TTL -= 1.0;
                     } else {
@@ -395,7 +392,7 @@ impl State {
                 }
 
                 if i_ndvi != NODATAVAL {
-                    if i_ndvi >= 0.0 && i_ndvi <= 1.0 {
+                    if (0.0..=1.0).contains(&i_ndvi) {
                         state.NDVI = i_ndvi;
                     } else {
                         state.NDVI = NODATAVAL;
@@ -419,7 +416,7 @@ impl State {
                 }
 
                 if i_ndwi != NODATAVAL {
-                    if i_ndwi >= 0.0 && i_ndwi <= 1.0 {
+                    if (0.0..=1.0).contains(&i_ndwi) {
                         state.NDWI = i_ndwi;
                     } else {
                         state.NDWI = NODATAVAL;
@@ -431,7 +428,7 @@ impl State {
 
     #[allow(non_snake_case)]
     fn update_moisture(&mut self, props: &Properties, input: &Input, dt: f32) {
-        let dt = f32::max(1.0, f32::min(72.0, dt));
+        let dt = dt.clamp(1.0, 72.0);
 
         Zip::from(&mut self.data)
             // .and(&self.snow_cover)
@@ -453,14 +450,14 @@ impl State {
                 get_output_fn(state, props, input, &self.config, time)
             });
 
-        Output::new(time.clone(), output_data)
+        Output::new(*time, output_data)
     }
 
     /// Update the state of the cells.
     pub fn update(&mut self, props: &Properties, input: &Input) {
         let new_time = &input.time;
         let dt = new_time.signed_duration_since(self.time).num_seconds() as f32 / 3600.0;
-        self.time = new_time.clone();
+        self.time = *new_time;
         self.update_satellite(input);
         self.update_snow_cover(input);
         self.update_moisture(props, input, dt);

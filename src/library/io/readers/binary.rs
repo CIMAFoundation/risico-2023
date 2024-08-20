@@ -46,13 +46,19 @@ where
     const CHUNK_SIZE: usize = 4;
     let values = buffer
         .chunks_exact(CHUNK_SIZE)
-        .map(|chunk| f32::from_le_bytes(chunk.try_into().expect(&format!("error loading data"))))
+        .map(|chunk| {
+            f32::from_le_bytes(
+                chunk
+                    .try_into()
+                    .unwrap_or_else(|_| panic!("error loading data")),
+            )
+        })
         .collect::<Array1<f32>>();
     Ok(values)
 }
 
 pub fn read_grid_from_file(file: &str) -> Result<Box<dyn Grid>, io::Error> {
-    let input = File::open(file).expect(&format!("Can't open file: {}", file));
+    let input = File::open(file).unwrap_or_else(|_| panic!("Can't open file: {}", file));
 
     let input = io::BufReader::new(input);
     let mut decoder = gzip::Decoder::new(input)?;
@@ -111,7 +117,7 @@ where
 /// read a file and returns Grid and Vector of data
 /// Grid is a struct with the following fields:
 pub fn read_values_from_file(file: &str) -> Result<Array1<f32>, io::Error> {
-    let input = File::open(file).expect(&format!("Can't open file: {}", file));
+    let input = File::open(file).unwrap_or_else(|_| panic!("Can't open file: {}", file));
 
     let input = io::BufReader::new(input);
     let mut decoder = gzip::Decoder::new(input)?;
@@ -167,7 +173,7 @@ fn parse_line(line: &str) -> Result<(String, String, DateTime<Utc>), LegacyInput
 
     let name_and_ext = filename.split('.').collect::<Vec<&str>>();
 
-    if name_and_ext.len() == 0 || name_and_ext.len() > 2 {
+    if name_and_ext.is_empty() || name_and_ext.len() > 2 {
         return Err(format!("Error parsing filename {line}").into());
     }
 
@@ -257,9 +263,7 @@ impl BinaryInputDataHandler {
             }
 
             // add the data to the data map
-            if !data_map.contains_key(&date) {
-                data_map.insert(date, HashMap::new());
-            }
+            data_map.entry(date).or_insert_with(HashMap::new);
 
             if let Some(data_map_for_date) = data_map.get_mut(&date) {
                 if let Ok(var) = variable.parse::<InputVariableName>() {
@@ -291,12 +295,12 @@ impl InputHandler for BinaryInputDataHandler {
         };
 
         let data = read_values_from_file(file.path.as_str())
-            .expect(&format!("Error reading file {}", file.path));
+            .unwrap_or_else(|_| panic!("Error reading file {}", file.path));
 
         let indexes = self
             .grid_registry
             .get(&file.grid_name)
-            .expect(&format!("there should be a grid named {}", file.grid_name));
+            .unwrap_or_else(|| panic!("there should be a grid named {}", file.grid_name));
 
         let data: Vec<f32> = indexes
             .par_iter()

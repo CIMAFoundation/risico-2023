@@ -78,7 +78,7 @@ impl RegularGrid {
         izip!(lats, lons)
             .enumerate()
             .for_each(|(index, (lat, lon))| {
-                if let Some(idx) = self.index(&lat, &lon) {
+                if let Some(idx) = self.index(lat, lon) {
                     grid_indexes[idx].push(index);
                 }
             });
@@ -96,42 +96,42 @@ impl RegularGrid {
 
         let nrows = config_map
             .get("GRIDNROWS")
-            .and_then(|value| value.get(0))
+            .and_then(|value| value.first())
             .expect("GRIDNROWS not found in grid file")
             .replace("f", "")
             .parse::<usize>()
             .expect("GRIDNROWS is not a number");
         let ncols = config_map
             .get("GRIDNCOLS")
-            .and_then(|value| value.get(0))
+            .and_then(|value| value.first())
             .expect("GRIDNCOLS not found in grid file")
             .replace("f", "")
             .parse::<usize>()
             .expect("GRIDNCOLS is not a number");
         let minlat = config_map
             .get("MINLAT")
-            .and_then(|value| value.get(0))
+            .and_then(|value| value.first())
             .expect("MINLAT not found in grid file")
             .replace("f", "")
             .parse::<f32>()
             .expect("MINLAT is not a number");
         let minlon = config_map
             .get("MINLON")
-            .and_then(|value| value.get(0))
+            .and_then(|value| value.first())
             .expect("MINLON not found in grid file")
             .replace("f", "")
             .parse::<f32>()
             .expect("MINLON is not a number");
         let maxlat = config_map
             .get("MAXLAT")
-            .and_then(|value| value.get(0))
+            .and_then(|value| value.first())
             .expect("MAXLAT not found in grid file")
             .replace("f", "")
             .parse::<f32>()
             .expect("MAXLAT is not a number");
         let maxlon = config_map
             .get("MAXLON")
-            .and_then(|value| value.get(0))
+            .and_then(|value| value.first())
             .expect("MAXLON not found in grid file")
             .replace("f", "")
             .parse::<f32>()
@@ -199,9 +199,7 @@ type PointWithIndex = GeomWithData<[f32; 2], usize>;
 
 impl Grid for IrregularGrid {
     fn index(&self, lat: &f32, lon: &f32) -> Option<usize> {
-        self.tree
-            .nearest_neighbor(&[*lat, *lon])
-            .and_then(|p| Some(p.data))
+        self.tree.nearest_neighbor(&[*lat, *lon]).map(|p| p.data)
     }
 
     fn shape(&self) -> (usize, usize) {

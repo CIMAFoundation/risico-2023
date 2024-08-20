@@ -146,7 +146,7 @@ fn register_nc_file(
                 .variable_map
                 .iter()
                 .find(|(_, v)| *v == &nc_var)
-                .map(|(k, _)| k.clone());
+                .map(|(k, _)| *k);
             var_name
         })
         .collect::<Vec<InputVariableName>>();
@@ -201,11 +201,11 @@ fn read_variable_from_file(
 
     let var = nc_file
         .variable(variable)
-        .expect(&format!("Could not find variable '{}'", variable));
+        .unwrap_or_else(|| panic!("Could not find variable '{}'", variable));
 
     let extent: Extents = (time_index, .., ..)
         .try_into()
-        .expect(&format!("Could not create extent '{}'", &time_index));
+        .unwrap_or_else(|_| panic!("Could not create extent '{}'", &time_index));
     let values = var
         .values::<f32, _>(extent)?
         .into_iter()
@@ -268,10 +268,9 @@ impl InputHandler for NetCdfInputHandler {
                 continue;
             }
             let time_index = time_index.expect("Could not find time index");
-            let variable = self.config.variable_map.get(&var).expect(&format!(
-                "Could not find variable mapping for variable '{}'",
-                var
-            ));
+            let variable = self.config.variable_map.get(&var).unwrap_or_else(|| {
+                panic!("Could not find variable mapping for variable '{}'", var)
+            });
 
             let values = read_variable_from_file(&record.file, variable, time_index);
 

@@ -14,6 +14,7 @@ pub trait InputHandler {
     fn get_variables(&self, time: &DateTime<Utc>) -> Vec<InputVariableName>;
 }
 
+#[allow(clippy::upper_case_acronyms, non_camel_case_types)]
 #[derive(Debug, PartialEq, Eq, Hash, Copy, Clone, EnumString, EnumIter, Display)]
 pub enum InputVariableName {
     /// Air Humidity

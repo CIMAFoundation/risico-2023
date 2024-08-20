@@ -3,7 +3,8 @@ use chrono::Utc;
 #[cfg(feature = "gdal")]
 use gdal::raster::{Buffer, RasterCreationOption};
 
-use libflate::gzip;
+use libflate::gzip::{self, Encoder};
+use log::warn;
 use netcdf::extent::Extents;
 use std::io::BufWriter;
 use std::path::Path;
@@ -20,41 +21,58 @@ use strum::EnumProperty;
 
 use super::models::{grid::RegularGrid, palette::Palette};
 
+pub fn write_and_check(
+    encoder: &mut Encoder<BufWriter<File>>,
+    buf: &[u8],
+    ok: &mut bool,
+) -> Result<(), io::Error> {
+    let written = encoder.write(buf)?;
+    if written < buf.len() {
+        *ok = false;
+    }
+    Ok(())
+}
+
 pub fn write_to_zbin_file(file: &str, grid: &RegularGrid, values: &[f32]) -> Result<(), io::Error> {
     let output = File::create(file)?;
 
     let output = io::BufWriter::new(output);
     let mut encoder = gzip::Encoder::new(output)?;
+    let mut ok = true;
 
     let buf = [1u8, 0u8, 0u8, 0u8];
-    encoder.write(&buf)?;
+    write_and_check(&mut encoder, &buf, &mut ok)?;
     let nrows = grid.nrows as u32;
     let ncols = grid.ncols as u32;
     let buf = nrows.to_le_bytes();
-    encoder.write(&buf)?;
+    write_and_check(&mut encoder, &buf, &mut ok)?;
     let buf = ncols.to_le_bytes();
-    encoder.write(&buf)?;
+    write_and_check(&mut encoder, &buf, &mut ok)?;
 
     let buf = grid.min_lat.to_le_bytes();
-    encoder.write(&buf)?;
+    write_and_check(&mut encoder, &buf, &mut ok)?;
     let buf = grid.max_lat.to_le_bytes();
-    encoder.write(&buf)?;
+    write_and_check(&mut encoder, &buf, &mut ok)?;
 
     let buf = grid.min_lon.to_le_bytes();
-    encoder.write(&buf)?;
+    write_and_check(&mut encoder, &buf, &mut ok)?;
 
     let buf = grid.max_lon.to_le_bytes();
-    encoder.write(&buf)?;
+    write_and_check(&mut encoder, &buf, &mut ok)?;
 
     let mut buf = Vec::<u8>::new();
 
     for index in 0..nrows * ncols {
         let index = index as usize;
-        let val = values[index] as f32;
+        let val = values[index];
         buf.extend(val.to_le_bytes());
     }
-    encoder.write(&buf)?;
+    write_and_check(&mut encoder, &buf, &mut ok)?;
     encoder.finish();
+
+    if !ok {
+        warn!("Problems writing file {}", file);
+    }
 
     Ok(())
 }
@@ -69,7 +87,7 @@ pub fn write_to_pngwjson(
 
     let output = io::BufWriter::new(output);
 
-    let ref mut w = BufWriter::new(output);
+    let w = &mut BufWriter::new(output);
 
     let nrows = grid.nrows as u32;
     let ncols = grid.ncols as u32;
@@ -86,11 +104,11 @@ pub fn write_to_pngwjson(
     for row in (0..nrows).rev() {
         for col in 0..ncols {
             let index = (row * ncols + col) as usize;
-            let val = values[index] as f32;
+            let val = values[index];
             let color = palette.get_color(val);
             let pixel_data = [color.r, color.g, color.b, color.a];
-            for i in 0..4 {
-                data.push(pixel_data[i]);
+            for value in pixel_data {
+                data.push(value);
             }
         }
     }
@@ -275,10 +293,7 @@ pub fn create_nc_file(
         .expect("Should add attribute");
 
     variable_var
-        .add_attribute(
-            "units",
-            variable_name.get_str("units").unwrap_or(&"unknown"),
-        )
+        .add_attribute("units", variable_name.get_str("units").unwrap_or("unknown"))
         .expect("Should add attribute");
 
     variable_var
@@ -293,7 +308,7 @@ pub fn create_nc_file(
     Ok(file)
 }
 
-#[allow(non_camel_case_types)]
+#[allow(non_camel_case_types, clippy::upper_case_acronyms)]
 #[derive(Debug, PartialEq, Eq, Hash, Copy, Clone, EnumString, EnumProperty, Display)]
 pub enum OutputVariableName {
     /// Fine Fuel Moisture

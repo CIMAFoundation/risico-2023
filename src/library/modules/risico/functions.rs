@@ -26,7 +26,7 @@ pub fn get_ppf(time: &DateTime<Utc>, ppf_summer: f32, ppf_winter: f32) -> f32 {
     }
     let day_number: u32 = time.date_naive().ordinal();
 
-    let ppf = match day_number {
+    match day_number {
         1..=MARCH_31 => ppf_winter,
         APRIL_1..=MAY_31 => {
             let val: f32 = (day_number - (MARCH_31 + 1)) as f32 / (MAY_31 - MARCH_31) as f32;
@@ -40,8 +40,7 @@ pub fn get_ppf(time: &DateTime<Utc>, ppf_summer: f32, ppf_winter: f32) -> f32 {
         }
         DECEMBER_1..=366 => ppf_winter,
         _ => panic!("Invalid day number"),
-    };
-    ppf
+    }
 }
 
 ///calculate the wind effect on fire propagation
@@ -70,6 +69,7 @@ pub fn get_moisture_effect_legacy(dffm: f32) -> f32 {
     f32::exp(-1.0 * f32::powf(dffm / 20.0, 2.0))
 }
 
+#[allow(clippy::too_many_arguments)]
 pub fn get_v_legacy(
     v0: f32,
     d0: f32,
@@ -187,9 +187,10 @@ pub fn get_moisture_effect(dffm: f32) -> f32 {
         + M1 * x
         + M0;
     // clip in [0, 1]
-    f32::max(0.0, f32::min(1., moist_eff))
+    moist_eff.clamp(0.0, 1.)
 }
 
+#[allow(clippy::too_many_arguments)]
 pub fn get_v(
     v0: f32,
     d0: f32,
@@ -232,14 +233,13 @@ pub fn get_lhv_l1(humidity: f32, msi: f32, hhv: f32) -> f32 {
     if humidity == NODATAVAL {
         return 0.0;
     }
-    let lhv_l1: f32;
-    if msi >= 0.0 && msi <= 1.0 {
+
+    if (0.0..=1.0).contains(&msi) {
         let l1_msi = f32::max(20.0, humidity - (20.0 * msi));
-        lhv_l1 = hhv * (1.0 - (l1_msi / 100.0)) - Q * (l1_msi / 100.0);
+        hhv * (1.0 - (l1_msi / 100.0)) - Q * (l1_msi / 100.0)
     } else {
-        lhv_l1 = hhv * (1.0 - (humidity / 100.0)) - Q * (humidity / 100.0);
+        hhv * (1.0 - (humidity / 100.0)) - Q * (humidity / 100.0)
     }
-    lhv_l1
 }
 
 ///calculate the fire intensity
@@ -360,73 +360,6 @@ pub fn index_from_swi(dffm: f32, swi: f32) -> f32 {
     dffm
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use chrono::{DateTime, NaiveDate, Utc};
-
-    #[test]
-    fn test_get_ppf_winter() {
-        // create an utc datetime object
-        let date: DateTime<Utc> = DateTime::<Utc>::from_utc(
-            NaiveDate::from_ymd_opt(2019, 1, 1)
-                .unwrap()
-                .and_hms_opt(0, 0, 0)
-                .unwrap(),
-            Utc,
-        );
-        let ppf = get_ppf(&date, 0.0, 1.0);
-        assert_eq!(ppf, 0.0);
-    }
-
-    #[test]
-    fn test_get_ppf_summer() {
-        let date: DateTime<Utc> = DateTime::<Utc>::from_utc(
-            NaiveDate::from_ymd_opt(2019, 7, 1)
-                .unwrap()
-                .and_hms_opt(0, 0, 0)
-                .unwrap(),
-            Utc,
-        );
-
-        let ppf = get_ppf(&date, 0.0, 1.0);
-        assert_eq!(ppf, 1.0);
-    }
-
-    #[test]
-    fn test_get_ppf_spring() {
-        let date: DateTime<Utc> = DateTime::<Utc>::from_utc(
-            NaiveDate::from_ymd_opt(2019, 4, 1)
-                .unwrap()
-                .and_hms_opt(0, 0, 0)
-                .unwrap(),
-            Utc,
-        );
-        let ppf = get_ppf(&date, 0.0, 1.0);
-        assert_eq!(ppf, 0.5);
-    }
-
-    #[test]
-    fn test_get_ppf_autumn() {
-        let date: DateTime<Utc> = DateTime::<Utc>::from_utc(
-            NaiveDate::from_ymd_opt(2019, 10, 1)
-                .unwrap()
-                .and_hms_opt(0, 0, 0)
-                .unwrap(),
-            Utc,
-        );
-        let ppf = get_ppf(&date, 0.0, 1.0);
-        assert_eq!(ppf, 0.5);
-    }
-
-    // #[test]
-    // fn test_get_ppf_autumn() {
-    //     let date = NaiveDate::from_ymd(2019, 10, 1);
-    //     let ppf = get_ppf(&date, 0.0, 1.0);
-    //     assert_eq!(ppf, 0.5);
-    // }
-}
-
 #[allow(non_snake_case)]
 pub fn update_moisture_fn(
     state: &mut StateElement,
@@ -483,7 +416,7 @@ pub fn get_meteo_index(dffm: f32, w_effect: f32) -> f32 {
         return NODATAVAL;
     };
 
-    let col = if dffm <= 5.0 && dffm >= 0.0 {
+    let col = if (0.0..=5.0).contains(&dffm) {
         0
     } else if dffm <= 12.0 && dffm > 5.0 {
         1
@@ -497,7 +430,7 @@ pub fn get_meteo_index(dffm: f32, w_effect: f32) -> f32 {
         5
     };
 
-    let row = if w_effect >= 1.0 && w_effect <= 1.5 {
+    let row = if (1.0..=1.5).contains(&w_effect) {
         0
     } else if w_effect > 1.5 && w_effect <= 1.8 {
         1
@@ -538,13 +471,13 @@ pub fn get_output_fn(
     let dffm = state.dffm;
 
     let ndvi = if veg.use_ndvi && NDVI != NODATAVAL {
-        f32::max(f32::min(1.0 - NDVI, 1.0), 0.0)
+        (1.0 - NDVI).clamp(0.0, 1.0)
     } else {
         1.0
     };
 
     let ndwi = if NDWI != NODATAVAL {
-        f32::max(f32::min(1.0 - NDWI, 1.0), 0.0)
+        (1.0 - NDWI).clamp(0.0, 1.0)
     } else {
         1.0
     };
@@ -581,16 +514,76 @@ pub fn get_output_fn(
         W: wind_effect,
         PPF: ppf,
         I: intensity,
-        temperature: temperature,
-        humidity: humidity,
-        wind_speed: wind_speed,
-        wind_dir: wind_dir,
-        rain: rain,
-        snow_cover: snow_cover,
-        dffm: dffm,
-        t_effect: t_effect,
+        temperature,
+        humidity,
+        wind_speed,
+        wind_dir,
+        rain,
+        snow_cover,
+        dffm,
+        t_effect,
         NDWI: ndwi,
         NDVI: ndvi,
-        meteo_index: meteo_index,
+        meteo_index,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use chrono::{DateTime, NaiveDate, TimeZone, Utc};
+
+    #[test]
+    fn test_get_ppf_winter() {
+        // create an utc datetime object
+        let date: DateTime<Utc> = Utc::from_utc_datetime(
+            &Utc,
+            &NaiveDate::from_ymd_opt(2019, 1, 1)
+                .unwrap()
+                .and_hms_opt(0, 0, 0)
+                .unwrap(),
+        );
+        let ppf = get_ppf(&date, 0.0, 1.0);
+        assert_eq!(ppf, 0.0);
+    }
+
+    #[test]
+    fn test_get_ppf_summer() {
+        let date: DateTime<Utc> = Utc::from_utc_datetime(
+            &Utc,
+            &NaiveDate::from_ymd_opt(2019, 7, 1)
+                .unwrap()
+                .and_hms_opt(0, 0, 0)
+                .unwrap(),
+        );
+
+        let ppf = get_ppf(&date, 0.0, 1.0);
+        assert_eq!(ppf, 1.0);
+    }
+
+    #[test]
+    fn test_get_ppf_spring() {
+        let date: DateTime<Utc> = Utc::from_utc_datetime(
+            &Utc,
+            &NaiveDate::from_ymd_opt(2019, 4, 1)
+                .unwrap()
+                .and_hms_opt(0, 0, 0)
+                .unwrap(),
+        );
+        let ppf = get_ppf(&date, 0.0, 1.0);
+        assert_eq!(ppf, 0.5);
+    }
+
+    #[test]
+    fn test_get_ppf_autumn() {
+        let date: DateTime<Utc> = Utc::from_utc_datetime(
+            &Utc,
+            &NaiveDate::from_ymd_opt(2019, 10, 1)
+                .unwrap()
+                .and_hms_opt(0, 0, 0)
+                .unwrap(),
+        );
+        let ppf = get_ppf(&date, 0.0, 1.0);
+        assert_eq!(ppf, 0.5);
     }
 }

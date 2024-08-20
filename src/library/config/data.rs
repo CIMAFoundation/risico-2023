@@ -8,12 +8,18 @@ use crate::library::modules::risico::models::Vegetation;
 
 use super::models::RISICOError;
 
+pub struct CellPropertiesContainer {
+    pub lons: Vec<f32>,
+    pub lats: Vec<f32>,
+    pub slopes: Vec<f32>,
+    pub aspects: Vec<f32>,
+    pub vegetations: Vec<String>,
+}
+
 /// Read the cells from a file.
 /// :param file_path: The path to the file.
 /// :return: A list of cells.
-pub fn read_cells_properties(
-    file_path: &str,
-) -> Result<(Vec<f32>, Vec<f32>, Vec<f32>, Vec<f32>, Vec<String>), RISICOError> {
+pub fn read_cells_properties(file_path: &str) -> Result<CellPropertiesContainer, RISICOError> {
     let file = fs::File::open(file_path).map_err(|err| format!("can't open file: {err}."))?;
 
     let mut lons: Vec<f32> = Vec::new();
@@ -41,17 +47,18 @@ pub fn read_cells_properties(
         //  [TODO] refactor this for using error handling
         let lon = line_parts[0]
             .parse::<f32>()
-            .expect(format!("Invalid line in file: {}", line).as_str());
+            .unwrap_or_else(|_| panic!("Invalid line in file: {}", line));
+
         let lat = line_parts[1]
             .parse::<f32>()
-            .expect(format!("Invalid line in file: {}", line).as_str());
+            .unwrap_or_else(|_| panic!("Invalid line in file: {}", line));
 
         let slope = line_parts[2]
             .parse::<f32>()
-            .expect(format!("Invalid line in file: {}", line).as_str());
+            .unwrap_or_else(|_| panic!("Invalid line in file: {}", line));
         let aspect = line_parts[3]
             .parse::<f32>()
-            .expect(format!("Invalid line in file: {}", line).as_str());
+            .unwrap_or_else(|_| panic!("Invalid line in file: {}", line));
 
         let vegetation = line_parts[4].to_string();
 
@@ -65,7 +72,14 @@ pub fn read_cells_properties(
         vegetations.push(vegetation);
     }
 
-    Ok((lats, lons, slopes, aspects, vegetations))
+    let props = CellPropertiesContainer {
+        lats,
+        lons,
+        slopes,
+        aspects,
+        vegetations,
+    };
+    Ok(props)
 }
 
 /// Read the cells from a file.
@@ -85,7 +99,7 @@ pub fn read_vegetation(
             // skip header and empty lines
             continue;
         }
-        let line_elements: Vec<&str> = line.trim().split_whitespace().collect::<Vec<&str>>();
+        let line_elements: Vec<&str> = line.split_whitespace().collect::<Vec<&str>>();
 
         let n_elements = line_elements.len();
         if n_elements < 9 {
@@ -98,31 +112,31 @@ pub fn read_vegetation(
         let id = line_elements[0].to_string();
         let d0 = line_elements[1]
             .parse::<f32>()
-            .expect(format!("Invalid line in file: {}", line).as_str());
+            .unwrap_or_else(|_| panic!("Invalid line in file: {}", line));
         let d1 = line_elements[2]
             .parse::<f32>()
-            .expect(format!("Invalid line in file: {}", line).as_str());
+            .unwrap_or_else(|_| panic!("Invalid line in file: {}", line));
         let hhv = line_elements[3]
             .parse::<f32>()
-            .expect(format!("Invalid line in file: {}", line).as_str());
+            .unwrap_or_else(|_| panic!("Invalid line in file: {}", line));
         let umid = line_elements[4]
             .parse::<f32>()
-            .expect(format!("Invalid line in file: {}", line).as_str());
+            .unwrap_or_else(|_| panic!("Invalid line in file: {}", line));
         let v0 = line_elements[5]
             .parse::<f32>()
-            .expect(format!("Invalid line in file: {}", line).as_str());
+            .unwrap_or_else(|_| panic!("Invalid line in file: {}", line));
         #[allow(non_snake_case)]
         let T0 = line_elements[6]
             .parse::<f32>()
-            .expect(format!("Invalid line in file: {}", line).as_str());
+            .unwrap_or_else(|_| panic!("Invalid line in file: {}", line));
         let sat = line_elements[7]
             .parse::<f32>()
-            .expect(format!("Invalid line in file: {}", line).as_str());
+            .unwrap_or_else(|_| panic!("Invalid line in file: {}", line));
 
         let use_ndvi = match n_elements {
             10.. => line_elements[8]
                 .parse::<bool>()
-                .expect(format!("Invalid line in file: {}", line).as_str()),
+                .unwrap_or_else(|_| panic!("Invalid line in file: {}", line)),
             _ => false,
         };
         let name = line_elements[n_elements - 1].to_string();

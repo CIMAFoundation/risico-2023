@@ -74,14 +74,10 @@ impl OutputVariable {
     ) -> Option<Array1<f32>> {
         let values = output.get(&self.internal_name);
 
-        let values = if let Some(values) = values {
-            values
-        } else {
-            return None;
-        };
+        let values = values?;
         let cutval = f32::powi(10.0, self.precision);
 
-        let n_pixels = grid.nrows * grid.ncols as usize;
+        let n_pixels = grid.nrows * grid.ncols;
         let mut grid_values: Array1<f32> = Array1::ones(n_pixels) * NODATAVAL;
 
         let indexes_and_values: Vec<(usize, f32)> = Zip::from(lats)
@@ -93,10 +89,7 @@ impl OutputVariable {
                     return None;
                 }
 
-                match grid.index(lat, lon) {
-                    Some(idx) => Some((idx, *value)),
-                    None => None,
-                }
+                grid.index(lat, lon).map(|idx| (idx, *value))
             })
             .collect();
 
@@ -121,17 +114,14 @@ impl OutputVariable {
             }
         });
 
-        match self.cluster_mode {
-            ClusterMode::Mean => {
-                let mut grid_count: Array1<f32> = Array1::zeros(n_pixels);
-                indexes_and_values
-                    .iter()
-                    .for_each(|(idx, _)| grid_count[*idx] += 1.0);
+        if let ClusterMode::Mean = self.cluster_mode {
+            let mut grid_count: Array1<f32> = Array1::zeros(n_pixels);
+            indexes_and_values
+                .iter()
+                .for_each(|(idx, _)| grid_count[*idx] += 1.0);
 
-                let grid_count = grid_count.mapv(|v| if v == 0.0 { 1.0 } else { v });
-                grid_values = grid_values / grid_count;
-            }
-            _ => {}
+            let grid_count = grid_count.mapv(|v| if v == 0.0 { 1.0 } else { v });
+            grid_values = grid_values / grid_count;
         }
 
         // apply cutval
@@ -186,12 +176,12 @@ impl OutputType {
             internal_name: internal_name.to_string(),
             name: name.to_string(),
             path: path.to_string(),
-            grid: grid,
+            grid,
             format: format.to_string(),
             variables: Vec::new(),
-            palettes: palettes,
-            run_date: run_date.clone(),
-            writer: writer,
+            palettes,
+            run_date: *run_date,
+            writer,
         })
     }
 
@@ -227,7 +217,7 @@ impl NetcdfWriter {
         Self {
             path: PathBuf::from(path),
             name: name.to_string(),
-            run_date: run_date.clone(),
+            run_date: *run_date,
             files: HashMap::new(),
         }
     }
@@ -244,7 +234,7 @@ impl ZBinWriter {
         Self {
             path: PathBuf::from(path),
             name: name.to_string(),
-            run_date: run_date.clone(),
+            run_date: *run_date,
         }
     }
 }
@@ -261,7 +251,7 @@ impl PngWriter {
         Self {
             path: PathBuf::from(path),
             name: name.to_string(),
-            run_date: run_date.clone(),
+            run_date: *run_date,
             palettes: palettes.clone(),
         }
     }
@@ -319,8 +309,8 @@ impl Writer for NetcdfWriter {
 
                 let mut time_var = file
                     .variable_mut("time")
-                    .ok_or_else(|| format!("variable not found: time"))?;
-                let time: i64 = output.time.timestamp() as i64;
+                    .ok_or_else(|| "variable not found: time".to_string())?;
+                let time: i64 = output.time.timestamp();
                 let len = time_var.len();
                 let extents: Extents = (&[len], &[1]).try_into().expect("Should convert");
 
@@ -332,7 +322,7 @@ impl Writer for NetcdfWriter {
                     .variable_mut(&variable.name)
                     .ok_or_else(|| format!("variable not found: {}", variable.name))?;
 
-                let values = variable.get_variable_on_grid(&output, lats, lons, &grid);
+                let values = variable.get_variable_on_grid(output, lats, lons, grid);
                 let extents: Extents = (&[len, 0, 0], &[1, n_lats, n_lons])
                     .try_into()
                     .expect("Should convert");
@@ -382,10 +372,10 @@ impl Writer for ZBinWriter {
                 );
 
                 debug!("[ZBIN] Writing variable {} to {:?}", variable.name, file);
-                let values = variable.get_variable_on_grid(&output, lats, lons, grid);
+                let values = variable.get_variable_on_grid(output, lats, lons, grid);
 
                 if let Some(values) = values {
-                    write_to_zbin_file(&file, &grid, values.as_slice().expect("Should unwrap"))
+                    write_to_zbin_file(&file, grid, values.as_slice().expect("Should unwrap"))
                         .map_err(|err| format!("Cannot write file {}: error {err}", file))?;
 
                     debug!(
@@ -428,7 +418,7 @@ impl Writer for PngWriter {
 
                 debug!("[PNG] Writing variable {} to {:?}", variable.name, file);
 
-                let values = variable.get_variable_on_grid(&output, lats, lons, grid);
+                let values = variable.get_variable_on_grid(output, lats, lons, grid);
                 let palette = self
                     .palettes
                     .get(&variable.name)
@@ -437,9 +427,9 @@ impl Writer for PngWriter {
                 if let Some(values) = values {
                     write_to_pngwjson(
                         &file,
-                        &grid,
+                        grid,
                         values.as_slice().expect("Should unwrap"),
-                        &palette,
+                        palette,
                     )
                     .map_err(|err| format!("Cannot write file {}: error {err}", file))?;
 

@@ -8,7 +8,6 @@ use std::process::exit;
 use chrono::prelude::*;
 use library::io::readers::netcdf::{NetCdfInputConfiguration, NetCdfInputHandler};
 use log::{error, info, trace, warn};
-use pretty_env_logger;
 
 use crate::library::io::readers::binary::BinaryInputDataHandler;
 use crate::library::io::readers::prelude::InputHandler;
@@ -46,11 +45,11 @@ fn main() {
     }
 
     let date = NaiveDateTime::parse_from_str(date, "%Y%m%d%H%M")
-        .expect(&format!("Could not parse run date '{}'", date));
+        .unwrap_or_else(|_| panic!("Could not parse run date '{}'", date));
 
     let date = DateTime::from_naive_utc_and_offset(date, Utc);
 
-    let config = Config::new(&config_path_str, date).expect("Could not configure model");
+    let config = Config::new(config_path_str, date).expect("Could not configure model");
 
     let mut output_writer = config
         .get_output_writer()

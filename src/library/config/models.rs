@@ -60,7 +60,7 @@ pub trait ConfigMapExt {
 
 impl ConfigMapExt for ConfigMap {
     fn first(&self, key: &str) -> Option<String> {
-        self.get(key).and_then(|values| values.get(0).cloned())
+        self.get(key).and_then(|values| values.first().cloned())
     }
 
     fn all(&self, key: &str) -> Option<Vec<String>> {
@@ -257,21 +257,19 @@ impl Config {
 
         let ppf_file = config_map.first(PPF_FILE_KEY);
 
-        let use_temperature_effect = match config_map.first(USE_TEMPERATURE_EFFECT_KEY) {
-            Some(value) => match value.as_str() {
-                "true" | "True" | "TRUE" | "1" => true,
-                _ => false,
-            },
-            None => false,
+        let use_temperature_effect =
+            if let Some(value) = config_map.first(USE_TEMPERATURE_EFFECT_KEY) {
+                matches!(value.as_str(), "true" | "True" | "TRUE" | "1")
+            } else {
+                false
+            };
+
+        let use_ndvi = if let Some(value) = config_map.first(USE_NDVI_KEY) {
+            matches!(value.as_str(), "true" | "True" | "TRUE" | "1")
+        } else {
+            false
         };
 
-        let use_ndvi = match config_map.first(USE_NDVI_KEY) {
-            Some(value) => match value.as_str() {
-                "true" | "True" | "TRUE" | "1" => true,
-                _ => false,
-            },
-            None => false,
-        };
         let output_time_resolution = match config_map.first(KEY_HOURSRESOLUTION) {
             Some(value) => value.parse::<u32>().unwrap_or(3),
             None => 3,
@@ -284,14 +282,14 @@ impl Config {
             .all(VARIABLES_KEY)
             .ok_or(format!("KEY {VARIABLES_KEY} not found"))?;
 
-        let (lats, lons, slopes, aspects, vegetations) = read_cells_properties(&cells_file)
+        let props_container = read_cells_properties(&cells_file)
             .map_err(|error| format!("error reading {}, {error}", cells_file))?;
 
-        let n_cells = lons.len();
-        if n_cells != lats.len()
-            || n_cells != slopes.len()
-            || n_cells != aspects.len()
-            || n_cells != vegetations.len()
+        let n_cells = props_container.lons.len();
+        if n_cells != props_container.lats.len()
+            || n_cells != props_container.slopes.len()
+            || n_cells != props_container.aspects.len()
+            || n_cells != props_container.vegetations.len()
         {
             panic!("All properties must have the same length");
         }
@@ -301,7 +299,7 @@ impl Config {
 
         let (warm_state, warm_state_time) = read_warm_state(&warm_state_path, date).unwrap_or((
             vec![WarmState::default(); n_cells],
-            date.clone() - Duration::try_days(1).expect("Should be a valid duration"),
+            date - Duration::try_days(1).expect("Should be a valid duration"),
         ));
 
         let ppf = match ppf_file {
@@ -314,19 +312,10 @@ impl Config {
 
         let netcdf_input_configuration = config_map
             .first(NETCDF_INPUT_CONFIG)
-            .and_then(|line| Some(NetCdfInputConfiguration::from(&line)))
+            .map(|line| NetCdfInputConfiguration::from(&line))
             .or(None);
 
-        let props = Properties::new(
-            lats,
-            lons,
-            slopes,
-            aspects,
-            vegetations,
-            vegetations_dict,
-            ppf_summer,
-            ppf_winter,
-        );
+        let props = Properties::new(props_container, vegetations_dict, ppf_summer, ppf_winter);
 
         let config = Config {
             run_date: date,
@@ -375,7 +364,7 @@ impl Config {
 
     #[allow(non_snake_case)]
     pub fn write_warm_state(&self, state: &State) -> Result<(), RISICOError> {
-        let warm_state_time = state.time.clone() + Duration::try_days(1).expect("Should be valid");
+        let warm_state_time = state.time + Duration::try_days(1).expect("Should be valid");
         let date_string = warm_state_time.format("%Y%m%d%H%M").to_string();
         let warm_state_name = format!("{}{}", self.warm_state_path, date_string);
         let mut warm_state_file = File::create(&warm_state_name)
@@ -496,10 +485,10 @@ fn read_warm_state(
     // compose the filename as <base_warm_file>_<YYYYmmDDHHMM>
     let mut file: Option<File> = None;
 
-    let mut current_date = date.clone();
+    let mut current_date = date;
 
     for days_before in 0..4 {
-        current_date = date.clone() - Duration::try_days(days_before).expect("Should be valid");
+        current_date = date - Duration::try_days(days_before).expect("Should be valid");
 
         let filename = format!("{}{}", base_warm_file, current_date.format("%Y%m%d%H%M"));
 
@@ -539,25 +528,25 @@ fn read_warm_state(
         let components: Vec<&str> = line.split_whitespace().collect();
         let dffm = components[0]
             .parse::<f32>()
-            .expect(&format!("Could not parse dffm from {}", line));
+            .unwrap_or_else(|_| panic!("Could not parse dffm from {}", line));
         let snow_cover = components[1]
             .parse::<f32>()
-            .expect(&format!("Could not parse snow_cover from {}", line));
+            .unwrap_or_else(|_| panic!("Could not parse snow_cover from {}", line));
         let snow_cover_time = components[2]
             .parse::<f32>()
-            .expect(&format!("Could not parse snow_cover_time from {}", line));
+            .unwrap_or_else(|_| panic!("Could not parse snow_cover_time from {}", line));
         let MSI = components[3]
             .parse::<f32>()
-            .expect(&format!("Could not parse MSI from {}", line));
+            .unwrap_or_else(|_| panic!("Could not parse MSI from {}", line));
         let MSI_TTL = components[4]
             .parse::<f32>()
-            .expect(&format!("Could not parse MSI_TTL from {}", line));
+            .unwrap_or_else(|_| panic!("Could not parse MSI_TTL from {}", line));
         let NDVI = components[5]
             .parse::<f32>()
-            .expect(&format!("Could not parse NDVI from {}", line));
+            .unwrap_or_else(|_| panic!("Could not parse NDVI from {}", line));
         let NDVI_TIME = components[6]
             .parse::<f32>()
-            .expect(&format!("Could not parse NDVI_TIME from {}", line));
+            .unwrap_or_else(|_| panic!("Could not parse NDVI_TIME from {}", line));
 
         let mut NDWI = NODATAVAL;
         let mut NDWI_TIME = 0.0;
@@ -565,10 +554,10 @@ fn read_warm_state(
         if components.len() > 7 {
             NDWI = components[7]
                 .parse::<f32>()
-                .expect(&format!("Could not parse NDWI from {}", line));
+                .unwrap_or_else(|_| panic!("Could not parse NDWI from {}", line));
             NDWI_TIME = components[8]
                 .parse::<f32>()
-                .expect(&format!("Could not parse NDWI_TIME from {}", line));
+                .unwrap_or_else(|_| panic!("Could not parse NDWI_TIME from {}", line));
         }
 
         warm_state.push(WarmState {

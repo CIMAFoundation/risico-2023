@@ -3,10 +3,10 @@ use super::functions::{
     update_dffm_rain_legacy,
 };
 
+type RosFnType = fn(f32, f32, f32, f32, f32, f32, f32, f32, f32, f32) -> (f32, f32);
+
 /// configuration structure for model config
 /// can be used to store functions and constants
-///
-
 #[derive(Debug)]
 pub struct ModelConfig {
     pub model_version: String,
@@ -14,7 +14,7 @@ pub struct ModelConfig {
     pub use_t_effect: bool,
     ffmc_no_rain_fn: fn(f32, f32, f32, f32, f32, f32, f32) -> f32,
     ffmc_rain_fn: fn(f32, f32, f32) -> f32,
-    ros_fn: fn(f32, f32, f32, f32, f32, f32, f32, f32, f32, f32) -> (f32, f32),
+    ros_fn: RosFnType,
 }
 
 impl ModelConfig {
@@ -22,7 +22,7 @@ impl ModelConfig {
         log::info!("Model version: {}", model_version_str);
         let ffmc_no_rain_fn: fn(f32, f32, f32, f32, f32, f32, f32) -> f32;
         let ffmc_rain_fn: fn(f32, f32, f32) -> f32;
-        let ros_fn: fn(f32, f32, f32, f32, f32, f32, f32, f32, f32, f32) -> (f32, f32);
+        let ros_fn: RosFnType;
 
         match model_version_str {
             "legacy" => {
@@ -51,7 +51,7 @@ impl ModelConfig {
         }
     }
 
-    #[allow(non_snake_case)]
+    #[allow(non_snake_case, clippy::too_many_arguments)]
     pub fn ffmc_no_rain(
         &self,
         dffm: f32,
@@ -69,6 +69,7 @@ impl ModelConfig {
         (self.ffmc_rain_fn)(r, dffm, sat)
     }
 
+    #[allow(clippy::too_many_arguments)]
     pub fn ros(
         &self,
         v0: f32,
