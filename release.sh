@@ -101,7 +101,7 @@ git add Cargo.toml src/library/version.rs
 git commit -m "Bump version to v$new_tag"
 git push
 git tag v$new_tag
-#git push origin v$new_tag
+git push origin v$new_tag
 
 echo "Tag v$new_tag has been pushed to origin"
 echo "In order to trigger the release build, you need to remove the draft status from the release in GitHub"
