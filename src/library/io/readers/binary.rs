@@ -205,12 +205,12 @@ pub struct BinaryInputFile {
 }
 
 #[derive(Debug)]
-pub struct BinaryInputDataHandler {
+pub struct BinaryInputHandler {
     pub grid_registry: HashMap<String, Array1<Option<usize>>>,
     pub data_map: HashMap<DateTime<Utc>, HashMap<InputVariableName, BinaryInputFile>>,
 }
 
-impl BinaryInputDataHandler {
+impl BinaryInputHandler {
     pub fn new(file_path: &str, lats: &[f32], lons: &[f32]) -> Result<Self, Box<dyn Error>> {
         let mut grid_registry = HashMap::new();
         let mut data_map = HashMap::new();
@@ -274,14 +274,14 @@ impl BinaryInputDataHandler {
             }
         }
 
-        Ok(BinaryInputDataHandler {
+        Ok(BinaryInputHandler {
             grid_registry,
             data_map,
         })
     }
 }
 
-impl InputHandler for BinaryInputDataHandler {
+impl InputHandler for BinaryInputHandler {
     /// Returns the data for the given date and variable on the selected coordinates
     fn get_values(&self, var: InputVariableName, date: &DateTime<Utc>) -> Option<Array1<f32>> {
         let data_map = match self.data_map.get(date) {

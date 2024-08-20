@@ -11,7 +11,7 @@ use library::io::readers::netcdf::{NetCdfInputConfiguration, NetCdfInputHandler}
 use library::version::LONG_VERSION;
 use log::{error, info, trace, warn};
 
-use crate::library::io::readers::binary::BinaryInputDataHandler;
+use crate::library::io::readers::binary::BinaryInputHandler;
 use crate::library::io::readers::prelude::InputHandler;
 use crate::library::{config::models::Config, helpers::get_input};
 
@@ -43,13 +43,13 @@ It is designed to predict the likelihood and potential impact of wildfires in a 
 
     // Extracting the values
     let date = matches
-        .get_one::<&str>("date")
+        .get_one::<String>("date")
         .unwrap_or_else(|| panic!(""));
     let config_path = matches
-        .get_one::<&str>("config_path")
+        .get_one::<String>("config_path")
         .unwrap_or_else(|| panic!(""));
     let input_path = matches
-        .get_one::<&str>("input_path")
+        .get_one::<String>("input_path")
         .unwrap_or_else(|| panic!(""));
     
     (
@@ -94,17 +94,18 @@ fn main() {
     let (lats, lons) = (lats.as_slice(), lons.as_slice());
 
     let current_time = Utc::now();
-    info!("Loading input data from {}", input_path_str);
 
     // check if input_path is a file or a directory
     let input_path = Path::new(input_path_str);
     let handler: Box<dyn InputHandler> = if input_path.is_file() {
+        info!("Loading input data from {} using BinaryInputHandler", input_path_str);
         // if it is a file, we are loading the legacy input.txt file and binary inputs
         Box::new(
-            BinaryInputDataHandler::new(input_path_str, lats, lons)
+            BinaryInputHandler::new(input_path_str, lats, lons)
                 .expect("Could not load input data"),
         )
     } else if input_path.is_dir() {
+        info!("Loading input data from {} using NetCdfInputHandler", input_path_str);
         // we should load the netcdfs using the netcdfinputhandler
         let nc_config = if let Some(nc_config) = &config.netcdf_input_configuration {
             nc_config.clone()
