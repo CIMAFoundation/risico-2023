@@ -107,12 +107,12 @@ fn main() {
     } else if input_path.is_dir() {
         // we should load the netcdfs using the netcdfinputhandler
         let nc_config = if let Some(nc_config) = &config.netcdf_input_configuration {
-            nc_config
+            nc_config.clone()
         } else {
-            &NetCdfInputConfiguration::default()
+            NetCdfInputConfiguration::default()
         };
         Box::new(
-            NetCdfInputHandler::new(input_path_str, lats, lons, nc_config)
+            NetCdfInputHandler::new(input_path_str, lats, lons, &nc_config)
                 .expect("Could not load input data"),
         )
     } else {
