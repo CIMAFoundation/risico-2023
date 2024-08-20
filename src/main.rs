@@ -1,3 +1,4 @@
+#![allow(dead_code)]
 mod library;
 use std::env::{set_var, var};
 use std::path::Path;

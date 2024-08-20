@@ -40,7 +40,6 @@ const WARM_STATE_PATH_KEY: &str = "STATO0";
 const CELLS_FILE_KEY: &str = "CELLE";
 const VEGETATION_FILE_KEY: &str = "VEG";
 const PPF_FILE_KEY: &str = "PPF";
-const CACHE_PATH_KEY: &str = "BUFFERS";
 
 const MODEL_VERSION_KEY: &str = "MODEL_VERSION";
 
