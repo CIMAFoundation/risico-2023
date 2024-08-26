@@ -33,6 +33,7 @@ hdf5 = "0.8.1"
 hdf5-sys = { version = "0.8.1" }
 netcdf = "0.8.1"
 netcdf-sys = { version = "0.5.1" }
+serde_derive = "1.0.209"
 
 
 [build-dependencies]

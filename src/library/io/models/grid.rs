@@ -4,8 +4,9 @@ use crate::library::config::models::{read_config, RISICOError};
 use itertools::izip;
 use ndarray::Array1;
 use rstar::{primitives::GeomWithData, RTree};
+use serde_derive::{Deserialize, Serialize};
 
-#[derive(Debug)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum ClusterMode {
     Mean,
     Median,

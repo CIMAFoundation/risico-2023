@@ -6,6 +6,7 @@ use log::warn;
 use ndarray::Array1;
 use netcdf::extent::Extents;
 use rayon::prelude::*;
+use serde_derive::{Deserialize, Serialize};
 use std::fs;
 use strum::IntoEnumIterator;
 
@@ -16,7 +17,7 @@ use crate::library::{
 
 use super::prelude::{InputHandler, InputVariableName};
 
-#[derive(Clone)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct NetCdfInputConfiguration {
     pub variable_map: HashMap<InputVariableName, String>,
     pub lat_name: String,

@@ -6,6 +6,7 @@ use gdal::raster::{Buffer, RasterCreationOption};
 use libflate::gzip::{self, Encoder};
 use log::warn;
 use netcdf::extent::Extents;
+use serde_derive::{Deserialize, Serialize};
 use std::io::BufWriter;
 use std::path::Path;
 use std::{
@@ -306,7 +307,7 @@ pub fn create_nc_file(
 }
 
 #[allow(non_camel_case_types, clippy::upper_case_acronyms)]
-#[derive(Debug, PartialEq, Eq, Hash, Copy, Clone, EnumString, EnumProperty, Display)]
+#[derive(Debug, PartialEq, Eq, Hash, Copy, Clone, EnumString, EnumProperty, Display, Serialize, Deserialize)]
 pub enum OutputVariableName {
     /// Fine Fuel Moisture
     #[strum(props(long_name = "Fine Fuel Moisture", units = "%"))]

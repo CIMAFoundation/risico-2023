@@ -6,6 +6,7 @@ use log::debug;
 use ndarray::{Array1, Zip};
 use netcdf::{extent::Extents, MutableFile};
 use rayon::prelude::*;
+use serde_derive::{Deserialize, Serialize};
 
 use crate::library::{
     config::models::{PaletteMap, RISICOError},
@@ -42,7 +43,7 @@ fn extract_errors(
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct OutputVariable {
     internal_name: OutputVariableName,
     name: String,
