@@ -4,14 +4,20 @@ mod library;
 const VERSION: &str = env!("CARGO_PKG_VERSION");
 
 use clap::Parser;
-use library::config::serde::SerializableConfig;
+use library::{config::serde::SerializableConfig, version::LONG_VERSION};
 
-/// Simple program to greet a person
+
 #[derive(Parser, Debug)]
-#[command(author, version, about, long_about = None)]
+#[command(
+    author, 
+    version, 
+    about, 
+    version, 
+    long_version=LONG_VERSION, 
+    )]
 struct Args {
     /// configuration file
-    #[arg(short, long)]
+    #[arg(required=true, index=1)]
     config_file: String,
 }
 

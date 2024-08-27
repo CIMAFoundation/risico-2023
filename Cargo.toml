@@ -2,6 +2,8 @@
 name = "risico-2023"
 version = "0.2.0"
 edition = "2021"
+author = "Mirko D'Andrea <mirko.dandrea@cimafoundation.org>, Nicolò Perello <nicolo.perello@cimafoundation.org>"
+about = "risico-2023 Wildfire Risk Assessment Model by CIMA Research Foundation"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 [features]
