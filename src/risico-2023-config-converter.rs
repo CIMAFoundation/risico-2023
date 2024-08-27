@@ -9,12 +9,12 @@ use library::{config::serde::SerializableConfig, version::LONG_VERSION};
 
 #[derive(Parser, Debug)]
 #[command(
-    author, 
+    author="Mirko D'Andrea <mirko.dandrea@cimafoundation.org>", 
     version, 
-    about, 
+    about="risico-2023 utility for converting old txt configuration to yaml",  
     version, 
     long_version=LONG_VERSION, 
-    )]
+)]
 struct Args {
     /// configuration file
     #[arg(required=true, index=1)]
