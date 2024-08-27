@@ -15,7 +15,7 @@ use std::{
 };
 use strum_macros::{Display, EnumProperty, EnumString};
 
-use crate::library::config::models::RISICOError;
+use crate::library::helpers::RISICOError;
 use crate::library::modules::risico::constants::NODATAVAL;
 use crate::library::version::FULL_VERSION;
 use strum::EnumProperty;

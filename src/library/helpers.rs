@@ -1,4 +1,4 @@
-use std::f32::consts::PI;
+use std::{f32::consts::PI, fmt::Display};
 
 use chrono::{DateTime, Utc};
 use itertools::izip;
@@ -167,5 +167,35 @@ pub fn get_input(handler: &dyn InputHandler, time: &DateTime<Utc>, len: usize) -
     Input {
         time: time.to_owned(),
         data,
+    }
+}
+
+
+#[derive(Debug)]
+pub struct RISICOError {
+    msg: String,
+}
+
+impl From<String> for RISICOError {
+    fn from(msg: String) -> Self {
+        RISICOError { msg }
+    }
+}
+
+impl From<RISICOError> for String {
+    fn from(value: RISICOError) -> String {
+        value.msg
+    }
+}
+
+impl From<&str> for RISICOError {
+    fn from(msg: &str) -> Self {
+        RISICOError { msg: msg.into() }
+    }
+}
+
+impl Display for RISICOError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.msg)
     }
 }

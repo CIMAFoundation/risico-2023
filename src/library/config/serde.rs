@@ -2,19 +2,29 @@ use serde_derive::{Deserialize, Serialize};
 use std::io::BufRead;
 use std::str::FromStr;
 use std::{collections::HashMap, fs::File, io};
-
 use crate::library::io::models::grid::ClusterMode;
-use crate::library::io::models::palette::Palette;
 use crate::library::io::writers::OutputVariableName;
 use crate::library::io::{
     models::output::OutputVariable, readers::netcdf::NetCdfInputConfiguration,
 };
+use crate::library::helpers::RISICOError;
 
-use super::models::RISICOError;
-
-#[derive(Debug, Serialize, Deserialize)]
-pub type PaletteMap = HashMap<String, Box<Palette>>;
+pub type PaletteMap = HashMap<String, String>;
 pub type ConfigMap = HashMap<String, Vec<String>>;
+
+const MODEL_NAME_KEY: &str = "MODELNAME";
+const WARM_STATE_PATH_KEY: &str = "STATO0";
+const CELLS_FILE_KEY: &str = "CELLE";
+const VEGETATION_FILE_KEY: &str = "VEG";
+const PPF_FILE_KEY: &str = "PPF";
+const MODEL_VERSION_KEY: &str = "MODEL_VERSION";
+const USE_TEMPERATURE_EFFECT_KEY: &str = "USETCONTR";
+const USE_NDVI_KEY: &str = "USENDVI";
+const OUTPUTS_KEY: &str = "MODEL";
+const NETCDF_INPUT_CONFIG: &str = "NETCDFINPUTCONFIG";
+const VARIABLES_KEY: &str = "VARIABLE";
+const PALETTE_KEY: &str = "PALETTE";
+const KEY_HOURSRESOLUTION: &str = "OUTPUTHRES";
 
 trait ConfigMapExt {
     /// Get the first value of a key in the config map
@@ -32,50 +42,7 @@ impl ConfigMapExt for ConfigMap {
     }
 }
 
-const MODEL_NAME_KEY: &str = "MODELNAME";
-const WARM_STATE_PATH_KEY: &str = "STATO0";
-const CELLS_FILE_KEY: &str = "CELLE";
-const VEGETATION_FILE_KEY: &str = "VEG";
-const PPF_FILE_KEY: &str = "PPF";
-
-const MODEL_VERSION_KEY: &str = "MODEL_VERSION";
-
-const USE_TEMPERATURE_EFFECT_KEY: &str = "USETCONTR";
-const USE_NDVI_KEY: &str = "USENDVI";
-const OUTPUTS_KEY: &str = "MODEL";
-const NETCDF_INPUT_CONFIG: &str = "NETCDFINPUTCONFIG";
-const VARIABLES_KEY: &str = "VARIABLE";
-const PALETTE_KEY: &str = "PALETTE";
-const KEY_HOURSRESOLUTION: &str = "OUTPUTHRES";
-
-#[derive(Debug, Serialize, Deserialize)]
-pub struct SerializableConfig {
-    pub model_name: String,
-    pub cells_file_path: String,
-    pub vegetation_file: String,
-    pub warm_state_path: String,
-    pub ppf_file: Option<String>,
-    pub output_types: Vec<OutputTypeConfig>,
-    pub palettes: PaletteMap,
-    pub use_temperature_effect: bool,
-    pub use_ndvi: bool,
-    pub output_time_resolution: u32,
-    pub model_version: String,
-    pub netcdf_input_configuration: Option<NetCdfInputConfiguration>,
-}
-
-#[derive(Debug, Serialize, Deserialize)]
-pub struct OutputTypeConfig {
-    pub internal_name: String,
-    pub name: String,
-    pub path: String,
-    pub grid_path: String,
-    pub format: String,
-    pub variables: Vec<OutputVariable>,
-}
-
-impl SerializableConfig {
-    fn read(file_name: impl Into<String>) -> Result<ConfigMap, RISICOError> {
+pub fn read_config(file_name: impl Into<String>) -> Result<ConfigMap, RISICOError> {
         let file_name = file_name.into();
         // open file as text and read it using a buffered reader
         let file = File::open(&file_name)
@@ -117,8 +84,35 @@ impl SerializableConfig {
         Ok(config_map)
     }
 
+#[derive(Debug, Serialize, Deserialize)]
+pub struct SerializableConfig {
+    pub model_name: String,
+    pub cells_file_path: String,
+    pub vegetation_file: String,
+    pub warm_state_path: String,
+    pub ppf_file: Option<String>,
+    pub output_types: Vec<OutputTypeConfig>,
+    pub palettes: PaletteMap,
+    pub use_temperature_effect: bool,
+    pub use_ndvi: bool,
+    pub output_time_resolution: u32,
+    pub model_version: String,
+    pub netcdf_input_configuration: Option<NetCdfInputConfiguration>,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct OutputTypeConfig {
+    pub internal_name: String,
+    pub name: String,
+    pub path: String,
+    pub grid_path: String,
+    pub format: String,
+    pub variables: Vec<OutputVariable>,
+}
+
+impl SerializableConfig {
     pub fn new(config_file: &str) -> Result<SerializableConfig, RISICOError> {
-        let config_map = Self::read(config_file)?;
+        let config_map = read_config(config_file)?;
 
         // try to get the model name, expect it to be there
         let model_name = config_map
@@ -171,7 +165,7 @@ impl SerializableConfig {
             .ok_or(format!("KEY {VARIABLES_KEY} not found"))?;
 
         let palettes = SerializableConfig::load_palettes(&config_map);
-        let output_types = Self::parse_output_types(&output_types_defs, &variables_defs, &palettes)?;
+        let output_types = Self::parse_output_types(&output_types_defs, &variables_defs)?;
 
         let netcdf_input_configuration = config_map
             .first(NETCDF_INPUT_CONFIG)
@@ -196,10 +190,11 @@ impl SerializableConfig {
         Ok(config)
     }
 
+    
+    
     fn parse_output_types(
         output_types_defs: &Vec<String>,
         variables_defs: &Vec<String>,
-        palettes: &PaletteMap,
     ) -> Result<Vec<OutputTypeConfig>, RISICOError> {
         let mut output_types_vec: Vec<OutputTypeConfig> = Vec::new();
 
@@ -250,8 +245,8 @@ impl SerializableConfig {
         Ok(output_types_vec)
     }
 
-    fn load_palettes(config_map: &ConfigMap) -> HashMap<String, Box<Palette>> {
-        let mut palettes: HashMap<String, Box<Palette>> = HashMap::new();
+    fn load_palettes(config_map: &ConfigMap) -> HashMap<String, String> {
+        let mut palettes: HashMap<String, String> = HashMap::new();
         let palettes_defs = config_map.all(PALETTE_KEY);
         if palettes_defs.is_none() {
             return palettes;
@@ -265,9 +260,11 @@ impl SerializableConfig {
             }
             let (name, path) = (parts[0], parts[1]);
 
-            if let Ok(palette) = Palette::load_palette(path) {
-                palettes.insert(name.to_string(), Box::new(palette));
-            }
+            // if let Ok(palette) = Palette::load_palette(path) {
+            //     palettes.insert(name.to_string(), Box::new(palette));
+            // }
+
+            palettes.insert(name.into(), path.into());
         }
         palettes
     }

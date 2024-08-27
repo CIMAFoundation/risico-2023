@@ -2,7 +2,7 @@ use std::io::Read;
 
 use log::warn;
 
-use crate::library::config::models::RISICOError;
+use crate::library::helpers::RISICOError;
 
 #[derive(Debug, Clone, Copy)]
 pub struct Color {

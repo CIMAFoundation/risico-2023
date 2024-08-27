@@ -1,6 +1,6 @@
 use std::fmt::Debug;
 
-use crate::library::config::models::{read_config, RISICOError};
+use crate::library::{config::serde::read_config, helpers::RISICOError};
 use itertools::izip;
 use ndarray::Array1;
 use rstar::{primitives::GeomWithData, RTree};

@@ -9,11 +9,12 @@ use rayon::prelude::*;
 use serde_derive::{Deserialize, Serialize};
 
 use crate::library::{
-    config::models::{PaletteMap, RISICOError},
+    config::{models::PaletteMap, serde::OutputTypeConfig},
     io::writers::{create_nc_file, write_to_pngwjson, write_to_zbin_file, OutputVariableName},
     modules::risico::{constants::NODATAVAL, models::Output},
 };
 
+use crate::library::helpers::RISICOError;
 #[cfg(feature = "gdal")]
 use crate::library::io::writers::write_to_geotiff;
 
@@ -138,6 +139,7 @@ impl OutputVariable {
     }
 }
 
+
 pub struct OutputType {
     pub internal_name: String,
     name: String,
@@ -154,17 +156,19 @@ unsafe impl Send for OutputType {}
 
 impl OutputType {
     pub fn new(
-        internal_name: &str,
-        name: &str,
-        path: &str,
-        grid_path: &str,
-        format: &str,
+        output_type_def: &OutputTypeConfig,
         run_date: &DateTime<Utc>,
-        palettes: PaletteMap,
+        palettes: &PaletteMap,
     ) -> Result<Self, RISICOError> {
+        let grid_path = &output_type_def.grid_path;
+        let internal_name = &output_type_def.internal_name;
+        let name = &output_type_def.name;
+        let path = &output_type_def.path;
+        let format = &output_type_def.format;
+
         let grid = RegularGrid::from_txt_file(grid_path)?;
 
-        let writer: Box<dyn Writer> = match format {
+        let writer: Box<dyn Writer> = match format.as_str() {
             "ZBIN" => Box::new(ZBinWriter::new(path, name, run_date)),
             "PNGWJSON" => Box::new(PngWriter::new(path, name, &palettes, run_date)),
             "NETCDF" => Box::new(NetcdfWriter::new(path, name, run_date)),
@@ -173,14 +177,27 @@ impl OutputType {
             _ => Box::new(ZBinWriter::new(path, name, run_date)),
         };
 
+        let variables = output_type_def.variables.iter()
+                .map(|var| 
+                    OutputVariable::new(
+                        var.internal_name,
+                        &var.name,
+                        var.cluster_mode.clone(),
+                        var.precision,
+                    )
+                )
+                .collect();
+        
+
+
         Ok(Self {
             internal_name: internal_name.to_string(),
             name: name.to_string(),
             path: path.to_string(),
             grid,
             format: format.to_string(),
-            variables: Vec::new(),
-            palettes,
+            variables,
+            palettes: palettes.clone(),
             run_date: *run_date,
             writer,
         })

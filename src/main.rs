@@ -7,6 +7,7 @@ use std::process::exit;
 // use chrono::format::parse;
 use chrono::prelude::*;
 use clap::{arg, command, crate_version};
+use library::config::serde::SerializableConfig;
 use library::io::readers::netcdf::{NetCdfInputConfiguration, NetCdfInputHandler};
 use library::version::LONG_VERSION;
 use log::{error, info, trace, warn};
@@ -81,7 +82,8 @@ fn main() {
 
     let date = DateTime::from_naive_utc_and_offset(date, Utc);
 
-    let config = Config::new(config_path_str, date).expect("Could not configure model");
+    let serializable_config = SerializableConfig::new(&config_path_str).expect("Could not configure model");
+    let config = Config::new(&serializable_config, date).expect("Could not configure model");
 
     let mut output_writer = config
         .get_output_writer()
@@ -90,7 +92,7 @@ fn main() {
     let props = config.get_properties();
     let mut state = config.new_state();
 
-    let (lats, lons) = config.properties.get_coords();
+    let (lats, lons) = config.get_properties().get_coords();
     let (lats, lons) = (lats.as_slice(), lons.as_slice());
 
     let current_time = Utc::now();
@@ -107,7 +109,7 @@ fn main() {
     } else if input_path.is_dir() {
         info!("Loading input data from {} using NetCdfInputHandler", input_path_str);
         // we should load the netcdfs using the netcdfinputhandler
-        let nc_config = if let Some(nc_config) = &config.netcdf_input_configuration {
+        let nc_config = if let Some(nc_config) = &config.get_netcdf_input_config() {
             nc_config.clone()
         } else {
             NetCdfInputConfiguration::default()

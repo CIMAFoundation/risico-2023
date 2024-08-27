@@ -4,9 +4,9 @@ use std::io::BufReader;
 use std::sync::Arc;
 use std::{collections::HashMap, io::BufRead};
 
+use crate::library::helpers::RISICOError;
 use crate::library::modules::risico::models::Vegetation;
 
-use super::models::RISICOError;
 
 pub struct CellPropertiesContainer {
     pub lons: Vec<f32>,
