@@ -24,7 +24,7 @@ use crate::library::{
 
 use super::{
     data::{read_cells_properties, read_vegetation},
-    serde::{OutputTypeConfig, SerializableConfig},
+    serde::{ConfigBuilder, OutputTypeConfig},
 };
 
 pub type PaletteMap = HashMap<String, Box<Palette>>;
@@ -122,10 +122,7 @@ impl Config {
         palettes
     }
 
-    pub fn new(
-        config_defs: &SerializableConfig,
-        date: DateTime<Utc>,
-    ) -> Result<Config, RISICOError> {
+    pub fn new(config_defs: &ConfigBuilder, date: DateTime<Utc>) -> Result<Config, RISICOError> {
         let palettes = Config::load_palettes(&config_defs.palettes);
 
         let cells_file = &config_defs.cells_file_path;

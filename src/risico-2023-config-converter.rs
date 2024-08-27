@@ -4,7 +4,7 @@ mod library;
 const VERSION: &str = env!("CARGO_PKG_VERSION");
 
 use clap::Parser;
-use library::{config::serde::SerializableConfig, version::LONG_VERSION};
+use library::{config::serde::ConfigBuilder, version::LONG_VERSION};
 
 #[derive(Parser, Debug)]
 #[command(
@@ -22,7 +22,7 @@ struct Args {
 fn main() {
     let args = Args::parse();
     let config_path = args.config_file;
-    let config = SerializableConfig::new(&config_path).expect("Could not configure model");
+    let config = ConfigBuilder::from_file(&config_path).expect("Could not configure model");
     let yml_str = serde_yaml::to_string(&config).expect("Could not convert config to yaml");
     println!("{}", yml_str);
 }

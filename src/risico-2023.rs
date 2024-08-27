@@ -1,5 +1,6 @@
 #![allow(dead_code)]
 mod library;
+use core::panic;
 use std::env::{set_var, var};
 use std::path::Path;
 use std::process::exit;
@@ -7,14 +8,14 @@ use std::process::exit;
 // use chrono::format::parse;
 use chrono::prelude::*;
 use clap::{arg, command, Parser};
-use library::config::serde::SerializableConfig;
+use library::config::serde::ConfigBuilder;
 use library::io::readers::netcdf::{NetCdfInputConfiguration, NetCdfInputHandler};
 use library::version::LONG_VERSION;
 use log::{error, info, trace, warn};
 
+use crate::library::helpers::get_input;
 use crate::library::io::readers::binary::BinaryInputHandler;
 use crate::library::io::readers::prelude::InputHandler;
-use crate::library::{config::models::Config, helpers::get_input};
 
 #[derive(Parser, Debug)]
 #[command(
@@ -64,9 +65,10 @@ fn main() {
 
     let date = DateTime::from_naive_utc_and_offset(date, Utc);
 
-    let serializable_config =
-        SerializableConfig::new(&config_path_str).expect("Could not configure model");
-    let config = Config::new(&serializable_config, date).expect("Could not configure model");
+    let config = ConfigBuilder::from_file(&config_path_str)
+        .unwrap_or_else(|err| panic!("{}", err))
+        .build(&date)
+        .expect("Could not configure model");
 
     let mut output_writer = config
         .get_output_writer()

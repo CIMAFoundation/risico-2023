@@ -4,10 +4,16 @@ use crate::library::io::writers::OutputVariableName;
 use crate::library::io::{
     models::output::OutputVariable, readers::netcdf::NetCdfInputConfiguration,
 };
+use chrono::{DateTime, Utc};
 use serde_derive::{Deserialize, Serialize};
+use serde_yaml;
+use std::fs::File;
 use std::io::BufRead;
+use std::io::Read;
 use std::str::FromStr;
-use std::{collections::HashMap, fs::File, io};
+use std::{collections::HashMap, io};
+
+use super::models::Config;
 
 pub type PaletteMap = HashMap<String, String>;
 pub type ConfigMap = HashMap<String, Vec<String>>;
@@ -85,7 +91,7 @@ pub fn read_config(file_name: impl Into<String>) -> Result<ConfigMap, RISICOErro
 }
 
 #[derive(Debug, Serialize, Deserialize)]
-pub struct SerializableConfig {
+pub struct ConfigBuilder {
     pub model_name: String,
     pub cells_file_path: String,
     pub vegetation_file: String,
@@ -110,8 +116,34 @@ pub struct OutputTypeConfig {
     pub variables: Vec<OutputVariable>,
 }
 
-impl SerializableConfig {
-    pub fn new(config_file: &str) -> Result<SerializableConfig, RISICOError> {
+impl ConfigBuilder {
+    pub fn from_file(config_file: &str) -> Result<ConfigBuilder, RISICOError> {
+        // Check the file extension to determine which method to use
+        if config_file.ends_with(".yaml") || config_file.ends_with(".yml") {
+            Self::from_yaml(config_file)
+        } else if config_file.ends_with(".txt") {
+            Self::from_txt_file(config_file)
+        } else {
+            Err(RISICOError::from(format!(
+                "Unsupported config file format: {}",
+                config_file
+            )))
+        }
+    }
+
+    fn from_yaml(config_file: &str) -> Result<ConfigBuilder, RISICOError> {
+        let mut file = File::open(config_file)
+            .map_err(|e| RISICOError::from(format!("Failed to open config file: {}", e)))?;
+
+        let mut contents = String::new();
+        file.read_to_string(&mut contents)
+            .map_err(|e| RISICOError::from(format!("Failed to read config file: {}", e)))?;
+
+        serde_yaml::from_str(&contents)
+            .map_err(|e| RISICOError::from(format!("Failed to parse YAML: {}", e)))
+    }
+
+    fn from_txt_file(config_file: &str) -> Result<ConfigBuilder, RISICOError> {
         let config_map = read_config(config_file)?;
 
         // try to get the model name, expect it to be there
@@ -164,7 +196,7 @@ impl SerializableConfig {
             .all(VARIABLES_KEY)
             .ok_or(format!("KEY {VARIABLES_KEY} not found"))?;
 
-        let palettes = SerializableConfig::load_palettes(&config_map);
+        let palettes = ConfigBuilder::load_palettes(&config_map);
         let output_types = Self::parse_output_types(&output_types_defs, &variables_defs)?;
 
         let netcdf_input_configuration = config_map
@@ -172,7 +204,7 @@ impl SerializableConfig {
             .map(|line| NetCdfInputConfiguration::from(&line))
             .or(None);
 
-        let config = SerializableConfig {
+        let config = ConfigBuilder {
             model_name,
             warm_state_path,
             cells_file_path,
@@ -268,5 +300,9 @@ impl SerializableConfig {
             palettes.insert(name.into(), path.into());
         }
         palettes
+    }
+
+    pub fn build(&self, date: &DateTime<Utc>) -> Result<Config, RISICOError> {
+        Config::new(self, *date)
     }
 }
