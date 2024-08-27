@@ -170,7 +170,6 @@ pub fn get_input(handler: &dyn InputHandler, time: &DateTime<Utc>, len: usize) -
     }
 }
 
-
 #[derive(Debug)]
 pub struct RISICOError {
     msg: String,

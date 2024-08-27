@@ -16,7 +16,9 @@ pub trait InputHandler {
 }
 
 #[allow(clippy::upper_case_acronyms, non_camel_case_types)]
-#[derive(Debug, PartialEq, Eq, Hash, Copy, Clone, EnumString, EnumIter, Display, Serialize, Deserialize)]
+#[derive(
+    Debug, PartialEq, Eq, Hash, Copy, Clone, EnumString, EnumIter, Display, Serialize, Deserialize,
+)]
 pub enum InputVariableName {
     /// Air Humidity
     H,

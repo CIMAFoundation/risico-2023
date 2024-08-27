@@ -6,7 +6,6 @@ use ndarray::Array1;
 use rstar::{primitives::GeomWithData, RTree};
 use serde_derive::{Deserialize, Serialize};
 
-
 use strum_macros::{Display, EnumString};
 
 #[derive(Debug, PartialEq, Eq, Hash, Copy, Clone, EnumString, Display, Serialize, Deserialize)]

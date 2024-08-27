@@ -7,7 +7,6 @@ use std::{collections::HashMap, io::BufRead};
 use crate::library::helpers::RISICOError;
 use crate::library::modules::risico::models::Vegetation;
 
-
 pub struct CellPropertiesContainer {
     pub lons: Vec<f32>,
     pub lats: Vec<f32>,

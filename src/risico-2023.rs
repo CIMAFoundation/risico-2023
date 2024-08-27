@@ -16,8 +16,6 @@ use crate::library::io::readers::binary::BinaryInputHandler;
 use crate::library::io::readers::prelude::InputHandler;
 use crate::library::{config::models::Config, helpers::get_input};
 
-
-
 #[derive(Parser, Debug)]
 #[command(
     author="Mirko D'Andrea <mirko.dandrea@cimafoundation.org>, Nicolò Perello <nicolo.perello@cimafoundation.org>", 
@@ -28,16 +26,19 @@ use crate::library::{config::models::Config, helpers::get_input};
 It is designed to predict the likelihood and potential impact of wildfires in a given region, given a set of input parameters."
 )]
 struct Args {
-    #[arg(required=true, help="Model date in the format YYYYMMDDHHMM", index=1)]
+    #[arg(
+        required = true,
+        help = "Model date in the format YYYYMMDDHHMM",
+        index = 1
+    )]
     date: String,
 
-    #[arg(required=true, help="Path to the configuration file", index=2)]
+    #[arg(required = true, help = "Path to the configuration file", index = 2)]
     config_path: String,
 
-    #[arg(required=true, help="Path to the input data file", index=3)]
-    input_path:String,
+    #[arg(required = true, help = "Path to the input data file", index = 3)]
+    input_path: String,
 }
-
 
 /// main function
 fn main() {
@@ -63,7 +64,8 @@ fn main() {
 
     let date = DateTime::from_naive_utc_and_offset(date, Utc);
 
-    let serializable_config = SerializableConfig::new(&config_path_str).expect("Could not configure model");
+    let serializable_config =
+        SerializableConfig::new(&config_path_str).expect("Could not configure model");
     let config = Config::new(&serializable_config, date).expect("Could not configure model");
 
     let mut output_writer = config
@@ -81,14 +83,20 @@ fn main() {
     // check if input_path is a file or a directory
     let input_path = Path::new(&input_path_str);
     let handler: Box<dyn InputHandler> = if input_path.is_file() {
-        info!("Loading input data from {} using BinaryInputHandler", input_path_str);
+        info!(
+            "Loading input data from {} using BinaryInputHandler",
+            input_path_str
+        );
         // if it is a file, we are loading the legacy input.txt file and binary inputs
         Box::new(
             BinaryInputHandler::new(&input_path_str, lats, lons)
                 .expect("Could not load input data"),
         )
     } else if input_path.is_dir() {
-        info!("Loading input data from {} using NetCdfInputHandler", input_path_str);
+        info!(
+            "Loading input data from {} using NetCdfInputHandler",
+            input_path_str
+        );
         // we should load the netcdfs using the netcdfinputhandler
         let nc_config = if let Some(nc_config) = &config.get_netcdf_input_config() {
             nc_config.clone()

@@ -139,7 +139,6 @@ impl OutputVariable {
     }
 }
 
-
 pub struct OutputType {
     pub internal_name: String,
     name: String,
@@ -177,18 +176,18 @@ impl OutputType {
             _ => Box::new(ZBinWriter::new(path, name, run_date)),
         };
 
-        let variables = output_type_def.variables.iter()
-                .map(|var| 
-                    OutputVariable::new(
-                        var.internal_name,
-                        &var.name,
-                        var.cluster_mode,
-                        var.precision,
-                    )
+        let variables = output_type_def
+            .variables
+            .iter()
+            .map(|var| {
+                OutputVariable::new(
+                    var.internal_name,
+                    &var.name,
+                    var.cluster_mode,
+                    var.precision,
                 )
-                .collect();
-        
-
+            })
+            .collect();
 
         Ok(Self {
             internal_name: internal_name.to_string(),

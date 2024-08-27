@@ -1,13 +1,13 @@
-use serde_derive::{Deserialize, Serialize};
-use std::io::BufRead;
-use std::str::FromStr;
-use std::{collections::HashMap, fs::File, io};
+use crate::library::helpers::RISICOError;
 use crate::library::io::models::grid::ClusterMode;
 use crate::library::io::writers::OutputVariableName;
 use crate::library::io::{
     models::output::OutputVariable, readers::netcdf::NetCdfInputConfiguration,
 };
-use crate::library::helpers::RISICOError;
+use serde_derive::{Deserialize, Serialize};
+use std::io::BufRead;
+use std::str::FromStr;
+use std::{collections::HashMap, fs::File, io};
 
 pub type PaletteMap = HashMap<String, String>;
 pub type ConfigMap = HashMap<String, Vec<String>>;
@@ -43,46 +43,46 @@ impl ConfigMapExt for ConfigMap {
 }
 
 pub fn read_config(file_name: impl Into<String>) -> Result<ConfigMap, RISICOError> {
-        let file_name = file_name.into();
-        // open file as text and read it using a buffered reader
-        let file = File::open(&file_name)
-            .map_err(|error| format!("error opening config file: {error}"))?;
-        let reader = io::BufReader::new(file);
-        let lines = reader.lines();
+    let file_name = file_name.into();
+    // open file as text and read it using a buffered reader
+    let file =
+        File::open(&file_name).map_err(|error| format!("error opening config file: {error}"))?;
+    let reader = io::BufReader::new(file);
+    let lines = reader.lines();
 
-        let mut config_map: ConfigMap = ConfigMap::new();
+    let mut config_map: ConfigMap = ConfigMap::new();
 
-        for (i, line) in lines.enumerate() {
-            let line = line.map_err(|error| format!("error line: {i} \n {error}"))?;
-            let line = line.trim().to_string();
+    for (i, line) in lines.enumerate() {
+        let line = line.map_err(|error| format!("error line: {i} \n {error}"))?;
+        let line = line.trim().to_string();
 
-            if line.starts_with("%") || line.starts_with("#") || line.is_empty() {
-                // skip comments and empty lines
-                continue;
-            }
-            if !line.contains("=") {
-                return Err(format!("error parsing config file {file_name} at line {i}.").into());
-            }
-            // implement split using regex
-            let mut parts = line.split("=");
-            let key = parts
-                .next()
-                .ok_or(format!("error parsing on line[{i}] {line}."))?;
-            let value = parts.next().ok_or(format!(
-                "error parsing value for key {key}: line[{i}] {line}."
-            ))?;
-
-            if config_map.contains_key(key) {
-                config_map
-                    .get_mut(key)
-                    .expect("It must have a value here!")
-                    .push(value.into());
-            } else {
-                config_map.insert(key.into(), vec![value.into()]);
-            }
+        if line.starts_with("%") || line.starts_with("#") || line.is_empty() {
+            // skip comments and empty lines
+            continue;
         }
-        Ok(config_map)
+        if !line.contains("=") {
+            return Err(format!("error parsing config file {file_name} at line {i}.").into());
+        }
+        // implement split using regex
+        let mut parts = line.split("=");
+        let key = parts
+            .next()
+            .ok_or(format!("error parsing on line[{i}] {line}."))?;
+        let value = parts.next().ok_or(format!(
+            "error parsing value for key {key}: line[{i}] {line}."
+        ))?;
+
+        if config_map.contains_key(key) {
+            config_map
+                .get_mut(key)
+                .expect("It must have a value here!")
+                .push(value.into());
+        } else {
+            config_map.insert(key.into(), vec![value.into()]);
+        }
     }
+    Ok(config_map)
+}
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct SerializableConfig {
@@ -158,7 +158,7 @@ impl SerializableConfig {
 
         let output_types_defs = config_map
             .all(OUTPUTS_KEY)
-            .ok_or(format!("KEY {OUTPUTS_KEY} not found"))?;      
+            .ok_or(format!("KEY {OUTPUTS_KEY} not found"))?;
 
         let variables_defs = config_map
             .all(VARIABLES_KEY)
@@ -190,8 +190,6 @@ impl SerializableConfig {
         Ok(config)
     }
 
-    
-    
     fn parse_output_types(
         output_types_defs: &Vec<String>,
         variables_defs: &Vec<String>,
@@ -231,10 +229,11 @@ impl SerializableConfig {
             output_types_vec
                 .iter_mut()
                 .filter(|_type| _type.internal_name == output_type)
-                
                 .for_each(|_type| {
-                    let internal_name = OutputVariableName::from_str(internal_name).unwrap_or_else(|_| panic!("Invalid Variable Name {}", &internal_name));
-                    let cluster_mode = ClusterMode::from_str(cluster_mode).unwrap_or_else(|_| panic!("Invalid ClusterMode {}", &cluster_mode));
+                    let internal_name = OutputVariableName::from_str(internal_name)
+                        .unwrap_or_else(|_| panic!("Invalid Variable Name {}", &internal_name));
+                    let cluster_mode = ClusterMode::from_str(cluster_mode)
+                        .unwrap_or_else(|_| panic!("Invalid ClusterMode {}", &cluster_mode));
                     _type.variables.push(OutputVariable::new(
                         internal_name,
                         name,

@@ -51,13 +51,17 @@ pub struct OutputWriter {
 }
 
 impl OutputWriter {
-    pub fn new(outputs_defs: &[OutputTypeConfig], date: &DateTime<Utc>, palettes: &PaletteMap) -> Self {
-        Self { 
+    pub fn new(
+        outputs_defs: &[OutputTypeConfig],
+        date: &DateTime<Utc>,
+        palettes: &PaletteMap,
+    ) -> Self {
+        Self {
             outputs: outputs_defs
                 .iter()
                 .filter_map(|t| OutputType::new(t, date, palettes).ok())
-                .collect()
-         }
+                .collect(),
+        }
     }
 
     pub fn write_output(
@@ -157,8 +161,6 @@ impl Config {
 
         let props = Properties::new(props_container, vegetations_dict, ppf_summer, ppf_winter);
 
-        
-
         let config = Config {
             run_date: date,
             model_name: config_defs.model_name.clone(),
@@ -188,7 +190,11 @@ impl Config {
     }
 
     pub fn get_output_writer(&self) -> Result<OutputWriter, RISICOError> {
-        Ok(OutputWriter::new(self.output_types_defs.as_slice(), &self.run_date, &self.palettes))
+        Ok(OutputWriter::new(
+            self.output_types_defs.as_slice(),
+            &self.run_date,
+            &self.palettes,
+        ))
     }
 
     pub fn should_write_output(&self, time: &DateTime<Utc>) -> bool {
@@ -229,7 +235,7 @@ impl Config {
         Ok(())
     }
 
-    pub fn get_netcdf_input_config(&self) -> &Option<NetCdfInputConfiguration>{
+    pub fn get_netcdf_input_config(&self) -> &Option<NetCdfInputConfiguration> {
         &self.netcdf_input_configuration
     }
 }
