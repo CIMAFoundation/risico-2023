@@ -4,7 +4,7 @@ mod library;
 const VERSION: &str = env!("CARGO_PKG_VERSION");
 
 use clap::Parser;
-use library::{config::serde::ConfigBuilder, version::LONG_VERSION};
+use library::{config::builder::ConfigBuilder, version::LONG_VERSION};
 
 #[derive(Parser, Debug)]
 #[command(

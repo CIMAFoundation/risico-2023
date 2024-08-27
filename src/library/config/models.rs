@@ -24,7 +24,7 @@ use crate::library::{
 
 use super::{
     data::{read_cells_properties, read_vegetation},
-    serde::{ConfigBuilder, OutputTypeConfig},
+    builder::{ConfigBuilder, OutputTypeConfig},
 };
 
 pub type PaletteMap = HashMap<String, Box<Palette>>;

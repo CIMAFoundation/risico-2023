@@ -6,7 +6,7 @@ use std::path::Path;
 
 use chrono::prelude::*;
 use clap::{arg, command, Parser};
-use library::config::serde::ConfigBuilder;
+use library::config::builder::ConfigBuilder;
 use library::io::readers::netcdf::{NetCdfInputConfiguration, NetCdfInputHandler};
 use library::version::LONG_VERSION;
 use log::{info, trace, warn};

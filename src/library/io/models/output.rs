@@ -9,7 +9,7 @@ use rayon::prelude::*;
 use serde_derive::{Deserialize, Serialize};
 
 use crate::library::{
-    config::{models::PaletteMap, serde::OutputTypeConfig},
+    config::{models::PaletteMap, builder::OutputTypeConfig},
     io::writers::{create_nc_file, write_to_pngwjson, write_to_zbin_file, OutputVariableName},
     modules::risico::{constants::NODATAVAL, models::Output},
 };
