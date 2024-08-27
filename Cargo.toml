@@ -11,7 +11,7 @@ gdal = ["dep:gdal"]
 static_deps = ["netcdf-sys/static", "hdf5-sys/static"]
 
 [dependencies]
-clap = { version = "4.5.16", features = ["cargo"] }
+clap = { version = "4.5.16", features = ["cargo", "derive"] }
 
 
 log = "0.4.17"
@@ -34,7 +34,18 @@ hdf5-sys = { version = "0.8.1" }
 netcdf = "0.8.1"
 netcdf-sys = { version = "0.5.1" }
 serde_derive = "1.0.209"
+serde_yaml = "0.9.17"
+clap_derive = "4.5.13"
 
 
 [build-dependencies]
 built = "0.7.4"
+
+
+[[bin]]
+name = "risico-2023"
+path = "src/risico-2023.rs"
+
+[[bin]]
+name = "risico-2023-config-converter"
+path = "src/risico-2023-config-converter.rs"

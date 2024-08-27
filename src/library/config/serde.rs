@@ -231,12 +231,14 @@ impl SerializableConfig {
             output_types_vec
                 .iter_mut()
                 .filter(|_type| _type.internal_name == output_type)
+                
                 .for_each(|_type| {
-                    let internal_name = OutputVariableName::from_str(internal_name).unwrap();
+                    let internal_name = OutputVariableName::from_str(internal_name).unwrap_or_else(|_| panic!("Invalid Variable Name {}", &internal_name));
+                    let cluster_mode = ClusterMode::from_str(cluster_mode).unwrap_or_else(|_| panic!("Invalid ClusterMode {}", &cluster_mode));
                     _type.variables.push(OutputVariable::new(
                         internal_name,
                         name,
-                        ClusterMode::from(cluster_mode),
+                        cluster_mode,
                         precision,
                     ))
                 });

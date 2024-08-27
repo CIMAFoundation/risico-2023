@@ -6,22 +6,16 @@ use ndarray::Array1;
 use rstar::{primitives::GeomWithData, RTree};
 use serde_derive::{Deserialize, Serialize};
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+
+use strum_macros::{Display, EnumString};
+
+#[derive(Debug, PartialEq, Eq, Hash, Copy, Clone, EnumString, Display, Serialize, Deserialize)]
+#[strum(ascii_case_insensitive)]
 pub enum ClusterMode {
     Mean,
     Median,
     Min,
     Max,
-}
-impl From<&str> for ClusterMode {
-    fn from(s: &str) -> Self {
-        match s {
-            "MEAN" | "mean" => ClusterMode::Mean,
-            "MAX" | "max" => ClusterMode::Max,
-            "MIN" | "min" => ClusterMode::Min,
-            _ => panic!("Invalid cluster mode"),
-        }
-    }
 }
 
 pub trait Grid {

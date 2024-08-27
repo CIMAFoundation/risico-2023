@@ -182,7 +182,7 @@ impl OutputType {
                     OutputVariable::new(
                         var.internal_name,
                         &var.name,
-                        var.cluster_mode.clone(),
+                        var.cluster_mode,
                         var.precision,
                     )
                 )

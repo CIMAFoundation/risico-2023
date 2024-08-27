@@ -308,6 +308,7 @@ pub fn create_nc_file(
 
 #[allow(non_camel_case_types, clippy::upper_case_acronyms)]
 #[derive(Debug, PartialEq, Eq, Hash, Copy, Clone, EnumString, EnumProperty, Display, Serialize, Deserialize)]
+#[strum(ascii_case_insensitive)]
 pub enum OutputVariableName {
     /// Fine Fuel Moisture
     #[strum(props(long_name = "Fine Fuel Moisture", units = "%"))]
@@ -358,8 +359,14 @@ pub enum OutputVariableName {
     NDWI,
 
     /// Meteorological Index
-    #[strum(props(long_name = "Meteorological Index", units = "-"))]
+    #[strum(
+        
+        props(long_name = "Meteorological Index", units = "-"), 
+        serialize = "meteoIndex", 
+        serialize="meteoIndex2")
+    ]
     meteoIndex2,
+
 
     /// Fire Spread Rate + PPF
     #[strum(props(long_name = "Fire Spread Rate + PPF", units = "m/h"))]
