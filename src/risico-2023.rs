@@ -18,9 +18,9 @@ use crate::library::{config::models::Config, helpers::get_input};
 
 #[derive(Parser, Debug)]
 #[command(
-    author="Mirko D'Andrea <mirko.dandrea@cimafoundation.org>, Nicolò Perello <nicolo.perello@cimafoundation.org>", 
-    version, 
-    long_version=LONG_VERSION, 
+    author="Mirko D'Andrea <mirko.dandrea@cimafoundation.org>, Nicolò Perello <nicolo.perello@cimafoundation.org>",
+    version,
+    long_version=LONG_VERSION,
     about="risico-2023 Wildfire Risk Assessment Model by CIMA Research Foundation", 
     long_about="RISICO  (Rischio Incendi E Coordinamento) is a wildfire risk forecast model written in rust and developed by CIMA Research Foundation. 
 It is designed to predict the likelihood and potential impact of wildfires in a given region, given a set of input parameters."
