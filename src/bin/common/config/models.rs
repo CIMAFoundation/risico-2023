@@ -8,38 +8,34 @@ use chrono::*;
 use chrono::{DateTime, Utc};
 use log::{info, warn};
 use rayon::prelude::*;
+use risico::modules::risico::{
+    config::ModelConfig,
+    constants::NODATAVAL,
+    models::{CellPropertiesContainer, Output, Properties, State, WarmState},
+};
 
-use crate::library::{
-    helpers::RISICOError, io::readers::netcdf::NetCdfInputConfiguration,
-    modules::risico::models::State,
-};
-use crate::library::{
-    io::models::{output::OutputType, palette::Palette},
-    modules::risico::{
-        config::ModelConfig,
-        constants::NODATAVAL,
-        models::{Output, Properties},
-    },
-};
+use crate::common::io::models::{output::OutputType, palette::Palette};
+use crate::common::{helpers::RISICOError, io::readers::netcdf::NetCdfInputConfiguration};
 
 use super::{
-    data::{read_cells_properties, read_vegetation},
     builder::{ConfigBuilder, OutputTypeConfig},
+    data::read_vegetation,
 };
 
+use crate::common::config::data::FromFile;
+
 pub type PaletteMap = HashMap<String, Box<Palette>>;
-pub type ConfigMap = HashMap<String, Vec<String>>;
+// pub type ConfigMap = HashMap<String, Vec<String>>;
+
 pub struct Config {
     run_date: DateTime<Utc>,
-
-    model_name: String,
     warm_state_path: String,
     warm_state: Vec<WarmState>,
     warm_state_time: DateTime<Utc>,
     properties: Properties,
     palettes: PaletteMap,
-    use_temperature_effect: bool,
-    use_ndvi: bool,
+    // use_temperature_effect: bool,
+    // use_ndvi: bool,
     output_time_resolution: u32,
     output_types_defs: Vec<OutputTypeConfig>,
     model_version: String,
@@ -80,36 +76,6 @@ impl OutputWriter {
     }
 }
 
-#[allow(non_snake_case)]
-#[derive(Debug, Clone)]
-pub struct WarmState {
-    pub dffm: f32,
-    pub snow_cover: f32,
-    pub snow_cover_time: f32,
-    pub MSI: f32,
-    pub MSI_TTL: f32,
-    pub NDVI: f32,
-    pub NDVI_TIME: f32,
-    pub NDWI: f32,
-    pub NDWI_TIME: f32,
-}
-
-impl Default for WarmState {
-    fn default() -> Self {
-        WarmState {
-            dffm: 40.0,
-            snow_cover: 0.0,
-            snow_cover_time: 0.0,
-            MSI: 0.0,
-            MSI_TTL: 0.0,
-            NDVI: 0.0,
-            NDVI_TIME: 0.0,
-            NDWI: 0.0,
-            NDWI_TIME: 0.0,
-        }
-    }
-}
-
 impl Config {
     fn load_palettes(palettes_defs: &HashMap<String, String>) -> HashMap<String, Box<Palette>> {
         let mut palettes: HashMap<String, Box<Palette>> = HashMap::new();
@@ -126,7 +92,8 @@ impl Config {
         let palettes = Config::load_palettes(&config_defs.palettes);
 
         let cells_file = &config_defs.cells_file_path;
-        let props_container = read_cells_properties(cells_file)
+        
+        let props_container = CellPropertiesContainer::from_file(cells_file)
             .map_err(|error| format!("error reading {}, {error}", cells_file))?;
 
         let n_cells = props_container.lons.len();
@@ -160,14 +127,14 @@ impl Config {
 
         let config = Config {
             run_date: date,
-            model_name: config_defs.model_name.clone(),
+            // model_name: config_defs.model_name.clone(),
             warm_state_path: config_defs.warm_state_path.clone(),
             warm_state,
             warm_state_time,
             properties: props,
             palettes,
-            use_temperature_effect: config_defs.use_temperature_effect,
-            use_ndvi: config_defs.use_ndvi,
+            // use_temperature_effect: config_defs.use_temperature_effect,
+            // use_ndvi: config_defs.use_ndvi,
             output_time_resolution: config_defs.output_time_resolution,
             model_version: config_defs.model_version.clone(),
             netcdf_input_configuration: config_defs.netcdf_input_configuration.clone(),

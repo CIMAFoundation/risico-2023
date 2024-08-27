@@ -6,19 +6,21 @@ use gdal::raster::{Buffer, RasterCreationOption};
 use libflate::gzip::{self, Encoder};
 use log::warn;
 use netcdf::extent::Extents;
-use serde_derive::{Deserialize, Serialize};
+use risico::modules::risico::constants::NODATAVAL;
+use risico::modules::risico::models::OutputVariableName;
+use risico::version::FULL_VERSION;
+
 use std::io::BufWriter;
 use std::path::Path;
 use std::{
     fs::File,
     io::{self, Write},
 };
-use strum_macros::{Display, EnumProperty, EnumString};
 
-use crate::library::helpers::RISICOError;
-use crate::library::modules::risico::constants::NODATAVAL;
-use crate::library::version::FULL_VERSION;
+use crate::common::helpers::RISICOError;
+
 use strum::EnumProperty;
+
 
 use super::models::{grid::RegularGrid, palette::Palette};
 
@@ -306,112 +308,3 @@ pub fn create_nc_file(
     Ok(file)
 }
 
-#[allow(non_camel_case_types, clippy::upper_case_acronyms)]
-#[derive(
-    Debug,
-    PartialEq,
-    Eq,
-    Hash,
-    Copy,
-    Clone,
-    EnumString,
-    EnumProperty,
-    Display,
-    Serialize,
-    Deserialize,
-)]
-#[strum(ascii_case_insensitive)]
-pub enum OutputVariableName {
-    /// Fine Fuel Moisture
-    #[strum(props(long_name = "Fine Fuel Moisture", units = "%"))]
-    dffm,
-    /// Wind Effect on Fire Spread
-    #[strum(props(long_name = "Wind Effect on Fire Spread", units = "-"))]
-    W,
-    /// Fire Spread Rate
-    #[strum(props(long_name = "Fire Spread Rate", units = "m/h"))]
-    V,
-    /// Fire Intensity
-    #[strum(props(long_name = "Fire Intensity", units = "kW/m"))]
-    I,
-
-    /// Temperature Effect on Fire Spread
-    #[strum(props(long_name = "Temperature Effect on Fire Spread", units = "-"))]
-    contrT,
-
-    /// Input Temperature
-    #[strum(props(long_name = "Input Temperature", units = "°C"))]
-    temperature,
-    /// Input Rain
-    #[strum(props(long_name = "Input Rain", units = "mm"))]
-    rain,
-
-    /// Input Wind Speed
-    #[strum(props(long_name = "Input Wind Speed", units = "m/s"))]
-    windSpeed,
-
-    /// Input Wind Direction
-    #[strum(props(long_name = "Input Wind Direction", units = "°"))]
-    windDir,
-
-    /// Input Relative Humidity
-    #[strum(props(long_name = "Input Relative Humidity", units = "%"))]
-    humidity,
-
-    /// Input Snow Cover
-    #[strum(props(long_name = "Input Snow Cover", units = "mm"))]
-    snowCover,
-
-    /// NDVI factor
-    #[strum(props(long_name = "NDVI factor", units = "-"))]
-    NDVI,
-
-    /// NDWI factor
-    #[strum(props(long_name = "NDWI factor", units = "-"))]
-    NDWI,
-
-    /// Meteorological Index
-    #[strum(
-        props(long_name = "Meteorological Index", units = "-"),
-        serialize = "meteoIndex",
-        serialize = "meteoIndex2"
-    )]
-    meteoIndex2,
-
-    /// Fire Spread Rate + PPF
-    #[strum(props(long_name = "Fire Spread Rate + PPF", units = "m/h"))]
-    VPPF,
-
-    /// Fire Intensity + PPF
-    #[strum(props(long_name = "Fire Intensity + PPF", units = "kW/m"))]
-    IPPF,
-
-    /// Fire Intensity + NDWI factor
-    #[strum(props(long_name = "Fire Intensity + NDWI factor", units = "kW/m"))]
-    INDWI,
-
-    /// Fire Spread rate + NDWI factor
-    #[strum(props(long_name = "Fire Spread rate + NDWI factor", units = "m/h"))]
-    VNDWI,
-
-    /// Fire Intensity + NDVI factor
-    #[strum(props(long_name = "Fire Intensity + NDVI factor", units = "kW/m"))]
-    INDVI,
-    /// Fire Spread rate + NDVI factor
-    #[strum(props(long_name = "Fire Spread rate + NDVI factor", units = "m/h"))]
-    VNDVI,
-
-    /// Fire Spread rate + PPF + NDWI factor
-    #[strum(props(long_name = "Fire Spread rate + PPF + NDWI factor", units = "m/h"))]
-    VPPFNDWI,
-    /// Fire Intensity + PPF + NDWI factor
-    #[strum(props(long_name = "Fire Intensity + PPF + NDWI factor", units = "kW/m"))]
-    IPPFNDWI,
-
-    /// Fire Spread rate + PPF + NDVI factor
-    #[strum(props(long_name = "Fire Spread rate + PPF + NDVI factor", units = "m/h"))]
-    VPPFNDVI,
-    /// Fire Intensity + PPF + NDVI factor
-    #[strum(props(long_name = "Fire Intensity + PPF + NDVI factor", units = "kW/m"))]
-    IPPFNDVI,
-}

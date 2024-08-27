@@ -1,10 +1,5 @@
-use crate::library::helpers::RISICOError;
-use crate::library::io::models::grid::ClusterMode;
-use crate::library::io::writers::OutputVariableName;
-use crate::library::io::{
-    models::output::OutputVariable, readers::netcdf::NetCdfInputConfiguration,
-};
 use chrono::{DateTime, Utc};
+use risico::modules::risico::models::OutputVariableName;
 use serde_derive::{Deserialize, Serialize};
 use serde_yaml;
 use std::fs::File;
@@ -12,6 +7,11 @@ use std::io::BufRead;
 use std::io::Read;
 use std::str::FromStr;
 use std::{collections::HashMap, io};
+
+use crate::common::helpers::RISICOError;
+use crate::common::io::models::grid::ClusterMode;
+use crate::common::io::models::output::OutputVariable;
+use crate::common::io::readers::netcdf::NetCdfInputConfiguration;
 
 use super::models::Config;
 

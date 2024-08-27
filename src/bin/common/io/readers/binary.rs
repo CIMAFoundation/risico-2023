@@ -2,17 +2,14 @@ use chrono::{DateTime, NaiveDateTime, Utc};
 use libflate::gzip::{self, Decoder};
 use log::warn;
 use ndarray::Array1;
+use risico::modules::risico::constants::NODATAVAL;
 use std::{
-    collections::HashMap,
-    error::Error,
-    fs::File,
-    io::{self, BufRead, Read},
-    path::Path,
+    collections::HashMap, error::Error, fmt::{Display, Formatter}, fs::File, io::{self, BufRead, Read}, path::Path
 };
 
-use crate::library::{io::models::grid::Grid, modules::risico::constants::NODATAVAL};
+use crate::common::io::models::grid::Grid;
 
-use crate::library::io::models::grid::{IrregularGrid, RegularGrid};
+use crate::common::io::models::grid::{IrregularGrid, RegularGrid};
 use rayon::prelude::*;
 
 use super::prelude::{InputHandler, InputVariableName};
@@ -162,6 +159,19 @@ impl From<String> for LegacyInputFileParseError {
         Self { message: err }
     }
 }
+
+impl std::error::Error for LegacyInputFileParseError {
+    fn description(&self) -> &str {
+        &self.message
+    }
+}
+
+impl Display for LegacyInputFileParseError {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
+        write!(f, "LegacyInputFileParseError: {}", self.message)
+    }
+}
+
 
 /// Parse an input filename and return a tuple with grid_name, variable and datetime
 fn parse_line(line: &str) -> Result<(String, String, DateTime<Utc>), LegacyInputFileParseError> {
@@ -319,20 +329,5 @@ impl InputHandler for BinaryInputHandler {
         // sort the timeline
         timeline.sort();
         timeline
-    }
-
-    // returns the variables at given time
-    fn get_variables(&self, time: &DateTime<Utc>) -> Vec<InputVariableName> {
-        let mut variables: Vec<InputVariableName> = Vec::new();
-
-        let data_map = self
-            .data_map
-            .get(time)
-            .expect("there should be data for this time");
-
-        for var in data_map.keys() {
-            variables.push(*var);
-        }
-        variables
     }
 }

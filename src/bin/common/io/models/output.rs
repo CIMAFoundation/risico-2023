@@ -6,17 +6,13 @@ use log::debug;
 use ndarray::{Array1, Zip};
 use netcdf::{extent::Extents, MutableFile};
 use rayon::prelude::*;
+use risico::modules::risico::{constants::NODATAVAL, models::{Output, OutputVariableName}};
 use serde_derive::{Deserialize, Serialize};
 
-use crate::library::{
-    config::{models::PaletteMap, builder::OutputTypeConfig},
-    io::writers::{create_nc_file, write_to_pngwjson, write_to_zbin_file, OutputVariableName},
-    modules::risico::{constants::NODATAVAL, models::Output},
-};
-
-use crate::library::helpers::RISICOError;
 #[cfg(feature = "gdal")]
-use crate::library::io::writers::write_to_geotiff;
+use crate::common::io::writers::write_to_geotiff;
+
+use crate::common::{config::{builder::OutputTypeConfig, models::PaletteMap}, helpers::RISICOError, io::writers::{create_nc_file, write_to_pngwjson, write_to_zbin_file}};
 
 use super::grid::{ClusterMode, Grid, RegularGrid};
 
@@ -140,14 +136,14 @@ impl OutputVariable {
 }
 
 pub struct OutputType {
-    pub internal_name: String,
+    // pub internal_name: String,
     name: String,
-    path: String,
+    // path: String,
     grid: RegularGrid,
     format: String,
     variables: Vec<OutputVariable>,
-    palettes: PaletteMap,
-    run_date: DateTime<Utc>,
+    // palettes: PaletteMap,
+    // run_date: DateTime<Utc>,
     writer: Box<dyn Writer>,
 }
 
@@ -160,7 +156,7 @@ impl OutputType {
         palettes: &PaletteMap,
     ) -> Result<Self, RISICOError> {
         let grid_path = &output_type_def.grid_path;
-        let internal_name = &output_type_def.internal_name;
+        // let internal_name = &output_type_def.internal_name;
         let name = &output_type_def.name;
         let path = &output_type_def.path;
         let format = &output_type_def.format;
@@ -170,7 +166,7 @@ impl OutputType {
         let writer: Box<dyn Writer> = match format.as_str() {
             "ZBIN" => Box::new(ZBinWriter::new(path, name, run_date)),
             "PNGWJSON" => Box::new(PngWriter::new(path, name, palettes, run_date)),
-            "NETCDF" => Box::new(NetcdfWriter::new(path, name, run_date)),
+            "NETCDF" => Box::new(NetcdfWriter::new(path)),
             #[cfg(feature = "gdal")]
             "GEOTIFF" => Box::new(GeotiffWriter::new(path, name, run_date)),
             _ => Box::new(ZBinWriter::new(path, name, run_date)),
@@ -190,21 +186,21 @@ impl OutputType {
             .collect();
 
         Ok(Self {
-            internal_name: internal_name.to_string(),
+            // internal_name: internal_name.to_string(),
             name: name.to_string(),
-            path: path.to_string(),
+            // path: path.to_string(),
             grid,
             format: format.to_string(),
             variables,
-            palettes: palettes.clone(),
-            run_date: *run_date,
+            // palettes: palettes.clone(),
+            // run_date: *run_date,
             writer,
         })
     }
 
-    pub fn add_variable(&mut self, variable: OutputVariable) {
-        self.variables.push(variable);
-    }
+    // pub fn add_variable(&mut self, variable: OutputVariable) {
+    //     self.variables.push(variable);
+    // }
 
     pub fn write_variables(
         &mut self,
@@ -224,17 +220,17 @@ impl OutputType {
 #[derive(Debug)]
 struct NetcdfWriter {
     path: PathBuf,
-    name: String,
-    run_date: DateTime<Utc>,
+    // name: String,
+    // run_date: DateTime<Utc>,
     files: HashMap<String, Mutex<MutableFile>>,
 }
 
 impl NetcdfWriter {
-    fn new(path: &str, name: &str, run_date: &DateTime<Utc>) -> Self {
+    fn new(path: &str) -> Self {
         Self {
             path: PathBuf::from(path),
-            name: name.to_string(),
-            run_date: *run_date,
+            // name: name.to_string(),
+            // run_date: *run_date,
             files: HashMap::new(),
         }
     }

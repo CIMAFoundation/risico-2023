@@ -10,9 +10,6 @@ pub trait InputHandler {
 
     /// Returns the timeline of the input data
     fn get_timeline(&self) -> Vec<DateTime<Utc>>;
-
-    // returns the variables available at a given time
-    fn get_variables(&self, time: &DateTime<Utc>) -> Vec<InputVariableName>;
 }
 
 #[allow(clippy::upper_case_acronyms, non_camel_case_types)]

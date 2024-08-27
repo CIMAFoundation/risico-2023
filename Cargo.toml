@@ -42,11 +42,14 @@ clap_derive = "4.5.13"
 [build-dependencies]
 built = "0.7.4"
 
+[lib]
+name = "risico"
+path = "src/lib/mod.rs"
 
 [[bin]]
 name = "risico-2023"
-path = "src/risico-2023.rs"
+path = "src/bin/main.rs"
 
 [[bin]]
 name = "risico-2023-config-converter"
-path = "src/risico-2023-config-converter.rs"
+path = "src/bin/converter.rs"

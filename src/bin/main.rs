@@ -1,19 +1,20 @@
-#![allow(dead_code)]
-mod library;
+mod common;
 use std::env::{set_var, var};
 use std::error::Error;
 use std::path::Path;
 
 use chrono::prelude::*;
 use clap::{arg, command, Parser};
-use library::config::builder::ConfigBuilder;
-use library::io::readers::netcdf::{NetCdfInputConfiguration, NetCdfInputHandler};
-use library::version::LONG_VERSION;
+
+use common::config::builder::ConfigBuilder;
+use common::helpers::get_input;
+use common::io::readers::binary::BinaryInputHandler;
+use common::io::readers::netcdf::{NetCdfInputConfiguration, NetCdfInputHandler};
+use common::io::readers::prelude::InputHandler;
+use risico::version::LONG_VERSION;
 use log::{info, trace, warn};
 
-use crate::library::helpers::get_input;
-use crate::library::io::readers::binary::BinaryInputHandler;
-use crate::library::io::readers::prelude::InputHandler;
+
 
 #[derive(Parser, Debug)]
 #[command(
@@ -102,6 +103,7 @@ fn main() -> Result<(), Box<dyn Error>> {
         } else {
             NetCdfInputConfiguration::default()
         };
+
         Box::new(
             NetCdfInputHandler::new(&input_path_str, lats, lons, &nc_config)
                 .map_err(|_| "Could not load input data")?,

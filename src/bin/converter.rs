@@ -1,10 +1,9 @@
-#![allow(dead_code)]
-// import state from lib
-mod library;
-const VERSION: &str = env!("CARGO_PKG_VERSION");
-
+#[allow(dead_code)]
+mod common;
 use clap::Parser;
-use library::{config::builder::ConfigBuilder, version::LONG_VERSION};
+use common::config::builder::ConfigBuilder;
+use risico::version::LONG_VERSION;
+
 
 #[derive(Parser, Debug)]
 #[command(

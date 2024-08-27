@@ -4,12 +4,9 @@ use chrono::{DateTime, Utc};
 use itertools::izip;
 
 use ndarray::{azip, Array1, Zip};
+use risico::modules::risico::{constants::NODATAVAL, models::{Input, InputElement}};
 
-use super::modules::risico::{
-    constants::NODATAVAL,
-    models::{Input, InputElement},
-};
-use crate::library::io::readers::prelude::{InputHandler, InputVariableName::*};
+use crate::common::io::readers::prelude::{InputHandler, InputVariableName::*};
 
 fn replace<'a>(
     dst: &'a mut Array1<InputElement>,
