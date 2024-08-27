@@ -1,17 +1,15 @@
 #![allow(dead_code)]
 mod library;
-use core::panic;
 use std::env::{set_var, var};
+use std::error::Error;
 use std::path::Path;
-use std::process::exit;
 
-// use chrono::format::parse;
 use chrono::prelude::*;
 use clap::{arg, command, Parser};
 use library::config::serde::ConfigBuilder;
 use library::io::readers::netcdf::{NetCdfInputConfiguration, NetCdfInputHandler};
 use library::version::LONG_VERSION;
-use log::{error, info, trace, warn};
+use log::{info, trace, warn};
 
 use crate::library::helpers::get_input;
 use crate::library::io::readers::binary::BinaryInputHandler;
@@ -42,9 +40,9 @@ struct Args {
 }
 
 /// main function
-fn main() {
+fn main() -> Result<(), Box<dyn Error>> {
     let args = Args::parse();
-    let date = args.date;
+    let date_str = args.date;
     let config_path_str = args.config_path;
     let input_path_str = args.input_path;
 
@@ -56,23 +54,22 @@ fn main() {
     let start_time = Utc::now();
 
     if !Path::new(&config_path_str).is_file() {
-        error!("Config file {} is not a file", config_path_str);
-        exit(1)
+        return Err(format!("Config file {} is not a file", config_path_str).into());
     }
 
-    let date = NaiveDateTime::parse_from_str(&date, "%Y%m%d%H%M")
-        .unwrap_or_else(|_| panic!("Could not parse run date '{}'", date));
+    let date = NaiveDateTime::parse_from_str(&date_str, "%Y%m%d%H%M")
+        .map_err(|_| format!("Could not parse run date '{}'", date_str))?;
 
     let date = DateTime::from_naive_utc_and_offset(date, Utc);
 
     let config = ConfigBuilder::from_file(&config_path_str)
-        .unwrap_or_else(|err| panic!("{}", err))
+        .map_err(|err| format!("Failed to build config: {}", err))?
         .build(&date)
-        .expect("Could not configure model");
+        .map_err(|_| "Could not configure model")?;
 
     let mut output_writer = config
         .get_output_writer()
-        .expect("Could not configure output writer");
+        .map_err(|_| "Could not configure output writer")?;
 
     let props = config.get_properties();
     let mut state = config.new_state();
@@ -92,7 +89,7 @@ fn main() {
         // if it is a file, we are loading the legacy input.txt file and binary inputs
         Box::new(
             BinaryInputHandler::new(&input_path_str, lats, lons)
-                .expect("Could not load input data"),
+                .map_err(|_| "Could not load input data")?,
         )
     } else if input_path.is_dir() {
         info!(
@@ -107,11 +104,10 @@ fn main() {
         };
         Box::new(
             NetCdfInputHandler::new(&input_path_str, lats, lons, &nc_config)
-                .expect("Could not load input data"),
+                .map_err(|_| "Could not load input data")?,
         )
     } else {
-        error!("Input path {} is not valid", input_path_str);
-        exit(1);
+        return Err(format!("Input path {} is not valid", input_path_str).into());
     };
 
     trace!(
@@ -136,23 +132,23 @@ fn main() {
             trace!("Generating output took {} seconds", Utc::now() - c);
 
             let c = Utc::now();
-            match output_writer.write_output(lats, lons, &output) {
-                Ok(_) => (),
-                Err(err) => warn!("Error writing output: {}", err),
-            };
+            if let Err(err) = output_writer.write_output(lats, lons, &output) {
+                warn!("Error writing output: {}", err);
+            }
             trace!("Writing output took {} seconds", Utc::now() - c);
         }
 
         if time.hour() == 0 {
             let c = Utc::now();
-            match config.write_warm_state(&state) {
-                Ok(_) => (),
-                Err(err) => warn!("Error writing warm state: {}", err),
-            };
+            if let Err(err) = config.write_warm_state(&state) {
+                warn!("Error writing warm state: {}", err);
+            }
             trace!("Writing warm state took {} seconds", Utc::now() - c);
         }
         trace!("Step took {} seconds", Utc::now() - step_time);
     }
     let elapsed_time = Utc::now() - start_time;
     info!("Elapsed time: {} seconds", elapsed_time.num_seconds());
+
+    Ok(())
 }
