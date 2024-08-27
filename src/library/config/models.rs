@@ -148,7 +148,7 @@ impl Config {
 
         let ppf_file = &config_defs.ppf_file;
         let ppf = match ppf_file {
-            Some(ppf_file) => read_ppf(&ppf_file)
+            Some(ppf_file) => read_ppf(ppf_file)
                 .map_err(|error| format!("error reading {}, {}", &ppf_file, error))?,
             None => vec![(1.0, 1.0); n_cells],
         };
@@ -188,7 +188,7 @@ impl Config {
     }
 
     pub fn get_output_writer(&self) -> Result<OutputWriter, RISICOError> {
-        Ok(OutputWriter::new(&self.output_types_defs.as_slice(), &self.run_date, &self.palettes))
+        Ok(OutputWriter::new(self.output_types_defs.as_slice(), &self.run_date, &self.palettes))
     }
 
     pub fn should_write_output(&self, time: &DateTime<Utc>) -> bool {

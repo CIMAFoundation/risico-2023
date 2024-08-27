@@ -82,7 +82,7 @@ fn main() {
 
     let date = DateTime::from_naive_utc_and_offset(date, Utc);
 
-    let serializable_config = SerializableConfig::new(&config_path_str).expect("Could not configure model");
+    let serializable_config = SerializableConfig::new(config_path_str).expect("Could not configure model");
     let config = Config::new(&serializable_config, date).expect("Could not configure model");
 
     let mut output_writer = config

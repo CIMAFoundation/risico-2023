@@ -170,7 +170,7 @@ impl OutputType {
 
         let writer: Box<dyn Writer> = match format.as_str() {
             "ZBIN" => Box::new(ZBinWriter::new(path, name, run_date)),
-            "PNGWJSON" => Box::new(PngWriter::new(path, name, &palettes, run_date)),
+            "PNGWJSON" => Box::new(PngWriter::new(path, name, palettes, run_date)),
             "NETCDF" => Box::new(NetcdfWriter::new(path, name, run_date)),
             #[cfg(feature = "gdal")]
             "GEOTIFF" => Box::new(GeotiffWriter::new(path, name, run_date)),
