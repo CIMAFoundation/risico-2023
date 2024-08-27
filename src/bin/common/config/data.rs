@@ -13,71 +13,71 @@ pub trait FromFile<T> {
 }
 
 impl FromFile<Self> for CellPropertiesContainer {
-/// Read the cells from a file.
-/// :param file_path: The path to the file.
-/// :return: A list of cells.
- fn from_file(file_path: &str) -> Result<Self, RISICOError> {
-    let file = fs::File::open(file_path).map_err(|err| format!("can't open file: {err}."))?;
+    /// Read the cells from a file.
+    /// :param file_path: The path to the file.
+    /// :return: A list of cells.
+    fn from_file(file_path: &str) -> Result<Self, RISICOError> {
+        let file = fs::File::open(file_path).map_err(|err| format!("can't open file: {err}."))?;
 
-    let mut lons: Vec<f32> = Vec::new();
-    let mut lats: Vec<f32> = Vec::new();
-    let mut slopes: Vec<f32> = Vec::new();
-    let mut aspects: Vec<f32> = Vec::new();
-    let mut vegetations: Vec<String> = Vec::new();
+        let mut lons: Vec<f32> = Vec::new();
+        let mut lats: Vec<f32> = Vec::new();
+        let mut slopes: Vec<f32> = Vec::new();
+        let mut aspects: Vec<f32> = Vec::new();
+        let mut vegetations: Vec<String> = Vec::new();
 
-    let reader = BufReader::new(file);
+        let reader = BufReader::new(file);
 
-    for line in reader.lines() {
-        let line = line.map_err(|err| format!("can't read from file: {err}."))?;
-        if line.starts_with("#") {
-            // skip header
-            continue;
+        for line in reader.lines() {
+            let line = line.map_err(|err| format!("can't read from file: {err}."))?;
+            if line.starts_with("#") {
+                // skip header
+                continue;
+            }
+
+            let line_parts: Vec<&str> = line.trim().split(' ').collect();
+
+            if line_parts.len() < 5 {
+                let error_message = format!("Invalid line in file: {}", line);
+                return Err(error_message.into());
+            }
+
+            //  [TODO] refactor this for using error handling
+            let lon = line_parts[0]
+                .parse::<f32>()
+                .unwrap_or_else(|_| panic!("Invalid line in file: {}", line));
+
+            let lat = line_parts[1]
+                .parse::<f32>()
+                .unwrap_or_else(|_| panic!("Invalid line in file: {}", line));
+
+            let slope = line_parts[2]
+                .parse::<f32>()
+                .unwrap_or_else(|_| panic!("Invalid line in file: {}", line));
+            let aspect = line_parts[3]
+                .parse::<f32>()
+                .unwrap_or_else(|_| panic!("Invalid line in file: {}", line));
+
+            let vegetation = line_parts[4].to_string();
+
+            let slope = slope * PI / 180.0;
+            let aspect = aspect * PI / 180.0;
+
+            lons.push(lon);
+            lats.push(lat);
+            slopes.push(slope);
+            aspects.push(aspect);
+            vegetations.push(vegetation);
         }
 
-        let line_parts: Vec<&str> = line.trim().split(' ').collect();
-
-        if line_parts.len() < 5 {
-            let error_message = format!("Invalid line in file: {}", line);
-            return Err(error_message.into());
-        }
-
-        //  [TODO] refactor this for using error handling
-        let lon = line_parts[0]
-            .parse::<f32>()
-            .unwrap_or_else(|_| panic!("Invalid line in file: {}", line));
-
-        let lat = line_parts[1]
-            .parse::<f32>()
-            .unwrap_or_else(|_| panic!("Invalid line in file: {}", line));
-
-        let slope = line_parts[2]
-            .parse::<f32>()
-            .unwrap_or_else(|_| panic!("Invalid line in file: {}", line));
-        let aspect = line_parts[3]
-            .parse::<f32>()
-            .unwrap_or_else(|_| panic!("Invalid line in file: {}", line));
-
-        let vegetation = line_parts[4].to_string();
-
-        let slope = slope * PI / 180.0;
-        let aspect = aspect * PI / 180.0;
-
-        lons.push(lon);
-        lats.push(lat);
-        slopes.push(slope);
-        aspects.push(aspect);
-        vegetations.push(vegetation);
+        let props = CellPropertiesContainer {
+            lats,
+            lons,
+            slopes,
+            aspects,
+            vegetations,
+        };
+        Ok(props)
     }
-
-    let props = CellPropertiesContainer {
-        lats,
-        lons,
-        slopes,
-        aspects,
-        vegetations,
-    };
-    Ok(props)
-}
 }
 /// Read the cells from a file.
 /// :param file_path: The path to the file.

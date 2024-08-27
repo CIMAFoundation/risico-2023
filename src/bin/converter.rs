@@ -4,7 +4,6 @@ use clap::Parser;
 use common::config::builder::ConfigBuilder;
 use risico::version::LONG_VERSION;
 
-
 #[derive(Parser, Debug)]
 #[command(
     author="Mirko D'Andrea <mirko.dandrea@cimafoundation.org>",

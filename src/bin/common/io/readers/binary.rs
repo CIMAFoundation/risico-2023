@@ -4,7 +4,12 @@ use log::warn;
 use ndarray::Array1;
 use risico::modules::risico::constants::NODATAVAL;
 use std::{
-    collections::HashMap, error::Error, fmt::{Display, Formatter}, fs::File, io::{self, BufRead, Read}, path::Path
+    collections::HashMap,
+    error::Error,
+    fmt::{Display, Formatter},
+    fs::File,
+    io::{self, BufRead, Read},
+    path::Path,
 };
 
 use crate::common::io::models::grid::Grid;
@@ -171,7 +176,6 @@ impl Display for LegacyInputFileParseError {
         write!(f, "LegacyInputFileParseError: {}", self.message)
     }
 }
-
 
 /// Parse an input filename and return a tuple with grid_name, variable and datetime
 fn parse_line(line: &str) -> Result<(String, String, DateTime<Utc>), LegacyInputFileParseError> {

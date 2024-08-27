@@ -92,7 +92,7 @@ impl Config {
         let palettes = Config::load_palettes(&config_defs.palettes);
 
         let cells_file = &config_defs.cells_file_path;
-        
+
         let props_container = CellPropertiesContainer::from_file(cells_file)
             .map_err(|error| format!("error reading {}, {error}", cells_file))?;
 

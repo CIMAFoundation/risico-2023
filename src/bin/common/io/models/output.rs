@@ -6,13 +6,20 @@ use log::debug;
 use ndarray::{Array1, Zip};
 use netcdf::{extent::Extents, MutableFile};
 use rayon::prelude::*;
-use risico::modules::risico::{constants::NODATAVAL, models::{Output, OutputVariableName}};
+use risico::modules::risico::{
+    constants::NODATAVAL,
+    models::{Output, OutputVariableName},
+};
 use serde_derive::{Deserialize, Serialize};
 
 #[cfg(feature = "gdal")]
 use crate::common::io::writers::write_to_geotiff;
 
-use crate::common::{config::{builder::OutputTypeConfig, models::PaletteMap}, helpers::RISICOError, io::writers::{create_nc_file, write_to_pngwjson, write_to_zbin_file}};
+use crate::common::{
+    config::{builder::OutputTypeConfig, models::PaletteMap},
+    helpers::RISICOError,
+    io::writers::{create_nc_file, write_to_pngwjson, write_to_zbin_file},
+};
 
 use super::grid::{ClusterMode, Grid, RegularGrid};
 

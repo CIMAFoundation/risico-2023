@@ -11,9 +11,7 @@ use serde_derive::{Deserialize, Serialize};
 use std::fs;
 use strum::IntoEnumIterator;
 
-use crate::common::
-    io::models::grid::{Grid, IrregularGrid}
-;
+use crate::common::io::models::grid::{Grid, IrregularGrid};
 
 use super::prelude::{InputHandler, InputVariableName};
 

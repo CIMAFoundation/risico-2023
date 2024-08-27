@@ -4,7 +4,10 @@ use chrono::{DateTime, Utc};
 use itertools::izip;
 
 use ndarray::{azip, Array1, Zip};
-use risico::modules::risico::{constants::NODATAVAL, models::{Input, InputElement}};
+use risico::modules::risico::{
+    constants::NODATAVAL,
+    models::{Input, InputElement},
+};
 
 use crate::common::io::readers::prelude::{InputHandler, InputVariableName::*};
 

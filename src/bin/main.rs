@@ -11,10 +11,8 @@ use common::helpers::get_input;
 use common::io::readers::binary::BinaryInputHandler;
 use common::io::readers::netcdf::{NetCdfInputConfiguration, NetCdfInputHandler};
 use common::io::readers::prelude::InputHandler;
-use risico::version::LONG_VERSION;
 use log::{info, trace, warn};
-
-
+use risico::version::LONG_VERSION;
 
 #[derive(Parser, Debug)]
 #[command(

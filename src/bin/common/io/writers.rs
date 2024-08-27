@@ -21,7 +21,6 @@ use crate::common::helpers::RISICOError;
 
 use strum::EnumProperty;
 
-
 use super::models::{grid::RegularGrid, palette::Palette};
 
 pub fn write_and_check(
@@ -307,4 +306,3 @@ pub fn create_nc_file(
 
     Ok(file)
 }
-
