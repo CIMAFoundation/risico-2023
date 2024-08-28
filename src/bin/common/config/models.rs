@@ -147,6 +147,7 @@ impl Config {
     }
 
     pub fn new_state(&self) -> State {
+        log::info!("Model version: {}", &self.model_version);
         let config = ModelConfig::new(&self.model_version);
         State::new(&self.warm_state, &self.warm_state_time, config)
     }

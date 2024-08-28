@@ -9,6 +9,19 @@ default-run = "risico-2023"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 [features]
+build-binary = [
+    "dep:log",
+    "dep:pretty_env_logger",
+    "dep:libflate",
+    "dep:png",
+    "dep:rstar",
+    "dep:serde_yaml",
+    "dep:clap_derive",
+    "dep:netcdf",
+    "dep:netcdf-sys",
+    "dep:hdf5",
+    "dep:hdf5-sys",
+]
 default = []
 gdal_bindgen = ["gdal/bindgen"]
 gdal = ["dep:gdal"]
@@ -18,32 +31,31 @@ static_deps = ["netcdf-sys/static", "hdf5-sys/static"]
 clap = { version = "4.5.16", features = ["cargo", "derive"] }
 
 
-log = "0.4.17"
-strum = "0.26.3"
-strum_macros = "0.26.4"
-pretty_env_logger = "0.5.0"
-itertools = "0.13.0"
-chrono = "0.4"
-serde = "1.0"
-libflate = "2.0.0"
-rayon = "1.6.0"
-ndarray = { version = "0.16.0", features = ["rayon"] }
-ndarray-stats = "0.5.1"
-png = "0.17.7"
-rstar = "0.12.0"
+log = { version = "0.4.17", optional = true }
+strum = { version = "0.26.3", optional = false }
+strum_macros = { version = "0.26.4", optional = false }
+pretty_env_logger = { version = "0.5.0", optional = true }
+itertools = { version = "0.13.0", optional = false }
+chrono = { version = "0.4", optional = false }
+serde = { version = "1.0", optional = false }
+libflate = { version = "2.0.0", optional = true }
+rayon = { version = "1.6.0", optional = false }
+ndarray = { version = "0.16.0", features = ["rayon"], optional = false }
+ndarray-stats = { version = "0.5.1", optional = false }
+png = { version = "0.17.7", optional = true }
+rstar = { version = "0.12.0", optional = true }
+
+serde_derive = { version = "1.0.209", optional = false }
+serde_yaml = { version = "0.9.17", optional = true }
+clap_derive = { version = "4.5.13", optional = true }
+
 # Native dependencies
 gdal = { version = "0.17.0", default-features = false, optional = true }
-hdf5 = "0.8.1"
-hdf5-sys = { version = "0.8.1" }
-netcdf = "0.8.1"
-netcdf-sys = { version = "0.5.1" }
-serde_derive = "1.0.209"
-serde_yaml = "0.9.17"
-clap_derive = "4.5.13"
+hdf5 = { version = "0.8.1", optional = true }
+hdf5-sys = { version = "0.8.1", optional = true }
+netcdf = { version = "0.8.1", optional = true }
+netcdf-sys = { version = "0.5.1", optional = true }
 
-
-[build-dependencies]
-built = "0.7.4"
 
 [lib]
 name = "risico"
@@ -52,7 +64,9 @@ path = "src/lib/mod.rs"
 [[bin]]
 name = "risico-2023"
 path = "src/bin/main.rs"
+required-features = ["build-binary"]
 
 [[bin]]
 name = "risico-2023-config-converter"
 path = "src/bin/converter.rs"
+required-features = ["build-binary"]

@@ -19,7 +19,6 @@ pub struct ModelConfig {
 
 impl ModelConfig {
     pub fn new(model_version_str: &str) -> Self {
-        log::info!("Model version: {}", model_version_str);
         let ffmc_no_rain_fn: fn(f32, f32, f32, f32, f32, f32, f32) -> f32;
         let ffmc_rain_fn: fn(f32, f32, f32) -> f32;
         let ros_fn: RosFnType;

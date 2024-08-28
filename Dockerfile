@@ -29,4 +29,4 @@ WORKDIR /app
 COPY . .
 
 #ENV RUSTFLAGS="-C target-feature=+crt-static"
-ENTRYPOINT ["cargo", "build", "--release", "--features", "static_deps", "--target", "x86_64-unknown-linux-gnu"]
+ENTRYPOINT ["cargo", "build", "--release", "--features=build-binary, static_deps", "--target", "x86_64-unknown-linux-gnu"]
