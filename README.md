@@ -105,4 +105,4 @@ fn main() {
 
 
 ## License
-See [LICENSE](LICENSE) file
+See [LICENSE](LICENSE.md) file
