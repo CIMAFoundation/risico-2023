@@ -1,9 +1,6 @@
 name: upload lib to crates.io
 
 on:
-  push:
-    branches:
-      - main
   release:
     types: [published]
 
