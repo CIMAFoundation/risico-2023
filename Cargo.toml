@@ -1,5 +1,8 @@
 [package]
 name = "risico-2023"
+description = "risico-2023 Wildfire Risk Assessment Model by CIMA Research Foundation"
+tags = ["wildfire", "risk assessment model"]
+license = "EUPL-1.2"
 version = "0.3.0"
 edition = "2021"
 default-run = "risico-2023"
