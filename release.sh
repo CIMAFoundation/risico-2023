@@ -84,19 +84,19 @@ else
   sed -i 's/^version = \".*\"/version = \"'$new_tag'\"/' Cargo.toml
 fi
 
-# overwrite the file src/library/version.rs
-echo "pub const FULL_VERSION: &str = \"v$new_tag-$short_commit_hash\";" > ./src/library/version.rs
+# overwrite the file src/lib/version.rs
+echo "pub const FULL_VERSION: &str = \"v$new_tag-$short_commit_hash\";" > ./src/lib/version.rs
 TZ=UTC echo "pub const LONG_VERSION: &str = \"
 version: v$new_tag
 commit: $long_commit_hash
 branch: $current_branch
 released on: $(date -R)\";
-" >> ./src/library/version.rs
+" >> ./src/lib/version.rs
 
 
 
 # commit the changes
-git add Cargo.toml src/library/version.rs
+git add Cargo.toml src/lib/version.rs
 
 git commit -m "Bump version to v$new_tag"
 git push
