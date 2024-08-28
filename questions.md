@@ -1,1 +1,0 @@
-ndvi va nel calcolo della intensità come Relative Greeness,  è corretto?
