@@ -20,7 +20,10 @@ cargo run
 ```
 
 ## Using risico-2023 as library
-Add the crate to your _rust_ project with 
+The risico-2023 model can be used as a library in your rust project, it is published on
+[crates.io](https://crates.io/crates/risico-2023).
+Add the crate to your cargo.toml file or run the following command to add it to your project: 
+
 ```bash
 cargo add risico-2023
 ```
