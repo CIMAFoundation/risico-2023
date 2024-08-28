@@ -36,6 +36,6 @@ jobs:
         uses: meeDamian/github-release@2.0
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
-          files: risico-2023-linux-gnu:target/x86_64-unknown-linux-gnu/release/risico-2023
+          files: risico-2023-linux-gnu:target/x86_64-unknown-linux-gnu/release/risico-2023 risico-2023-config-converter-linux-gnu:target/x86_64-unknown-linux-gnu/release/risico-2023-config-converter
           tag: ${{ github.ref_name }}
           allow_override: true

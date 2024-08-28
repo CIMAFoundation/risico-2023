@@ -1,26 +1,21 @@
 use std::fmt::Debug;
 
-use crate::library::config::models::{read_config, RISICOError};
 use itertools::izip;
 use ndarray::Array1;
 use rstar::{primitives::GeomWithData, RTree};
+use serde_derive::{Deserialize, Serialize};
 
-#[derive(Debug)]
+use strum_macros::{Display, EnumString};
+
+use crate::common::{config::builder::read_config, helpers::RISICOError};
+
+#[derive(Debug, PartialEq, Eq, Hash, Copy, Clone, EnumString, Display, Serialize, Deserialize)]
+#[strum(ascii_case_insensitive)]
 pub enum ClusterMode {
     Mean,
     Median,
     Min,
     Max,
-}
-impl From<&str> for ClusterMode {
-    fn from(s: &str) -> Self {
-        match s {
-            "MEAN" | "mean" => ClusterMode::Mean,
-            "MAX" | "max" => ClusterMode::Max,
-            "MIN" | "min" => ClusterMode::Min,
-            _ => panic!("Invalid cluster mode"),
-        }
-    }
 }
 
 pub trait Grid {
@@ -70,25 +65,25 @@ impl RegularGrid {
         }
     }
 
-    pub fn project_to_grid(&self, lats: &[f32], lons: &[f32]) -> Vec<Array1<usize>> {
-        let (nrows, ncols) = self.shape();
+    // pub fn project_to_grid(&self, lats: &[f32], lons: &[f32]) -> Vec<Array1<usize>> {
+    //     let (nrows, ncols) = self.shape();
 
-        let mut grid_indexes = vec![vec![]; nrows * ncols];
+    //     let mut grid_indexes = vec![vec![]; nrows * ncols];
 
-        izip!(lats, lons)
-            .enumerate()
-            .for_each(|(index, (lat, lon))| {
-                if let Some(idx) = self.index(lat, lon) {
-                    grid_indexes[idx].push(index);
-                }
-            });
+    //     izip!(lats, lons)
+    //         .enumerate()
+    //         .for_each(|(index, (lat, lon))| {
+    //             if let Some(idx) = self.index(lat, lon) {
+    //                 grid_indexes[idx].push(index);
+    //             }
+    //         });
 
-        let indexes = grid_indexes
-            .iter()
-            .map(|v| Array1::from(v.to_owned()))
-            .collect();
-        indexes
-    }
+    //     let indexes = grid_indexes
+    //         .iter()
+    //         .map(|v| Array1::from(v.to_owned()))
+    //         .collect();
+    //     indexes
+    // }
 
     pub fn from_txt_file(grid_file: &str) -> Result<RegularGrid, RISICOError> {
         // read the file as text
@@ -172,8 +167,8 @@ impl Grid for RegularGrid {
 pub struct IrregularGrid {
     pub nrows: usize,
     pub ncols: usize,
-    pub lats: Array1<f32>,
-    pub lons: Array1<f32>,
+    // pub lats: Array1<f32>,
+    // pub lons: Array1<f32>,
     tree: RTree<PointWithIndex>,
 }
 
@@ -188,8 +183,8 @@ impl IrregularGrid {
         IrregularGrid {
             nrows,
             ncols,
-            lats,
-            lons,
+            // lats,
+            // lons,
             tree,
         }
     }

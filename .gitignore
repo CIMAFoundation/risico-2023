@@ -1,5 +1,8 @@
+!src/lib/
+
 /data
 /target
+
 
 
 # Created by https://www.toptal.com/developers/gitignore/api/rust,macos,linux,windows,python
@@ -74,7 +77,7 @@ dist/
 downloads/
 eggs/
 .eggs/
-lib/
+./lib/
 lib64/
 parts/
 sdist/

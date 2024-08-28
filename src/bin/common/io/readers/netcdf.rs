@@ -6,17 +6,16 @@ use log::warn;
 use ndarray::Array1;
 use netcdf::extent::Extents;
 use rayon::prelude::*;
+use risico::modules::risico::constants::NODATAVAL;
+use serde_derive::{Deserialize, Serialize};
 use std::fs;
 use strum::IntoEnumIterator;
 
-use crate::library::{
-    io::models::grid::{Grid, IrregularGrid},
-    modules::risico::constants::NODATAVAL,
-};
+use crate::common::io::models::grid::{Grid, IrregularGrid};
 
 use super::prelude::{InputHandler, InputVariableName};
 
-#[derive(Clone)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct NetCdfInputConfiguration {
     pub variable_map: HashMap<InputVariableName, String>,
     pub lat_name: String,
@@ -305,15 +304,15 @@ impl InputHandler for NetCdfInputHandler {
             .collect()
     }
 
-    fn get_variables(&self, time: &DateTime<Utc>) -> Vec<InputVariableName> {
-        let mut variables = Vec::new();
+    // fn get_variables(&self, time: &DateTime<Utc>) -> Vec<InputVariableName> {
+    //     let mut variables = Vec::new();
 
-        for record in &self.records {
-            let time_index = record.timeline.iter().position(|t| t == time);
-            if time_index.is_some() {
-                variables.extend_from_slice(&record.variables);
-            }
-        }
-        variables
-    }
+    //     for record in &self.records {
+    //         let time_index = record.timeline.iter().position(|t| t == time);
+    //         if time_index.is_some() {
+    //             variables.extend_from_slice(&record.variables);
+    //         }
+    //     }
+    //     variables
+    // }
 }

@@ -1,5 +1,6 @@
 use chrono::{DateTime, Utc};
 use ndarray::Array1;
+use serde_derive::{Deserialize, Serialize};
 use strum_macros::{Display, EnumIter, EnumString};
 
 /// Trait defining the behavior of an InputDataSupplier for RISICO
@@ -9,13 +10,12 @@ pub trait InputHandler {
 
     /// Returns the timeline of the input data
     fn get_timeline(&self) -> Vec<DateTime<Utc>>;
-
-    // returns the variables available at a given time
-    fn get_variables(&self, time: &DateTime<Utc>) -> Vec<InputVariableName>;
 }
 
 #[allow(clippy::upper_case_acronyms, non_camel_case_types)]
-#[derive(Debug, PartialEq, Eq, Hash, Copy, Clone, EnumString, EnumIter, Display)]
+#[derive(
+    Debug, PartialEq, Eq, Hash, Copy, Clone, EnumString, EnumIter, Display, Serialize, Deserialize,
+)]
 pub enum InputVariableName {
     /// Air Humidity
     H,

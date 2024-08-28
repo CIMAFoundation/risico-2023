@@ -4,22 +4,14 @@ use std::io::BufReader;
 use std::sync::Arc;
 use std::{collections::HashMap, io::BufRead};
 
-use crate::library::modules::risico::models::Vegetation;
+use risico::modules::risico::models::{CellPropertiesContainer, Vegetation};
 
-use super::models::RISICOError;
-
-pub struct CellPropertiesContainer {
-    pub lons: Vec<f32>,
-    pub lats: Vec<f32>,
-    pub slopes: Vec<f32>,
-    pub aspects: Vec<f32>,
-    pub vegetations: Vec<String>,
-}
+use crate::common::helpers::RISICOError;
 
 /// Read the cells from a file.
 /// :param file_path: The path to the file.
 /// :return: A list of cells.
-pub fn read_cells_properties(file_path: &str) -> Result<CellPropertiesContainer, RISICOError> {
+pub fn from_file(file_path: &str) -> Result<CellPropertiesContainer, RISICOError> {
     let file = fs::File::open(file_path).map_err(|err| format!("can't open file: {err}."))?;
 
     let mut lons: Vec<f32> = Vec::new();

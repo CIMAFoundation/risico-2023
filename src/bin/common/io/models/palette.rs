@@ -2,7 +2,7 @@ use std::io::Read;
 
 use log::warn;
 
-use crate::library::config::models::RISICOError;
+use crate::common::helpers::RISICOError;
 
 #[derive(Debug, Clone, Copy)]
 pub struct Color {
@@ -19,36 +19,36 @@ pub struct Palette {
 }
 
 impl Palette {
-    pub fn new(min: f32, max: f32) -> Self {
-        let mut palette = Self {
-            bounds: Vec::new(),
-            colors: Vec::new(),
-        };
+    // pub fn new(min: f32, max: f32) -> Self {
+    //     let mut palette = Self {
+    //         bounds: Vec::new(),
+    //         colors: Vec::new(),
+    //     };
 
-        palette.bounds.push(-9999.0);
-        let mut c = Color {
-            r: 0,
-            g: 0,
-            b: 0,
-            a: 0,
-        };
-        palette.colors.push(c);
+    //     palette.bounds.push(-9999.0);
+    //     let mut c = Color {
+    //         r: 0,
+    //         g: 0,
+    //         b: 0,
+    //         a: 0,
+    //     };
+    //     palette.colors.push(c);
 
-        let step = (max - min) / 255.0;
-        for i in 0..255 {
-            let val = min + i as f32 * step;
+    //     let step = (max - min) / 255.0;
+    //     for i in 0..255 {
+    //         let val = min + i as f32 * step;
 
-            c.r = i as u8;
-            c.g = i as u8;
-            c.b = i as u8;
-            c.a = 255;
+    //         c.r = i as u8;
+    //         c.g = i as u8;
+    //         c.b = i as u8;
+    //         c.a = 255;
 
-            palette.bounds.push(val);
-            palette.colors.push(c);
-        }
+    //         palette.bounds.push(val);
+    //         palette.colors.push(c);
+    //     }
 
-        palette
-    }
+    //     palette
+    // }
 
     pub fn load_palette(s_palette_file: &str) -> Result<Self, RISICOError> {
         let ifs = std::fs::File::open(s_palette_file)
