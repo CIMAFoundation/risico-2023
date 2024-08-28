@@ -11,7 +11,7 @@ use rayon::prelude::*;
 use risico::modules::risico::{
     config::ModelConfig,
     constants::NODATAVAL,
-    models::{CellPropertiesContainer, Output, Properties, State, WarmState},
+    models::{Output, Properties, State, WarmState},
 };
 
 use crate::common::io::models::{output::OutputType, palette::Palette};
@@ -19,10 +19,8 @@ use crate::common::{helpers::RISICOError, io::readers::netcdf::NetCdfInputConfig
 
 use super::{
     builder::{ConfigBuilder, OutputTypeConfig},
-    data::read_vegetation,
+    data::{from_file, read_vegetation},
 };
-
-use crate::common::config::data::FromFile;
 
 pub type PaletteMap = HashMap<String, Box<Palette>>;
 // pub type ConfigMap = HashMap<String, Vec<String>>;
@@ -93,7 +91,7 @@ impl Config {
 
         let cells_file = &config_defs.cells_file_path;
 
-        let props_container = CellPropertiesContainer::from_file(cells_file)
+        let props_container = from_file(cells_file)
             .map_err(|error| format!("error reading {}, {error}", cells_file))?;
 
         let n_cells = props_container.lons.len();
