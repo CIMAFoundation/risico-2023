@@ -205,8 +205,8 @@ impl Config {
 #[allow(non_snake_case)]
 /// Reads the warm state from the file
 /// The warm state is stored in a file with the following structure:
-/// <base_warm_file>_<YYYYmmDDHHMM>
-/// where <base_warm_file> is the base name of the file and <YYYYmmDDHHMM> is the date of the warm state
+/// base_warm_file_YYYYmmDDHHMM
+/// where <base_warm_file> is the base name of the file and `YYYYmmDDHHMM` is the date of the warm state
 /// The warm state is stored in a text file with the following structure:
 /// dffm
 fn read_warm_state(
@@ -214,7 +214,7 @@ fn read_warm_state(
     date: DateTime<Utc>,
 ) -> Option<(Vec<WarmState>, DateTime<Utc>)> {
     // for the last n days before date, try to read the warm state
-    // compose the filename as <base_warm_file>_<YYYYmmDDHHMM>
+    // compose the filename as base_warm_file_YYYYmmDDHHMM
     let mut file: Option<File> = None;
 
     let mut current_date = date;

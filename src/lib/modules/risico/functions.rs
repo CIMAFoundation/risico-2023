@@ -101,11 +101,11 @@ pub fn get_v_legacy(
 
 /// Get the wind effect on the fire propagation at the desired angle
 /// # Arguments
-/// * `wind_speed` - Wind speed [m/h]
-/// * `wind_dir` - Wind direction [radians]
-/// * `angle` - Angle [radians]
+/// * `wind_speed` - Wind speed \[m/h\]
+/// * `wind_dir` - Wind direction \[radians\]
+/// * `angle` - Angle \[radians\]
 /// # Returns
-/// * `w_eff_on_dir` - Wind effect in angle direction
+/// * `w_eff_on_dir` - Wind effect in angle direction \[adim\]
 pub fn get_wind_effect_angle(wind_speed: f32, wind_dir: f32, angle: f32) -> f32 {
     // convert from m/h to km/h
     let ws_kph: f32 = wind_speed * 0.001;
@@ -123,11 +123,11 @@ pub fn get_wind_effect_angle(wind_speed: f32, wind_dir: f32, angle: f32) -> f32 
 
 /// Get the slope effect on the fire propagation at the desired angle
 /// # Arguments
-/// * `slope` - Slope [radians]
-/// * `aspect` - Aspect [radians]
-/// * `angle` - Angle [radians]
+/// * `slope` - Slope \[radians\]
+/// * `aspect` - Aspect \[radians\]
+/// * `angle` - Angle \[radians\]
 /// # Returns
-/// * `h_eff_on_dir` - Slope effect in angle direction
+/// * `h_eff_on_dir` - Slope effect in angle direction \[adim\]
 pub fn get_slope_effect_angle(slope: f32, aspect: f32, angle: f32) -> f32 {
     // slope in angle direction
     let s: f32 = f32::atan(f32::cos(aspect - angle) * f32::tan(slope));
@@ -138,13 +138,13 @@ pub fn get_slope_effect_angle(slope: f32, aspect: f32, angle: f32) -> f32 {
 
 /// Get the combined effect of wind and slope on the fire propagation at the desired angle
 /// # Arguments
-/// * `slope` - Slope [radians]
-/// * `aspect` - Aspect [radians]
-/// * `wind_speed` - Wind speed [m/h]
-/// * `wind_dir` - Wind direction [radians]
-/// * `angle` - Angle [radians]
+/// * `slope` - Slope \[radians\]
+/// * `aspect` - Aspect \[radians\]
+/// * `wind_speed` - Wind speed \[m/h\]
+/// * `wind_dir` - Wind direction \[radians\]
+/// * `angle` - Angle \[radians\]
 /// # Returns
-/// * `wh` - Combined effect of wind and slope in angle direction
+/// * `wh` - Combined effect of wind and slope in angle direction \[adim\]
 pub fn get_wind_slope_effect_angle(
     slope: f32,
     aspect: f32,
@@ -160,12 +160,12 @@ pub fn get_wind_slope_effect_angle(
 
 /// Get the wind and slope effect on the fire propagation considering all angles
 /// # Arguments
-/// * `slope` - Slope [radians]
-/// * `aspect` - Aspect [radians]
-/// * `wind_speed` - Wind speed [m/h]
-/// * `wind_dir` - Wind direction [radians]
+/// * `slope` - Slope \[radians\]
+/// * `aspect` - Aspect \[radians\]
+/// * `wind_speed` - Wind speed \[m/h\]
+/// * `wind_dir` - Wind direction \[radians\]
 /// # Returns
-/// * `ws_effect` - Wind and slope effect [adimensional]
+/// * `ws_effect` - Wind and slope effect \[adim\]
 pub fn get_wind_slope_effect(slope: f32, aspect: f32, wind_speed: f32, wind_dir: f32) -> f32 {
     let angles: Array1<f32> = Array::linspace(0., 2. * PI, N_ANGLES_ROS);
     let ws_effect: f32 = angles
