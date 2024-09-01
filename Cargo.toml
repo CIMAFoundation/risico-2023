@@ -67,13 +67,13 @@ name = "risico-2023"
 path = "src/bin/main.rs"
 # required-features = ["build-binary"]
 
-[[bin]]
-name = "risico-2023-config-converter"
-path = "src/bin/converter.rs"
-required-features = ["build-binary"]
+# [[bin]]
+# name = "risico-2023-config-converter"
+# path = "src/bin/converter.rs"
+# required-features = ["build-binary"]
 
 
-[[bin]]
-name = "test-config"
-path = "src/bin/test-config.rs"
-required-features = ["build-binary"]
+# [[bin]]
+# name = "test-config"
+# path = "src/bin/test-config.rs"
+# required-features = ["build-binary"]

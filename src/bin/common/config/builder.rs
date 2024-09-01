@@ -13,7 +13,7 @@ use crate::common::io::models::grid::ClusterMode;
 use crate::common::io::models::output::OutputVariable;
 use crate::common::io::readers::netcdf::NetCdfInputConfiguration;
 
-use super::models::Config;
+use super::models::RISICOConfig;
 
 pub type PaletteMap = HashMap<String, String>;
 pub type ConfigMap = HashMap<String, Vec<String>>;
@@ -102,8 +102,6 @@ pub struct RISICOConfigBuilder {
     pub use_ndvi: bool,
     pub output_time_resolution: u32,
     pub model_version: String,
-    pub netcdf_input_configuration: Option<NetCdfInputConfiguration>,
-    pub palettes: PaletteMap,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -115,6 +113,7 @@ pub struct FWIConfigBuilder {
     pub palettes: PaletteMap,
 }
 
+#[allow(clippy::upper_case_acronyms)]
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(tag = "type")]
 pub enum ConfigBuilderType {
@@ -125,35 +124,12 @@ pub enum ConfigBuilderType {
 #[derive(Debug, Serialize, Deserialize)]
 pub struct ConfigContainer {
     pub models: Vec<ConfigBuilderType>,
+    pub palettes: PaletteMap,
+    pub netcdf_input_configuration: Option<NetCdfInputConfiguration>,
 }
 
 impl ConfigContainer {
-    pub fn from_file(config_file: &str) -> Result<Self, RISICOError> {
-        let mut file = File::open(config_file)
-            .map_err(|err| format!("Cannot open config file {}: {}", config_file, err))?;
-
-        let mut contents = String::new();
-        file.read_to_string(&mut contents)
-            .map_err(|err| format!("Cannot read config file {}: {}", config_file, err))?;
-
-        let conf = serde_yaml::from_str(&contents)
-            .map_err(|err| format!("Cannot parse config file {}: {}", config_file, err))?;
-        Ok(conf)
-    }
-}
-
-#[derive(Debug, Serialize, Deserialize, Clone)]
-pub struct OutputTypeConfig {
-    pub internal_name: String,
-    pub name: String,
-    pub path: String,
-    pub grid_path: String,
-    pub format: String,
-    pub variables: Vec<OutputVariable>,
-}
-
-impl RISICOConfigBuilder {
-    pub fn from_file(config_file: &str) -> Result<RISICOConfigBuilder, RISICOError> {
+    pub fn from_file(config_file: &str) -> Result<ConfigContainer, RISICOError> {
         // Check the file extension to determine which method to use
         if config_file.ends_with(".yaml") || config_file.ends_with(".yml") {
             Self::from_yaml(config_file)
@@ -167,19 +143,76 @@ impl RISICOConfigBuilder {
         }
     }
 
-    fn from_yaml(config_file: &str) -> Result<RISICOConfigBuilder, RISICOError> {
+    pub fn from_yaml(config_file: &str) -> Result<Self, RISICOError> {
         let mut file = File::open(config_file)
-            .map_err(|e| RISICOError::from(format!("Failed to open config file: {}", e)))?;
+            .map_err(|err| format!("Cannot open config file {}: {}", config_file, err))?;
 
         let mut contents = String::new();
         file.read_to_string(&mut contents)
-            .map_err(|e| RISICOError::from(format!("Failed to read config file: {}", e)))?;
+            .map_err(|err| format!("Cannot read config file {}: {}", config_file, err))?;
 
-        serde_yaml::from_str(&contents)
-            .map_err(|e| RISICOError::from(format!("Failed to parse YAML: {}", e)))
+        let conf = serde_yaml::from_str(&contents)
+            .map_err(|err| format!("Cannot parse config file {}: {}", config_file, err))?;
+        Ok(conf)
     }
 
-    fn from_txt_file(config_file: &str) -> Result<RISICOConfigBuilder, RISICOError> {
+    fn parse_output_types(
+        output_types_defs: &Vec<String>,
+        variables_defs: &Vec<String>,
+    ) -> Result<Vec<OutputTypeConfig>, RISICOError> {
+        let mut output_types_vec: Vec<OutputTypeConfig> = Vec::new();
+
+        for out_type_def in output_types_defs {
+            let parts = out_type_def.split(":").collect::<Vec<&str>>();
+            if parts.len() != 5 {
+                return Err("Invalid output definition".into());
+            }
+            let (internal_name, name, path, grid_path, format) =
+                (parts[0], parts[1], parts[2], parts[3], parts[4]);
+
+            let output_type = OutputTypeConfig {
+                internal_name: internal_name.into(),
+                name: name.into(),
+                path: path.into(),
+                grid_path: grid_path.into(),
+                format: format.into(),
+                variables: Vec::new(),
+            };
+
+            output_types_vec.push(output_type);
+        }
+
+        for variable_def in variables_defs {
+            let parts = variable_def.split(":").collect::<Vec<&str>>();
+            if parts.len() != 5 {
+                return Err("Invalid variable definition".into());
+            }
+            let (output_type, internal_name, name, cluster_mode, precision) =
+                (parts[0], parts[1], parts[2], parts[3], parts[4]);
+
+            let precision = precision.parse::<i32>().map_err(|_| "Invalid precision")?;
+
+            output_types_vec
+                .iter_mut()
+                .filter(|_type| _type.internal_name == output_type)
+                .for_each(|_type| {
+                    let internal_name = OutputVariableName::from_str(internal_name)
+                        .unwrap_or_else(|_| panic!("Invalid Variable Name {}", &internal_name));
+                    let cluster_mode = ClusterMode::from_str(cluster_mode)
+                        .unwrap_or_else(|_| panic!("Invalid ClusterMode {}", &cluster_mode));
+                    _type.variables.push(OutputVariable::new(
+                        internal_name,
+                        name,
+                        cluster_mode,
+                        precision,
+                    ))
+                });
+        }
+
+        Ok(output_types_vec)
+    }
+
+    fn from_txt_file(config_file: &str) -> Result<ConfigContainer, RISICOError> {
         let config_map = read_config(config_file)?;
 
         // try to get the model name, expect it to be there
@@ -247,73 +280,38 @@ impl RISICOConfigBuilder {
             vegetation_file,
             ppf_file,
             output_types,
-            palettes,
+
             use_temperature_effect,
             use_ndvi,
             output_time_resolution,
             model_version,
+        };
+
+        let config_container = ConfigContainer {
+            models: vec![ConfigBuilderType::RISICO(config)],
+            palettes,
             netcdf_input_configuration,
         };
 
-        Ok(config)
+        Ok(config_container)
     }
 
-    fn parse_output_types(
-        output_types_defs: &Vec<String>,
-        variables_defs: &Vec<String>,
-    ) -> Result<Vec<OutputTypeConfig>, RISICOError> {
-        let mut output_types_vec: Vec<OutputTypeConfig> = Vec::new();
-
-        for out_type_def in output_types_defs {
-            let parts = out_type_def.split(":").collect::<Vec<&str>>();
-            if parts.len() != 5 {
-                return Err("Invalid output definition".into());
-            }
-            let (internal_name, name, path, grid_path, format) =
-                (parts[0], parts[1], parts[2], parts[3], parts[4]);
-
-            let output_type = OutputTypeConfig {
-                internal_name: internal_name.into(),
-                name: name.into(),
-                path: path.into(),
-                grid_path: grid_path.into(),
-                format: format.into(),
-                variables: Vec::new(),
-            };
-
-            output_types_vec.push(output_type);
-        }
-
-        for variable_def in variables_defs {
-            let parts = variable_def.split(":").collect::<Vec<&str>>();
-            if parts.len() != 5 {
-                return Err("Invalid variable definition".into());
-            }
-            let (output_type, internal_name, name, cluster_mode, precision) =
-                (parts[0], parts[1], parts[2], parts[3], parts[4]);
-
-            let precision = precision.parse::<i32>().map_err(|_| "Invalid precision")?;
-
-            output_types_vec
-                .iter_mut()
-                .filter(|_type| _type.internal_name == output_type)
-                .for_each(|_type| {
-                    let internal_name = OutputVariableName::from_str(internal_name)
-                        .unwrap_or_else(|_| panic!("Invalid Variable Name {}", &internal_name));
-                    let cluster_mode = ClusterMode::from_str(cluster_mode)
-                        .unwrap_or_else(|_| panic!("Invalid ClusterMode {}", &cluster_mode));
-                    _type.variables.push(OutputVariable::new(
-                        internal_name,
-                        name,
-                        cluster_mode,
-                        precision,
-                    ))
-                });
-        }
-
-        Ok(output_types_vec)
+    pub fn get_netcdf_input_config(&self) -> &Option<NetCdfInputConfiguration> {
+        &self.netcdf_input_configuration
     }
+}
 
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct OutputTypeConfig {
+    pub internal_name: String,
+    pub name: String,
+    pub path: String,
+    pub grid_path: String,
+    pub format: String,
+    pub variables: Vec<OutputVariable>,
+}
+
+impl RISICOConfigBuilder {
     fn load_palettes(config_map: &ConfigMap) -> HashMap<String, String> {
         let mut palettes: HashMap<String, String> = HashMap::new();
         let palettes_defs = config_map.all(PALETTE_KEY);
@@ -338,7 +336,11 @@ impl RISICOConfigBuilder {
         palettes
     }
 
-    pub fn build(&self, date: &DateTime<Utc>) -> Result<Config, RISICOError> {
-        Config::new(self, *date)
+    pub fn build(
+        &self,
+        date: &DateTime<Utc>,
+        palettes: &PaletteMap,
+    ) -> Result<RISICOConfig, RISICOError> {
+        RISICOConfig::new(self, *date, palettes)
     }
 }

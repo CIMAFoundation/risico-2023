@@ -6,7 +6,7 @@ use std::path::Path;
 use chrono::prelude::*;
 use clap::{arg, command, Parser};
 
-use common::config::builder::{ConfigBuilderType, ConfigContainer, RISICOConfigBuilder};
+use common::config::builder::{ConfigBuilderType, ConfigContainer};
 use common::helpers::get_input;
 use common::io::readers::binary::BinaryInputHandler;
 use common::io::readers::netcdf::{NetCdfInputConfiguration, NetCdfInputHandler};
@@ -64,7 +64,7 @@ fn main() -> Result<(), Box<dyn Error>> {
     let configs = ConfigContainer::from_file(&config_path_str)
         .map_err(|err| format!("Failed to build config: {}", err))?;
 
-    for config_builder in configs.models {
+    for config_builder in &configs.models {
         let config_builder = match config_builder {
             ConfigBuilderType::FWI(_) => unimplemented!(),
             ConfigBuilderType::RISICO(config_builder) => config_builder,
@@ -72,7 +72,7 @@ fn main() -> Result<(), Box<dyn Error>> {
 
         // run risico
         let config = config_builder
-            .build(&date)
+            .build(&date, &configs.palettes)
             .map_err(|_| "Could not configure model")?;
 
         let mut output_writer = config
@@ -105,7 +105,7 @@ fn main() -> Result<(), Box<dyn Error>> {
                 input_path_str
             );
             // we should load the netcdfs using the netcdfinputhandler
-            let nc_config = if let Some(nc_config) = &config.get_netcdf_input_config() {
+            let nc_config = if let Some(nc_config) = &configs.get_netcdf_input_config() {
                 nc_config.clone()
             } else {
                 NetCdfInputConfiguration::default()

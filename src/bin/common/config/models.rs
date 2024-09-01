@@ -14,18 +14,17 @@ use risico::modules::risico::{
     models::{Output, Properties, State, WarmState},
 };
 
-use crate::common::io::models::{output::OutputType, palette::Palette};
-use crate::common::{helpers::RISICOError, io::readers::netcdf::NetCdfInputConfiguration};
-
 use super::{
     builder::{OutputTypeConfig, RISICOConfigBuilder},
     data::{from_file, read_vegetation},
 };
+use crate::common::helpers::RISICOError;
+use crate::common::io::models::{output::OutputType, palette::Palette};
 
 pub type PaletteMap = HashMap<String, Box<Palette>>;
 // pub type ConfigMap = HashMap<String, Vec<String>>;
 
-pub struct Config {
+pub struct RISICOConfig {
     run_date: DateTime<Utc>,
     warm_state_path: String,
     warm_state: Vec<WarmState>,
@@ -37,7 +36,6 @@ pub struct Config {
     output_time_resolution: u32,
     output_types_defs: Vec<OutputTypeConfig>,
     model_version: String,
-    netcdf_input_configuration: Option<NetCdfInputConfiguration>,
 }
 
 pub struct OutputWriter {
@@ -74,7 +72,7 @@ impl OutputWriter {
     }
 }
 
-impl Config {
+impl RISICOConfig {
     fn load_palettes(palettes_defs: &HashMap<String, String>) -> HashMap<String, Box<Palette>> {
         let mut palettes: HashMap<String, Box<Palette>> = HashMap::new();
 
@@ -89,8 +87,9 @@ impl Config {
     pub fn new(
         config_defs: &RISICOConfigBuilder,
         date: DateTime<Utc>,
-    ) -> Result<Config, RISICOError> {
-        let palettes = Config::load_palettes(&config_defs.palettes);
+        palettes: &HashMap<String, String>,
+    ) -> Result<RISICOConfig, RISICOError> {
+        let palettes = RISICOConfig::load_palettes(palettes);
 
         let cells_file = &config_defs.cells_file_path;
 
@@ -126,7 +125,7 @@ impl Config {
 
         let props = Properties::new(props_container, vegetations_dict, ppf_summer, ppf_winter);
 
-        let config = Config {
+        let config = RISICOConfig {
             run_date: date,
             // model_name: config_defs.model_name.clone(),
             warm_state_path: config_defs.warm_state_path.clone(),
@@ -138,7 +137,6 @@ impl Config {
             // use_ndvi: config_defs.use_ndvi,
             output_time_resolution: config_defs.output_time_resolution,
             model_version: config_defs.model_version.clone(),
-            netcdf_input_configuration: config_defs.netcdf_input_configuration.clone(),
             output_types_defs: config_defs.output_types.clone(),
         };
 
@@ -199,10 +197,6 @@ impl Config {
                 .map_err(|error| format!("error writing to {}, {}", &warm_state_name, error))?;
         }
         Ok(())
-    }
-
-    pub fn get_netcdf_input_config(&self) -> &Option<NetCdfInputConfiguration> {
-        &self.netcdf_input_configuration
     }
 }
 
