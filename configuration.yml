@@ -1,0 +1,43 @@
+models:
+  - type: RISICO
+    model_name: RISICO2023
+    cells_file_path: /opt/risico/RISICO2023/STATIC/risico2023.txt
+    vegetation_file: /opt/risico/RISICO2023/STATIC/p_vegetazione.csv
+    warm_state_path: /opt/risico/RISICO2023/STATE0/state0RISICO_
+    ppf_file: null
+    output_types:
+      - internal_name: RISICO2023
+        name: RISICO2023
+        path: /opt/risico/RISICO2023/OUTPUT-NC/
+        grid_path: /opt/risico/RISICO2023/GRID/RISICOGRID.txt
+        format: NETCDF
+        variables:
+          - internal_name: V
+            name: V
+            cluster_mode: Max
+            precision: 0
+    palettes:
+      UMB: /opt/risico/PALETTE/RISICO_UMB.pal
+    use_temperature_effect: false
+    use_ndvi: true
+    output_time_resolution: 1
+    model_version: v2023
+    netcdf_input_configuration: null
+
+  - type: FWI
+    model_name: FWIITALIA
+    cells_file_path: /opt/risico/RISICO2023/STATIC/risico2023.txt
+    warm_state_path: /opt/risico/RISICO2023/STATE0/state0RISICO_
+    output_types:
+      - internal_name: RISICO2023
+        name: RISICO2023
+        path: /opt/risico/RISICO2023/OUTPUT-NC/
+        grid_path: /opt/risico/RISICO2023/GRID/RISICOGRID.txt
+        format: NETCDF
+        variables:
+          - internal_name: V
+            name: V
+            cluster_mode: Max
+            precision: 0
+    palettes:
+      UMB: /opt/risico/PALETTE/RISICO_UMB.pal

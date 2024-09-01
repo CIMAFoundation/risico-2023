@@ -18,7 +18,7 @@ use crate::common::io::models::{output::OutputType, palette::Palette};
 use crate::common::{helpers::RISICOError, io::readers::netcdf::NetCdfInputConfiguration};
 
 use super::{
-    builder::{ConfigBuilder, OutputTypeConfig},
+    builder::{OutputTypeConfig, RISICOConfigBuilder},
     data::{from_file, read_vegetation},
 };
 
@@ -86,7 +86,10 @@ impl Config {
         palettes
     }
 
-    pub fn new(config_defs: &ConfigBuilder, date: DateTime<Utc>) -> Result<Config, RISICOError> {
+    pub fn new(
+        config_defs: &RISICOConfigBuilder,
+        date: DateTime<Utc>,
+    ) -> Result<Config, RISICOError> {
         let palettes = Config::load_palettes(&config_defs.palettes);
 
         let cells_file = &config_defs.cells_file_path;
