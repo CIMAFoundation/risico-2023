@@ -2,16 +2,11 @@ use chrono::prelude::*;
 use ndarray::{Array1, Zip};
 use rayon::prelude::*;
 use serde_derive::{Deserialize, Serialize};
-use std::{collections::HashMap, sync::Arc};
 use strum_macros::{Display, EnumProperty, EnumString};
 
 use crate::modules::fwi::constants::NODATAVAL;
 
-use super::{
-    config::ModelConfig,
-    functions::{get_output_fn, update_moisture_fn},
-};
-
+use super::functions::{get_output_fn, update_moisture_fn};
 
 // CELLS PROPERTIES
 #[derive(Debug)]
@@ -35,14 +30,10 @@ impl Properties {
     pub fn new(
         props: CellPropertiesContainer,
     ) -> Self {
-        let data: Array1<PropertiesElement> = props
-            .iter()
-            .enumerate()
-            .map(|(idx, v)| PropertiesElement {
-                lon: props.lons[idx],
-                lat: props.lats[idx]
-            })
-            .collect();
+        let data: Array1<PropertiesElement> = props.lons.into_iter()
+        .zip(props.lats.into_iter())
+        .map(|(lon, lat)| PropertiesElement{lon, lat})
+        .collect();
 
         let len = data.len();
         Self {
@@ -201,14 +192,13 @@ pub struct StateElement {
 pub struct State {
     pub time: DateTime<Utc>,
     pub data: Array1<StateElement>,
-    len: usize,
-    config: ModelConfig,
+    len: usize
 }
 
 impl State {
     #[allow(dead_code, non_snake_case)]
     /// Create a new state.
-    pub fn new(warm_state: &[WarmState], time: &DateTime<Utc>, config: ModelConfig) -> State {
+    pub fn new(warm_state: &[WarmState], time: &DateTime<Utc>) -> State {
         let data = Array1::from_vec(
             warm_state
                 .iter()
@@ -223,8 +213,7 @@ impl State {
         State {
             time: *time,
             data,
-            len: warm_state.len(),
-            config,
+            len: warm_state.len()
         }
     }
 

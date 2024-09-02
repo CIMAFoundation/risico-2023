@@ -1,31 +1,28 @@
-use ndarray::{Array, Array1};
-use std::f32::consts::PI;
-use chrono::{Date, DateTime, Datelike, Utc};
+use chrono::{DateTime, Datelike, Utc};
 
 use super::{
     constants::*,
-    models::{InputElement, OutputElement, StateElement},
+    models::{PropertiesElement, InputElement, OutputElement, StateElement},
 };
 
 // FFMC MODULE
 pub fn from_ffmc_to_moisture(ffmc: f32) -> f32 {
-    FFMC_S1*(101-ffmc)/(FFMC_S2+ffmc)
+    FFMC_S1*(101.0-ffmc)/(FFMC_S2+ffmc)
 }
 
 pub fn from_moisture_to_ffmc(moisture: f32) -> f32 {
-    FFMC_S3*((250-moisture)/(FFMC_S1+moisture))
+    FFMC_S3*((250.0-moisture)/(FFMC_S1+moisture))
 }
 
 pub fn moisture_rain_effect(moisture: f32, rain12: f32) -> f32 {
-    let mut moisture_new: f32 = NODATAVAL;
     let rain_eff: f32 = rain12-FFMC_MIN_RAIN;
-    moisture_new = moisture + FFMC_R1*rain_eff*f32::exp(-100/(251-moisture))*(1-f32::exp(-FFMC_R2/rain_eff));
+    let mut moisture_new: f32 = moisture + FFMC_R1*rain_eff*f32::exp(-100.0/(251.0-moisture))*(1.0-f32::exp(-FFMC_R2/rain_eff));
     // sovra-saturtion conditions
     if moisture > FFMC_NORMAL_COND {
         moisture_new = moisture_new + FFMC_R3*f32::powf(moisture-FFMC_NORMAL_COND, FFMC_R4)*f32::powf(rain_eff, FFMC_R5);
     }
     // limit moisture to [0, 250]
-    moisture_new = f32::max(0.0, f32::min(250, moisture_new));
+    moisture_new = f32::max(0.0, f32::min(250.0, moisture_new));
     moisture_new
 }
 
@@ -41,24 +38,24 @@ pub fn update_moisture(moisture: f32, rain12: f32, hum: f32, temp: f32, w_speed:
     // EMC_dry > EMC_wet
     if moisture_new > emc_dry {
         // drying process
-        let k0_dry: f32 = FFMC_B1*(1-f32::powf(hum/100.0, FFMC_B2)) + FFMC_B3*f32::powf(w_speed, FFMC_B4)*(1.0-f32::powf(hum/100.0, FFMC_B5));
+        let k0_dry: f32 = FFMC_B1*(1.0-f32::powf(hum/100.0, FFMC_B2)) + FFMC_B3*f32::powf(w_speed, FFMC_B4)*(1.0-f32::powf(hum/100.0, FFMC_B5));
         let k_dry: f32 = FFMC_B6*k0_dry*f32::exp(FFMC_B7*temp);
         moisture_new = emc_dry + (moisture_new-emc_dry)*f32::powf(10.0, -k_dry);
     } else if moisture_new < emc_wet {
         // wetting process
-        let k0_wet: f32 = FFMC_B1*(1-f32::powf((100.0-hum)/100.0, FFMC_B2)) + FFMC_B3*f32::powf(w_speed, FFMC_B4)*(1.0-f32::powf((100.0-hum)/100.0, FFMC_B5));
+        let k0_wet: f32 = FFMC_B1*(1.0-f32::powf((100.0-hum)/100.0, FFMC_B2)) + FFMC_B3*f32::powf(w_speed, FFMC_B4)*(1.0-f32::powf((100.0-hum)/100.0, FFMC_B5));
         let k_wet: f32 = FFMC_B6*k0_wet*f32::exp(FFMC_B7*temp);
         moisture_new = emc_wet + (moisture_new-emc_wet)*f32::powf(10.0, -k_wet);
     }
     // limit moisture to [0, 250]
-    moisture_new = f32::max(0.0, f32::min(250, moisture_new));
+    moisture_new = f32::max(0.0, f32::min(250.0, moisture_new));
     moisture_new
 }
 
 // DMC MODULE
 fn get_dmc_param(date: &DateTime<Utc>, latitude: f32) -> f32 {
-    if latitude >= 0 {
-        /// North emisphere
+    if latitude >= 0.0 {
+        // North emisphere
         match date.month() {
             1 => 6.5,
             2 => 7.5,
@@ -75,7 +72,7 @@ fn get_dmc_param(date: &DateTime<Utc>, latitude: f32) -> f32 {
             _ => 0.0,
         }
     } else {
-        /// South emisphere
+        // South emisphere
         match date.month() {
             1 => 12.4,
             2 => 10.9,
@@ -108,8 +105,8 @@ pub fn dmc_rain_effect(dmc: f32, rain12: f32) -> f32 {
     let mr: f32 = m0 + 1000.0*(re/(DMC_R12+b*re));
     let mut dmc_new: f32 = DMC_R10 - DMC_R11*f32::ln(mr-DMC_R9);
     // clip to positive values
-    if dmc_new < 0 {
-        dmc_new = 0;
+    if dmc_new < 0.0 {
+        dmc_new = 0.0;
     }
     dmc_new
 } 
@@ -126,16 +123,16 @@ pub fn update_dmc(dmc: f32, rain12: f32, temp: f32, hum: f32, l_e: f32) -> f32 {
         dmc_new = dmc_new + 100.0*k;
     }
     // clip to positive values
-    if dmc_new < 0 {
-        dmc_new = 0;
+    if dmc_new < 0.0 {
+        dmc_new = 0.0;
     }
     dmc_new
 }
 
 // DC MODULE
 fn get_dc_param(date: &DateTime<Utc>, latitude: f32) -> f32 {
-    if latitude >= 0 {
-        /// North emisphere
+    if latitude >= 0.0 {
+        // North emisphere
         match date.month() {
             1 => 1.6,
             2 => 1.6,
@@ -152,7 +149,7 @@ fn get_dc_param(date: &DateTime<Utc>, latitude: f32) -> f32 {
             _ => 0.0,
         }
     } else {
-        /// South emisphere
+        // South emisphere
         match date.month() {
             1 => 6.4,
             2 => 5.0,
@@ -191,8 +188,8 @@ pub fn update_dc(dc: f32, rain12: f32, temp: f32, l_f: f32) -> f32 {
         dc_new = dc_new + DC_T3*v;
     }
     // clip to positive values
-    if dc_new < 0 {
-        dc_new = 0;
+    if dc_new < 0.0 {
+        dc_new = 0.0;
     }
     dc_new
 }
@@ -201,7 +198,7 @@ pub fn update_dc(dc: f32, rain12: f32, temp: f32, l_f: f32) -> f32 {
 pub fn compute_isi(ffmc: f32, w_speed: f32) -> f32 {
     let moisture: f32 = from_ffmc_to_moisture(ffmc);
     let fw: f32 = f32::exp(ISI_A0*w_speed);
-    let ff: f32 = ISI_A1*f32::exp(ISI_A2*moisture)*(1+f32::powf(moisture, ISI_A3)/ISI_A4*10e7);
+    let ff: f32 = ISI_A1*f32::exp(ISI_A2*moisture)*(1.0+f32::powf(moisture, ISI_A3)/ISI_A4*10e7);
     let isi: f32 = ISI_A5*fw*ff;
     isi
 }
@@ -209,12 +206,12 @@ pub fn compute_isi(ffmc: f32, w_speed: f32) -> f32 {
 // BUI MODULE
 pub fn compute_bui(dmc: f32, dc: f32) -> f32 {
     let mut bui: f32 = NODATAVAL;
-    if dmc == 0 {
-        bui = 0;
+    if dmc == 0.0 {
+        bui = 0.0;
     } else if dmc <= BUI_A1*dc {
         bui = BUI_A2*((dmc*dc)/(dmc+BUI_A1*dc));
     } else {
-        bui = dmc - (1-BUI_A2*(dc/(dmc+BUI_A1*dc)))*(BUI_A3+f32::powf(BUI_A4*dmc, BUI_A5));
+        bui = dmc - (1.0-BUI_A2*(dc/(dmc+BUI_A1*dc)))*(BUI_A3+f32::powf(BUI_A4*dmc, BUI_A5));
     }
     bui
 }
@@ -229,14 +226,14 @@ pub fn compute_fwi(bui: f32, isi: f32) -> f32 {
     }
     let b: f32 = 0.1*isi*fd;
     let mut fwi: f32 = NODATAVAL;
-    if b > 1 {
+    if b > 1.0 {
         fwi = f32::exp(FWI_A7*f32::powf(FWI_A8*f32::ln(b), FWI_A9));
     } else {
         fwi = b;
     }
     // clip to positive values
-    if fwi < 0 {
-        fwi = 0;
+    if fwi < 0.0 {
+        fwi = 0.0;
     }
     fwi
 }
@@ -259,7 +256,7 @@ pub fn update_moisture_fn(
         return;
     }
 
-    /// FFMC MODULE
+    // FFMC MODULE
     // convert ffmc to moisture scale
     let mut moisture: f32 = from_ffmc_to_moisture(state.ffmc);
     moisture = update_moisture(moisture, rain, humidity, temperature, wind_speed);
