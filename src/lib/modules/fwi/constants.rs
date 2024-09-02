@@ -13,18 +13,16 @@ pub const FFMC_R3: f32 = 0.0015;
 pub const FFMC_R4: f32 = 2;
 pub const FFMC_R5: f32 = 0.5;
 // No-rain phase constants
-pub const FFMC_A1d: f32 = 0.942;
-pub const FFMC_A2d: f32 = 0.679;
-pub const FFMC_A3d: f32 = 11.0;
-pub const FFMC_A4d: f32 = 10.0;
-pub const FFMC_A5d: f32 = 0.18;
-pub const FFMC_A6d: f32 = 0.115;
-pub const FFMC_A1w: f32 = 0.618;
-pub const FFMC_A2w: f32 = 0.753;
-pub const FFMC_A3w: f32 = 10.0;
-pub const FFMC_A4w: f32 = 10.0;
-pub const FFMC_A5w: f32 = 0.18;
-pub const FFMC_A6w: f32 = 0.115;
+pub const FFMC_A1D: f32 = 0.942;
+pub const FFMC_A2D: f32 = 0.679;
+pub const FFMC_A3D: f32 = 11.0;
+pub const FFMC_A4D: f32 = 0.18;
+pub const FFMC_A5D: f32 = 0.115;
+pub const FFMC_A1W: f32 = 0.618;
+pub const FFMC_A2W: f32 = 0.753;
+pub const FFMC_A3W: f32 = 10.0;
+pub const FFMC_A4W: f32 = 0.18;
+pub const FFMC_A5W: f32 = 0.115;
 pub const FFMC_B1: f32 = 0.424;
 pub const FFMC_B2: f32 = 1.7;
 pub const FFMC_B3: f32 = 0.0694;
@@ -54,7 +52,6 @@ pub const DMC_R12: f32 = 48.77;
 pub const DMC_MIN_TEMP: f32 = -1.1;
 pub const DMC_T1: f32 = 1.894;
 pub const DMC_T2: f32 = 1.1;
-pub const DMC_T3: f32 = 10e-6;
 
 // DC CONSTANTS
 // rain effect

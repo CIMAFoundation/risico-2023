@@ -64,21 +64,21 @@ impl Properties {
 pub struct InputElement {
     /// rain in mm
     pub rain: f32,
+    /// relative humidity in %
+    pub humidity: f32,
     /// temperature in celsius
     pub temperature: f32,
     /// wind speed in m/h
-    pub wind_speed: f32,
-    /// relative humidity in %
-    pub humidity: f32
+    pub wind_speed: f32
 }
 
 impl Default for InputElement {
     fn default() -> Self {
         Self {
             rain: NODATAVAL,
+            humidity: NODATAVAL,
             temperature: NODATAVAL,
-            wind_speed: NODATAVAL,
-            humidity: NODATAVAL
+            wind_speed: NODATAVAL
         }
     }
 }
@@ -106,10 +106,10 @@ pub struct OutputElement {
     pub fwi: f32,
     /// Input rain in mm
     pub rain: f32,
-    /// Input temperature in celsius
-    pub temperature: f32,
     /// Input relative humidity in %
     pub humidity: f32,
+    /// Input temperature in celsius
+    pub temperature: f32,
     /// Input wind speed in km/h
     pub wind_speed: f32
 }
@@ -124,8 +124,8 @@ impl Default for OutputElement {
             bui: NODATAVAL,
             fwi: NODATAVAL,
             rain: NODATAVAL,
-            temperature: NODATAVAL,
             humidity: NODATAVAL,
+            temperature: NODATAVAL,
             wind_speed: NODATAVAL
         }
     }
@@ -160,8 +160,8 @@ impl Output {
 
             // Input variables
             rain => Some(self.get_array(|o| o.rain)),
-            temperature => Some(self.get_array(|o| o.temperature)),
             humidity => Some(self.get_array(|o| o.humidity)),
+            temperature => Some(self.get_array(|o| o.temperature)),
             windSpeed => Some(self.get_array(|o| o.wind_speed))
         }
     }
@@ -180,9 +180,9 @@ pub struct WarmState {
 impl Default for WarmState {
     fn default() -> Self {
         WarmState {
-            ffmc: 80.0,
-            dmc: 15.0,
-            dc: 255.0,
+            ffmc: 85.0,
+            dmc: 6.0,
+            dc: 15.0,
         }
     }
 }
@@ -238,12 +238,13 @@ impl State {
 
 
     #[allow(non_snake_case)]
-    fn update_moisture(&mut self, input: &Input) {
-
+    fn update_moisture(&mut self, props: &Properties, input: &Input) {
+        let time = &self.time;
         Zip::from(&mut self.data)
+            .and(&props.data)
             .and(&input.data)
-            .par_for_each(|state, input_data| {
-                update_moisture_fn(state, input_data, &self.config)
+            .par_for_each(|state, props, input_data| {
+                update_moisture_fn(state, props, input_data, time)
             });
     }
 
@@ -254,17 +255,17 @@ impl State {
         let output_data = Zip::from(&self.data)
             .and(&input.data)
             .par_map_collect(|state, input| {
-                get_output_fn(state, input, &self.config)
+                get_output_fn(state, input)
             });
 
         Output::new(*time, output_data)
     }
 
     /// Update the state of the cells
-    pub fn update(&mut self, input: &Input) {
+    pub fn update(&mut self, props: &Properties, input: &Input) {
         let new_time = &input.time;
         self.time = *new_time;
-        self.update_moisture(input);
+        self.update_moisture(props, input);
     }
 
     pub fn output(&self, input: &Input) -> Output {
@@ -315,14 +316,14 @@ pub enum OutputVariableName {
     /// Input Rain
     #[strum(props(long_name = "Input Rain", units = "mm"))]
     rain,
-    /// Input Temperature
-    #[strum(props(long_name = "Input Temperature", units = "°C"))]
-    temperature,
     /// Input Relative Humidity
     #[strum(props(long_name = "Input Relative Humidity", units = "%"))]
     humidity,
+    /// Input Temperature
+    #[strum(props(long_name = "Input Temperature", units = "°C"))]
+    temperature,
     /// Input Wind Speed
-    #[strum(props(long_name = "Input Wind Speed", units = "m/s"))]
+    #[strum(props(long_name = "Input Wind Speed", units = "km/h"))]
     windSpeed
 
 }
