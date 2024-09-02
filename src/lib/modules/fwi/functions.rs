@@ -1,6 +1,7 @@
 use chrono::{DateTime, Datelike, Utc};
 
 use super::{
+    config::ModelConfig,
     constants::*,
     models::{PropertiesElement, InputElement, OutputElement, StateElement},
 };
@@ -240,11 +241,12 @@ pub fn compute_fwi(bui: f32, isi: f32) -> f32 {
 
 // UPDATE STATES
 #[allow(non_snake_case)]
-pub fn update_moisture_fn(
+pub fn update_state_fn(
     state: &mut StateElement,
     props: &PropertiesElement,
     input: &InputElement,
-    time: &DateTime<Utc>
+    time: &DateTime<Utc>,
+    config: &ModelConfig
 ) {
     let rain = input.rain;
     let humidity = input.humidity;
@@ -259,22 +261,24 @@ pub fn update_moisture_fn(
     // FFMC MODULE
     // convert ffmc to moisture scale
     let mut moisture: f32 = from_ffmc_to_moisture(state.ffmc);
-    moisture = update_moisture(moisture, rain, humidity, temperature, wind_speed);
+    moisture = config.moisture(moisture, rain, humidity, temperature, wind_speed);
     // compute fuel moisture in percentage
     // let dfmc = (moisture/(100.0+moisture))*moisture;
     // convert to ffmc scale and update state
     state.ffmc = from_moisture_to_ffmc(moisture);
+
     let l_e = get_dmc_param(time, props.lat);
-    state.dmc = update_dmc(state.dmc, rain, temperature, humidity, l_e);
+    state.dmc = config.dmc(state.dmc, rain, temperature, humidity, l_e);
     let l_f = get_dc_param(time, props.lat);
-    state.dc = update_dc(state.dc, rain, temperature, l_f);
+    state.dc = config.dc(state.dc, rain, temperature, l_f);
 }
 
 // COMPUTE OUTPUTS
 #[allow(non_snake_case)]
 pub fn get_output_fn(
     state: &StateElement,
-    input: &InputElement
+    input: &InputElement,
+    config: &ModelConfig
 ) -> OutputElement {
 
     let rain = input.rain;
@@ -286,9 +290,9 @@ pub fn get_output_fn(
     let dmc = state.dmc;
     let dc = state.dc;
 
-    let isi = compute_isi(ffmc, wind_speed);
-    let bui = compute_bui(dmc, dc);
-    let fwi = compute_fwi(isi, bui);
+    let isi = config.isi(ffmc, wind_speed);
+    let bui = config.bui(dmc, dc);
+    let fwi = config.fwi(isi, bui);
 
     OutputElement {
         ffmc,

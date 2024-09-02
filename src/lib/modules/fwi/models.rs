@@ -6,7 +6,10 @@ use strum_macros::{Display, EnumProperty, EnumString};
 
 use crate::modules::fwi::constants::NODATAVAL;
 
-use super::functions::{get_output_fn, update_moisture_fn};
+use super::{
+    config::ModelConfig,
+    functions::{update_state_fn, get_output_fn}
+};
 
 // CELLS PROPERTIES
 #[derive(Debug)]
@@ -192,13 +195,14 @@ pub struct StateElement {
 pub struct State {
     pub time: DateTime<Utc>,
     pub data: Array1<StateElement>,
-    len: usize
+    len: usize,
+    config: ModelConfig
 }
 
 impl State {
     #[allow(dead_code, non_snake_case)]
     /// Create a new state.
-    pub fn new(warm_state: &[WarmState], time: &DateTime<Utc>) -> State {
+    pub fn new(warm_state: &[WarmState], time: &DateTime<Utc>, config: ModelConfig) -> State {
         let data = Array1::from_vec(
             warm_state
                 .iter()
@@ -213,7 +217,8 @@ impl State {
         State {
             time: *time,
             data,
-            len: warm_state.len()
+            len: warm_state.len(),
+            config
         }
     }
 
@@ -227,13 +232,13 @@ impl State {
 
 
     #[allow(non_snake_case)]
-    fn update_moisture(&mut self, props: &Properties, input: &Input) {
+    fn update_state(&mut self, props: &Properties, input: &Input) {
         let time = &self.time;
         Zip::from(&mut self.data)
             .and(&props.data)
             .and(&input.data)
             .par_for_each(|state, props, input_data| {
-                update_moisture_fn(state, props, input_data, time)
+                update_state_fn(state, props, input_data, time, &self.config)
             });
     }
 
@@ -244,7 +249,7 @@ impl State {
         let output_data = Zip::from(&self.data)
             .and(&input.data)
             .par_map_collect(|state, input| {
-                get_output_fn(state, input)
+                get_output_fn(state, input, &self.config)
             });
 
         Output::new(*time, output_data)
@@ -254,7 +259,7 @@ impl State {
     pub fn update(&mut self, props: &Properties, input: &Input) {
         let new_time = &input.time;
         self.time = *new_time;
-        self.update_moisture(props, input);
+        self.update_state(props, input);
     }
 
     pub fn output(&self, input: &Input) -> Output {
