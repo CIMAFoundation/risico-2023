@@ -88,6 +88,8 @@ pub struct Input {
 pub struct OutputElement {
     /// Fine Fuel Moisture Code
     pub ffmc: f32,
+    /// Fuel Moisture content
+    pub dffm: f32,
     /// Duff Moisture Code
     pub dmc: f32,
     /// Dought Code
@@ -98,6 +100,8 @@ pub struct OutputElement {
     pub bui: f32,
     /// Fire Weather Index
     pub fwi: f32,
+    /// IFWI
+    pub ifwi: f32,
     /// Input rain in mm
     pub rain: f32,
     /// Input relative humidity in %
@@ -112,11 +116,13 @@ impl Default for OutputElement {
     fn default() -> Self {
         Self {
             ffmc: NODATAVAL,
+            dffm: NODATAVAL,
             dmc: NODATAVAL,
             dc: NODATAVAL,
             isi: NODATAVAL,
             bui: NODATAVAL,
             fwi: NODATAVAL,
+            ifwi: NODATAVAL,
             rain: NODATAVAL,
             humidity: NODATAVAL,
             temperature: NODATAVAL,
@@ -146,11 +152,13 @@ impl Output {
         match variable {
             // Output variables
             ffmc => Some(self.get_array(|o| o.ffmc)),
+            dffm => Some(self.get_array(|o| o.dffm)),
             dmc => Some(self.get_array(|o| o.dmc)),
             dc => Some(self.get_array(|o| o.dc)),
             isi => Some(self.get_array(|o| o.isi)),
             bui => Some(self.get_array(|o| o.bui)),
             fwi => Some(self.get_array(|o| o.fwi)),
+            ifwi => Some(self.get_array(|o| o.ifwi)),
 
             // Input variables
             rain => Some(self.get_array(|o| o.rain)),
@@ -291,6 +299,9 @@ pub enum OutputVariableName {
     /// Fine Fuel Moisture Code
     #[strum(props(long_name = "Fine Fuel Moisture Code", units = "-"))]
     ffmc,
+    /// Fuel Moisture Content
+    #[strum(props(long_name = "Fine Fuel Moisture", units = "%"))]
+    dffm,
     /// Duff Moisture Code
     #[strum(props(long_name = "Duff Moisture Code", units = "-"))]
     dmc,
@@ -306,6 +317,9 @@ pub enum OutputVariableName {
     /// Fire Weather Index
     #[strum(props(long_name = "Fire Weather Index", units = "-"))]
     fwi,
+    /// Fire Weather Index
+    #[strum(props(long_name = "IFWI", units = "-"))]
+    ifwi,
 
     /// Input Rain
     #[strum(props(long_name = "Input Rain", units = "mm"))]

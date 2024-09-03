@@ -239,6 +239,14 @@ pub fn compute_fwi(bui: f32, isi: f32) -> f32 {
     fwi
 }
 
+pub fn compute_ifwi(fwi: f32) -> f32 {
+    let mut ifwi: f32 = 0.0;
+    if fwi > 1.0 {
+        ifwi = (f32::exp(IFWI_A1*f32::powf(f32::ln(fwi),IFWI_A2)))/IFWI_A3;
+    }
+    ifwi
+}
+
 // UPDATE STATES
 #[allow(non_snake_case)]
 pub fn update_state_fn(
@@ -259,11 +267,9 @@ pub fn update_state_fn(
     }
 
     // FFMC MODULE
-    // convert ffmc to moisture scale
+    // convert ffmc to moisture scale [0, 250]
     let mut moisture: f32 = from_ffmc_to_moisture(state.ffmc);
     moisture = config.moisture(moisture, rain, humidity, temperature, wind_speed);
-    // compute fuel moisture in percentage
-    // let dfmc = (moisture/(100.0+moisture))*moisture;
     // convert to ffmc scale and update state
     state.ffmc = from_moisture_to_ffmc(moisture);
 
@@ -290,17 +296,25 @@ pub fn get_output_fn(
     let dmc = state.dmc;
     let dc = state.dc;
 
+    // compute fine fuel moisture in [0, 100]
+    let moisture = from_ffmc_to_moisture(ffmc);
+    let dffm = (moisture/(100.0+moisture))*moisture;
+
     let isi = config.isi(ffmc, wind_speed);
     let bui = config.bui(dmc, dc);
     let fwi = config.fwi(isi, bui);
 
+    let ifwi = compute_ifwi(fwi);
+
     OutputElement {
         ffmc,
+        dffm,
         dmc,
         dc,
         isi,
         bui,
         fwi,
+        ifwi,
         rain,
         humidity,
         temperature,

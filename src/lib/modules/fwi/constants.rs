@@ -95,3 +95,6 @@ pub const FWI_A10: f32 = 0.98;
 pub const FWI_A11: f32 = 1.546;
 pub const FWI_A12: f32 = 0.289;
 
+pub const IFWI_A1: f32 = 0.98;
+pub const IFWI_A2: f32 = 1.546;
+pub const IFWI_A3: f32 = 0.289;
