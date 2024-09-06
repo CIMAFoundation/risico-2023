@@ -94,14 +94,13 @@ fn get_dmc_param(date: &DateTime<Utc>, latitude: f32) -> f32 {
 
 pub fn dmc_rain_effect(dmc: f32, rain12: f32) -> f32 {
     let re: f32 = DMC_R1*rain12 - DMC_R2;
-    let mut b: f32 = NODATAVAL;
-    if dmc <= DMC_A1 {
-        b = 100.0/(DMC_R3+DMC_R4*dmc);
+    let b: f32 = if dmc <= DMC_A1 {
+        100.0/(DMC_R3+DMC_R4*dmc)
     } else if dmc > DMC_A2 {
-        b = DMC_R7*f32::ln(dmc)-DMC_R8;
+        DMC_R7*f32::ln(dmc)-DMC_R8
     } else {  //in between
-        b = DMC_R5-DMC_R6*f32::ln(dmc);
-    }
+        DMC_R5-DMC_R6*f32::ln(dmc)
+    };
     let m0: f32 = DMC_R9 + f32::exp(-(dmc-DMC_R10)/DMC_R11);
     let mr: f32 = m0 + 1000.0*(re/(DMC_R12+b*re));
     let mut dmc_new: f32 = DMC_R10 - DMC_R11*f32::ln(mr-DMC_R9);
@@ -206,32 +205,29 @@ pub fn compute_isi(ffmc: f32, w_speed: f32) -> f32 {
 
 // BUI MODULE
 pub fn compute_bui(dmc: f32, dc: f32) -> f32 {
-    let mut bui: f32 = NODATAVAL;
-    if dmc == 0.0 {
-        bui = 0.0;
+    let bui: f32 = if dmc == 0.0 {
+        0.0
     } else if dmc <= BUI_A1*dc {
-        bui = BUI_A2*((dmc*dc)/(dmc+BUI_A1*dc));
+        BUI_A2*((dmc*dc)/(dmc+BUI_A1*dc))
     } else {
-        bui = dmc - (1.0-BUI_A2*(dc/(dmc+BUI_A1*dc)))*(BUI_A3+f32::powf(BUI_A4*dmc, BUI_A5));
-    }
+        dmc - (1.0-BUI_A2*(dc/(dmc+BUI_A1*dc)))*(BUI_A3+f32::powf(BUI_A4*dmc, BUI_A5))
+    };
     bui
 }
 
 // FWI MODULE
 pub fn compute_fwi(bui: f32, isi: f32) -> f32 {
-    let mut fd: f32 = NODATAVAL;
-    if bui <= 80.0 {
-        fd = FWI_A1*f32::powf(bui, FWI_A2)+FWI_A3;
+    let fd: f32 = if bui <= 80.0 {
+        FWI_A1*f32::powf(bui, FWI_A2)+FWI_A3
     } else {
-        fd = 1000.0 / (FWI_A4+FWI_A5*f32::exp(FWI_A6*bui));
-    }
+        1000.0 / (FWI_A4+FWI_A5*f32::exp(FWI_A6*bui))
+    };
     let b: f32 = 0.1*isi*fd;
-    let mut fwi: f32 = NODATAVAL;
-    if b > 1.0 {
-        fwi = f32::exp(FWI_A7*f32::powf(FWI_A8*f32::ln(b), FWI_A9));
+    let mut fwi: f32 = if b > 1.0 {
+        f32::exp(FWI_A7*f32::powf(FWI_A8*f32::ln(b), FWI_A9))
     } else {
-        fwi = b;
-    }
+        b
+    };
     // clip to positive values
     if fwi < 0.0 {
         fwi = 0.0;
