@@ -43,12 +43,12 @@ struct Args {
 fn run_risico(
     model_config: &RISICOConfigBuilder,
     date: &DateTime<Utc>,
-    handler: &Box<dyn InputHandler>,
+    handler: &dyn InputHandler,
     palettes: &PaletteMap,
 ) -> Result<(), RISICOError> {
     // run risico
     let config = model_config
-        .build(&date, palettes)
+        .build(date, palettes)
         .map_err(|_| "Could not configure model")?;
 
     let mut output_writer = config
@@ -72,7 +72,7 @@ fn run_risico(
     for time in timeline {
         let step_time = Utc::now();
         info!("Processing {}", time.format("%Y-%m-%d %H:%M"));
-        let input = get_input(handler.as_ref(), &time, len);
+        let input = get_input(handler, &time, len);
 
         let c = Utc::now();
         state.update(props, &input);
@@ -105,7 +105,7 @@ fn run_risico(
 fn run_fwi(
     model_config: &FWIConfigBuilder,
     date: &DateTime<Utc>,
-    handler: &Box<dyn InputHandler>,
+    handler: &dyn InputHandler,
     palettes: &PaletteMap,
 ) -> Result<(), RISICOError> {
     unimplemented!()
@@ -123,7 +123,7 @@ fn get_input_handler(
             input_path_str
         );
         // if it is a file, we are loading the legacy input.txt file and binary inputs
-        Box::new(BinaryInputHandler::new(&input_path_str).map_err(|_| "Could not load input data")?)
+        Box::new(BinaryInputHandler::new(input_path_str).map_err(|_| "Could not load input data")?)
     } else if input_path.is_dir() {
         info!(
             "Loading input data from {} using NetCdfInputHandler",
@@ -137,7 +137,7 @@ fn get_input_handler(
         };
 
         Box::new(
-            NetCdfInputHandler::new(&input_path_str, &nc_config)
+            NetCdfInputHandler::new(input_path_str, &nc_config)
                 .map_err(|_| "Could not load input data")?,
         )
     } else {
@@ -177,12 +177,18 @@ fn main() -> Result<(), Box<dyn Error>> {
         let input_handler = get_input_handler(&input_path_str, &configs)?;
 
         let model_config = match model_config {
-            ConfigBuilderType::FWI(model_config) => {
-                run_fwi(model_config, &date, &input_handler, &configs.palettes)
-            }
-            ConfigBuilderType::RISICO(model_config) => {
-                run_risico(model_config, &date, &input_handler, &configs.palettes)
-            }
+            ConfigBuilderType::FWI(model_config) => run_fwi(
+                model_config,
+                &date,
+                input_handler.as_ref(),
+                &configs.palettes,
+            ),
+            ConfigBuilderType::RISICO(model_config) => run_risico(
+                model_config,
+                &date,
+                input_handler.as_ref(),
+                &configs.palettes,
+            ),
         };
         let elapsed_time = Utc::now() - start_time;
         info!("Elapsed time: {} seconds", elapsed_time.num_seconds());
