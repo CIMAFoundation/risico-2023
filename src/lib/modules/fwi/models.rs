@@ -2,16 +2,14 @@ use chrono::prelude::*;
 use ndarray::{Array1, Zip};
 use rayon::prelude::*;
 use serde_derive::{Deserialize, Serialize};
-use std::{collections::HashMap, sync::Arc};
-use strum_macros::{Display, EnumProperty, EnumString};
+use strum_macros::{Display, EnumProperty, EnumString, EnumIter, AsRefStr};
 
 use crate::modules::fwi::constants::NODATAVAL;
 
 use super::{
     config::ModelConfig,
-    functions::{get_output_fn, update_moisture_fn},
+    functions::{update_state_fn, get_output_fn}
 };
-
 
 // CELLS PROPERTIES
 #[derive(Debug)]
@@ -35,14 +33,10 @@ impl Properties {
     pub fn new(
         props: CellPropertiesContainer,
     ) -> Self {
-        let data: Array1<PropertiesElement> = props
-            .iter()
-            .enumerate()
-            .map(|(idx, v)| PropertiesElement {
-                lon: props.lons[idx],
-                lat: props.lats[idx]
-            })
-            .collect();
+        let data: Array1<PropertiesElement> = props.lons.into_iter()
+        .zip(props.lats.into_iter())
+        .map(|(lon, lat)| PropertiesElement{lon, lat})
+        .collect();
 
         let len = data.len();
         Self {
@@ -64,21 +58,21 @@ impl Properties {
 pub struct InputElement {
     /// rain in mm
     pub rain: f32,
+    /// relative humidity in %
+    pub humidity: f32,
     /// temperature in celsius
     pub temperature: f32,
     /// wind speed in m/h
-    pub wind_speed: f32,
-    /// relative humidity in %
-    pub humidity: f32
+    pub wind_speed: f32
 }
 
 impl Default for InputElement {
     fn default() -> Self {
         Self {
             rain: NODATAVAL,
+            humidity: NODATAVAL,
             temperature: NODATAVAL,
-            wind_speed: NODATAVAL,
-            humidity: NODATAVAL
+            wind_speed: NODATAVAL
         }
     }
 }
@@ -94,6 +88,8 @@ pub struct Input {
 pub struct OutputElement {
     /// Fine Fuel Moisture Code
     pub ffmc: f32,
+    /// Fuel Moisture content
+    pub dffm: f32,
     /// Duff Moisture Code
     pub dmc: f32,
     /// Dought Code
@@ -104,12 +100,14 @@ pub struct OutputElement {
     pub bui: f32,
     /// Fire Weather Index
     pub fwi: f32,
+    /// IFWI
+    pub ifwi: f32,
     /// Input rain in mm
     pub rain: f32,
-    /// Input temperature in celsius
-    pub temperature: f32,
     /// Input relative humidity in %
     pub humidity: f32,
+    /// Input temperature in celsius
+    pub temperature: f32,
     /// Input wind speed in km/h
     pub wind_speed: f32
 }
@@ -118,14 +116,16 @@ impl Default for OutputElement {
     fn default() -> Self {
         Self {
             ffmc: NODATAVAL,
+            dffm: NODATAVAL,
             dmc: NODATAVAL,
             dc: NODATAVAL,
             isi: NODATAVAL,
             bui: NODATAVAL,
             fwi: NODATAVAL,
+            ifwi: NODATAVAL,
             rain: NODATAVAL,
-            temperature: NODATAVAL,
             humidity: NODATAVAL,
+            temperature: NODATAVAL,
             wind_speed: NODATAVAL
         }
     }
@@ -152,16 +152,18 @@ impl Output {
         match variable {
             // Output variables
             ffmc => Some(self.get_array(|o| o.ffmc)),
+            dffm => Some(self.get_array(|o| o.dffm)),
             dmc => Some(self.get_array(|o| o.dmc)),
             dc => Some(self.get_array(|o| o.dc)),
             isi => Some(self.get_array(|o| o.isi)),
             bui => Some(self.get_array(|o| o.bui)),
             fwi => Some(self.get_array(|o| o.fwi)),
+            ifwi => Some(self.get_array(|o| o.ifwi)),
 
             // Input variables
             rain => Some(self.get_array(|o| o.rain)),
-            temperature => Some(self.get_array(|o| o.temperature)),
             humidity => Some(self.get_array(|o| o.humidity)),
+            temperature => Some(self.get_array(|o| o.temperature)),
             windSpeed => Some(self.get_array(|o| o.wind_speed))
         }
     }
@@ -180,9 +182,9 @@ pub struct WarmState {
 impl Default for WarmState {
     fn default() -> Self {
         WarmState {
-            ffmc: 80.0,
-            dmc: 15.0,
-            dc: 255.0,
+            ffmc: 85.0,
+            dmc: 6.0,
+            dc: 15.0,
         }
     }
 }
@@ -202,7 +204,7 @@ pub struct State {
     pub time: DateTime<Utc>,
     pub data: Array1<StateElement>,
     len: usize,
-    config: ModelConfig,
+    config: ModelConfig
 }
 
 impl State {
@@ -224,7 +226,7 @@ impl State {
             time: *time,
             data,
             len: warm_state.len(),
-            config,
+            config
         }
     }
 
@@ -238,12 +240,13 @@ impl State {
 
 
     #[allow(non_snake_case)]
-    fn update_moisture(&mut self, input: &Input) {
-
+    fn update_state(&mut self, props: &Properties, input: &Input) {
+        let time = &self.time;
         Zip::from(&mut self.data)
+            .and(&props.data)
             .and(&input.data)
-            .par_for_each(|state, input_data| {
-                update_moisture_fn(state, input_data, &self.config)
+            .par_for_each(|state, props, input_data| {
+                update_state_fn(state, props, input_data, time, &self.config)
             });
     }
 
@@ -261,10 +264,10 @@ impl State {
     }
 
     /// Update the state of the cells
-    pub fn update(&mut self, input: &Input) {
+    pub fn update(&mut self, props: &Properties, input: &Input) {
         let new_time = &input.time;
         self.time = *new_time;
-        self.update_moisture(input);
+        self.update_state(props, input);
     }
 
     pub fn output(&self, input: &Input) -> Output {
@@ -290,12 +293,17 @@ impl State {
     Display,
     Serialize,
     Deserialize,
+    EnumIter,
+    AsRefStr
 )]
 #[strum(ascii_case_insensitive)]
 pub enum OutputVariableName {
     /// Fine Fuel Moisture Code
     #[strum(props(long_name = "Fine Fuel Moisture Code", units = "-"))]
     ffmc,
+    /// Fuel Moisture Content
+    #[strum(props(long_name = "Fine Fuel Moisture", units = "%"))]
+    dffm,
     /// Duff Moisture Code
     #[strum(props(long_name = "Duff Moisture Code", units = "-"))]
     dmc,
@@ -311,18 +319,21 @@ pub enum OutputVariableName {
     /// Fire Weather Index
     #[strum(props(long_name = "Fire Weather Index", units = "-"))]
     fwi,
+    /// Fire Weather Index
+    #[strum(props(long_name = "IFWI", units = "-"))]
+    ifwi,
 
     /// Input Rain
     #[strum(props(long_name = "Input Rain", units = "mm"))]
     rain,
-    /// Input Temperature
-    #[strum(props(long_name = "Input Temperature", units = "°C"))]
-    temperature,
     /// Input Relative Humidity
     #[strum(props(long_name = "Input Relative Humidity", units = "%"))]
     humidity,
+    /// Input Temperature
+    #[strum(props(long_name = "Input Temperature", units = "°C"))]
+    temperature,
     /// Input Wind Speed
-    #[strum(props(long_name = "Input Wind Speed", units = "m/s"))]
+    #[strum(props(long_name = "Input Wind Speed", units = "km/h"))]
     windSpeed
 
 }
