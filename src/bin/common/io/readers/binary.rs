@@ -225,8 +225,8 @@ pub struct BinaryInputHandler {
 }
 
 impl BinaryInputHandler {
-    pub fn new(file_path: &str, lats: &[f32], lons: &[f32]) -> Result<Self, Box<dyn Error>> {
-        let mut grid_registry = HashMap::new();
+    pub fn new(file_path: &str) -> Result<Self, Box<dyn Error>> {
+        let grid_registry = HashMap::new();
         let mut data_map = HashMap::new();
 
         let file = File::open(file_path)?;
@@ -262,19 +262,6 @@ impl BinaryInputHandler {
                 grid_name,
                 path: line,
             };
-
-            if !grid_registry.contains_key(&input_file.grid_name) {
-                let mut grid = match read_grid_from_file(input_file.path.as_str()) {
-                    Ok(grid) => grid,
-                    Err(e) => {
-                        warn!("Error reading grid: {}", e);
-                        continue;
-                    }
-                };
-
-                let indexes = grid.indexes(lats, lons);
-                grid_registry.insert(input_file.grid_name.clone(), indexes);
-            }
 
             // add the data to the data map
             data_map.entry(date).or_insert_with(HashMap::new);
@@ -333,5 +320,24 @@ impl InputHandler for BinaryInputHandler {
         // sort the timeline
         timeline.sort();
         timeline
+    }
+
+    fn set_coordinates(&mut self, lats: &[f32], lons: &[f32]) -> Result<(), Box<dyn Error>> {
+        for (_, input_files) in self.data_map.iter() {
+            for (_, input_file) in input_files.iter() {
+                if !self.grid_registry.contains_key(&input_file.grid_name) {
+                    let mut grid = match read_grid_from_file(input_file.path.as_str()) {
+                        Ok(grid) => grid,
+                        Err(e) => return Err(e.into()),
+                    };
+
+                    let indexes = grid.indexes(lats, lons);
+                    self.grid_registry
+                        .insert(input_file.grid_name.clone(), indexes);
+                }
+            }
+        }
+
+        Ok(())
     }
 }

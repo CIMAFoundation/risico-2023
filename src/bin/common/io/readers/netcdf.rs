@@ -113,29 +113,28 @@ pub struct NetCdfFileInputRecord {
     file: String,
     timeline: Array1<DateTime<Utc>>,
     variables: Vec<InputVariableName>,
-    indexes: Array1<Option<usize>>,
+    grid: IrregularGrid,
+    indexes: Option<Array1<Option<usize>>>,
 }
 
 /// inspect a single netcdf file and builds a record
 fn register_nc_file(
     file: &str,
     config: &NetCdfInputConfiguration,
-    lats: &[f32],
-    lons: &[f32],
 ) -> Result<NetCdfFileInputRecord, Box<dyn Error>> {
     let nc_file = netcdf::open(file)?;
 
     let lats_var = &nc_file
         .variable(&config.lat_name)
-        .expect("Could not find variable 'latitude'");
+        .ok_or_else(|| "Could not find variable 'latitude'")?;
 
     let lons_var = &nc_file
         .variable(&config.lon_name)
-        .expect("Could not find variable 'longitude'");
+        .ok_or_else(|| format!("Could not find variable {}", &config.lon_name))?;
 
     let time_var = &nc_file
         .variable(&config.time_name)
-        .expect("Could not find variable 'longitude'");
+        .ok_or_else(|| format!("Could not find variable {}", &config.time_name))?;
 
     let variables = nc_file
         .variables()
@@ -176,15 +175,14 @@ fn register_nc_file(
     let nrows = dimensions[0].len();
     let ncols = dimensions[1].len();
 
-    let mut grid = IrregularGrid::new(nrows, ncols, nc_lats, nc_lons);
-
-    let indexes = grid.indexes(lats, lons);
+    let grid = IrregularGrid::new(nrows, ncols, nc_lats, nc_lons);
 
     let record = NetCdfFileInputRecord {
         file: file.to_owned(),
         timeline,
         variables,
-        indexes,
+        grid,
+        indexes: None,
     };
 
     Ok(record)
@@ -219,17 +217,7 @@ pub struct NetCdfInputHandler {
 }
 
 impl NetCdfInputHandler {
-    pub fn new(
-        path: &str,
-        lats: &[f32],
-        lons: &[f32],
-        config: &NetCdfInputConfiguration,
-    ) -> Result<Self, Box<dyn Error>> {
-        assert!(
-            lats.len() == lons.len(),
-            "lats and lons have different lenght, aborting"
-        );
-
+    pub fn new(path: &str, config: &NetCdfInputConfiguration) -> Result<Self, Box<dyn Error>> {
         let mut records = Vec::new();
 
         // Iterate over the files in the specified directory
@@ -245,7 +233,7 @@ impl NetCdfInputHandler {
             let file_path_str = file_path.to_string_lossy().into_owned();
 
             // Call the inspect_nc_file function to build the record
-            match register_nc_file(&file_path_str, config, lats, lons) {
+            match register_nc_file(&file_path_str, config) {
                 Ok(record) => records.push(record),
                 Err(e) => warn!("Error inspecting file {}: {}", file_path_str, e),
             }
@@ -282,6 +270,8 @@ impl InputHandler for NetCdfInputHandler {
                 Ok(values) => {
                     let data: Vec<f32> = record
                         .indexes
+                        .as_ref()
+                        .expect("indexes should be set")
                         .par_iter()
                         .map(|index| index.and_then(|idx| Some(values[idx])).unwrap_or(NODATAVAL))
                         .collect();
@@ -304,15 +294,12 @@ impl InputHandler for NetCdfInputHandler {
             .collect()
     }
 
-    // fn get_variables(&self, time: &DateTime<Utc>) -> Vec<InputVariableName> {
-    //     let mut variables = Vec::new();
-
-    //     for record in &self.records {
-    //         let time_index = record.timeline.iter().position(|t| t == time);
-    //         if time_index.is_some() {
-    //             variables.extend_from_slice(&record.variables);
-    //         }
-    //     }
-    //     variables
-    // }
+    fn set_coordinates(&mut self, lats: &[f32], lons: &[f32]) -> Result<(), Box<dyn Error>> {
+        for record in &mut self.records {
+            let grid = &mut record.grid;
+            let indexes = grid.indexes(lats, lons);
+            record.indexes = Some(Array1::from(indexes));
+        }
+        Ok(())
+    }
 }
