@@ -176,7 +176,7 @@ fn main() -> Result<(), Box<dyn Error>> {
         // check if input_path is a file or a directory
         let input_handler = get_input_handler(&input_path_str, &configs)?;
 
-        let model_config = match model_config {
+        let model_run = match model_config {
             ConfigBuilderType::FWI(model_config) => run_fwi(
                 model_config,
                 &date,
@@ -190,6 +190,11 @@ fn main() -> Result<(), Box<dyn Error>> {
                 &configs.palettes,
             ),
         };
+
+        if let Err(err) = model_run {
+            warn!("Error running model: {}", err);
+        }
+
         let elapsed_time = Utc::now() - start_time;
         info!("Elapsed time: {} seconds", elapsed_time.num_seconds());
     }
