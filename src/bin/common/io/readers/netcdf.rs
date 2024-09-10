@@ -126,7 +126,7 @@ fn register_nc_file(
 
     let lats_var = &nc_file
         .variable(&config.lat_name)
-        .ok_or_else(|| "Could not find variable 'latitude'")?;
+        .ok_or_else(|| format!("Could not find variable {}", &config.lat_name))?;
 
     let lons_var = &nc_file
         .variable(&config.lon_name)
