@@ -103,10 +103,10 @@ fn run_risico(
 }
 
 fn run_fwi(
-    model_config: &FWIConfigBuilder,
-    date: &DateTime<Utc>,
-    handler: &dyn InputHandler,
-    palettes: &PaletteMap,
+    _model_config: &FWIConfigBuilder,
+    _date: &DateTime<Utc>,
+    _handler: &dyn InputHandler,
+    _palettes: &PaletteMap,
 ) -> Result<(), RISICOError> {
     unimplemented!()
 }

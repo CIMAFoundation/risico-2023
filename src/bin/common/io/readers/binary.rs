@@ -2,7 +2,8 @@ use chrono::{DateTime, NaiveDateTime, Utc};
 use libflate::gzip::{self, Decoder};
 use log::warn;
 use ndarray::Array1;
-use risico::modules::risico::constants::NODATAVAL;
+use risico::{constants::NODATAVAL, models::input::InputVariableName};
+
 use std::{
     collections::HashMap,
     error::Error,
@@ -17,7 +18,7 @@ use crate::common::io::models::grid::Grid;
 use crate::common::io::models::grid::{IrregularGrid, RegularGrid};
 use rayon::prelude::*;
 
-use super::prelude::{InputHandler, InputVariableName};
+use super::prelude::InputHandler;
 
 fn read_header_from_file<T>(decoder: &mut Decoder<T>) -> Result<(u32, u32, u32), io::Error>
 where

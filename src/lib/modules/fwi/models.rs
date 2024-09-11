@@ -1,21 +1,17 @@
+use crate::models::{input::Input, output::Output};
 use chrono::prelude::*;
 use ndarray::{Array1, Zip};
-use rayon::prelude::*;
-use serde_derive::{Deserialize, Serialize};
-use strum_macros::{Display, EnumProperty, EnumString, EnumIter, AsRefStr};
-
-use crate::modules::fwi::constants::NODATAVAL;
 
 use super::{
     config::ModelConfig,
-    functions::{update_state_fn, get_output_fn}
+    functions::{get_output_fn, update_state_fn},
 };
 
 // CELLS PROPERTIES
 #[derive(Debug)]
 pub struct PropertiesElement {
     pub lon: f32,
-    pub lat: f32
+    pub lat: f32,
 }
 
 #[derive(Debug)]
@@ -26,23 +22,20 @@ pub struct Properties {
 
 pub struct CellPropertiesContainer {
     pub lons: Vec<f32>,
-    pub lats: Vec<f32>
+    pub lats: Vec<f32>,
 }
 
 impl Properties {
-    pub fn new(
-        props: CellPropertiesContainer,
-    ) -> Self {
-        let data: Array1<PropertiesElement> = props.lons.into_iter()
-        .zip(props.lats.into_iter())
-        .map(|(lon, lat)| PropertiesElement{lon, lat})
-        .collect();
+    pub fn new(props: CellPropertiesContainer) -> Self {
+        let data: Array1<PropertiesElement> = props
+            .lons
+            .into_iter()
+            .zip(props.lats)
+            .map(|(lon, lat)| PropertiesElement { lon, lat })
+            .collect();
 
         let len = data.len();
-        Self {
-            data,
-            len,
-        }
+        Self { data, len }
     }
 
     pub fn get_coords(&self) -> (Vec<f32>, Vec<f32>) {
@@ -52,131 +45,13 @@ impl Properties {
     }
 }
 
-
-// INPUT STRUCTURE
-#[derive(Debug)]
-pub struct InputElement {
-    /// rain in mm
-    pub rain: f32,
-    /// relative humidity in %
-    pub humidity: f32,
-    /// temperature in celsius
-    pub temperature: f32,
-    /// wind speed in m/h
-    pub wind_speed: f32
-}
-
-impl Default for InputElement {
-    fn default() -> Self {
-        Self {
-            rain: NODATAVAL,
-            humidity: NODATAVAL,
-            temperature: NODATAVAL,
-            wind_speed: NODATAVAL
-        }
-    }
-}
-
-pub struct Input {
-    pub time: DateTime<Utc>,
-    pub data: Array1<InputElement>,
-}
-
-
-// OUTPUT STRUCTURE
-#[allow(non_snake_case)]
-pub struct OutputElement {
-    /// Fine Fuel Moisture Code
-    pub ffmc: f32,
-    /// Fuel Moisture content
-    pub dffm: f32,
-    /// Duff Moisture Code
-    pub dmc: f32,
-    /// Dought Code
-    pub dc: f32,
-    /// Initial Spread  Index
-    pub isi: f32,
-    /// Build Up Index
-    pub bui: f32,
-    /// Fire Weather Index
-    pub fwi: f32,
-    /// IFWI
-    pub ifwi: f32,
-    /// Input rain in mm
-    pub rain: f32,
-    /// Input relative humidity in %
-    pub humidity: f32,
-    /// Input temperature in celsius
-    pub temperature: f32,
-    /// Input wind speed in km/h
-    pub wind_speed: f32
-}
-
-impl Default for OutputElement {
-    fn default() -> Self {
-        Self {
-            ffmc: NODATAVAL,
-            dffm: NODATAVAL,
-            dmc: NODATAVAL,
-            dc: NODATAVAL,
-            isi: NODATAVAL,
-            bui: NODATAVAL,
-            fwi: NODATAVAL,
-            ifwi: NODATAVAL,
-            rain: NODATAVAL,
-            humidity: NODATAVAL,
-            temperature: NODATAVAL,
-            wind_speed: NODATAVAL
-        }
-    }
-}
-
-pub struct Output {
-    pub time: DateTime<Utc>,
-    pub data: Array1<OutputElement>,
-}
-
-#[allow(non_snake_case)]
-impl Output {
-    pub fn new(time: DateTime<Utc>, data: Array1<OutputElement>) -> Self {
-        Self { time, data }
-    }
-
-    pub fn get_array(&self, func: fn(&OutputElement) -> f32) -> Array1<f32> {
-        let vec = self.data.par_iter().map(func).collect::<Vec<_>>();
-        Array1::from_vec(vec)
-    }
-
-    pub fn get(&self, variable: &OutputVariableName) -> Option<Array1<f32>> {
-        use OutputVariableName::*;
-        match variable {
-            // Output variables
-            ffmc => Some(self.get_array(|o| o.ffmc)),
-            dffm => Some(self.get_array(|o| o.dffm)),
-            dmc => Some(self.get_array(|o| o.dmc)),
-            dc => Some(self.get_array(|o| o.dc)),
-            isi => Some(self.get_array(|o| o.isi)),
-            bui => Some(self.get_array(|o| o.bui)),
-            fwi => Some(self.get_array(|o| o.fwi)),
-            ifwi => Some(self.get_array(|o| o.ifwi)),
-
-            // Input variables
-            rain => Some(self.get_array(|o| o.rain)),
-            humidity => Some(self.get_array(|o| o.humidity)),
-            temperature => Some(self.get_array(|o| o.temperature)),
-            windSpeed => Some(self.get_array(|o| o.wind_speed))
-        }
-    }
-}
-
-
 // WARM STATE
 #[allow(non_snake_case)]
 #[derive(Debug, Clone)]
 pub struct WarmState {
     pub ffmc: f32,
     pub dmc: f32,
-    pub dc: f32
+    pub dc: f32,
 }
 
 impl Default for WarmState {
@@ -189,14 +64,13 @@ impl Default for WarmState {
     }
 }
 
-
 // STATE
 #[derive(Debug)]
 #[allow(non_snake_case)]
 pub struct StateElement {
     pub ffmc: f32,
     pub dmc: f32,
-    pub dc: f32
+    pub dc: f32,
 }
 
 #[derive(Debug)]
@@ -204,7 +78,7 @@ pub struct State {
     pub time: DateTime<Utc>,
     pub data: Array1<StateElement>,
     len: usize,
-    config: ModelConfig
+    config: ModelConfig,
 }
 
 impl State {
@@ -217,7 +91,7 @@ impl State {
                 .map(|w| StateElement {
                     ffmc: w.ffmc,
                     dmc: w.dmc,
-                    dc: w.dc
+                    dc: w.dc,
                 })
                 .collect(),
         );
@@ -226,7 +100,7 @@ impl State {
             time: *time,
             data,
             len: warm_state.len(),
-            config
+            config,
         }
     }
 
@@ -237,7 +111,6 @@ impl State {
     pub fn is_empty(&self) -> bool {
         self.len() == 0
     }
-
 
     #[allow(non_snake_case)]
     fn update_state(&mut self, props: &Properties, input: &Input) {
@@ -256,9 +129,7 @@ impl State {
 
         let output_data = Zip::from(&self.data)
             .and(&input.data)
-            .par_map_collect(|state, input| {
-                get_output_fn(state, input, &self.config)
-            });
+            .par_map_collect(|state, input| get_output_fn(state, input, &self.config));
 
         Output::new(*time, output_data)
     }
@@ -273,67 +144,4 @@ impl State {
     pub fn output(&self, input: &Input) -> Output {
         self.get_output(input)
     }
-}
-
-
-
-
-
-
-#[allow(non_camel_case_types, clippy::upper_case_acronyms)]
-#[derive(
-    Debug,
-    PartialEq,
-    Eq,
-    Hash,
-    Copy,
-    Clone,
-    EnumString,
-    EnumProperty,
-    Display,
-    Serialize,
-    Deserialize,
-    EnumIter,
-    AsRefStr
-)]
-#[strum(ascii_case_insensitive)]
-pub enum OutputVariableName {
-    /// Fine Fuel Moisture Code
-    #[strum(props(long_name = "Fine Fuel Moisture Code", units = "-"))]
-    ffmc,
-    /// Fuel Moisture Content
-    #[strum(props(long_name = "Fine Fuel Moisture", units = "%"))]
-    dffm,
-    /// Duff Moisture Code
-    #[strum(props(long_name = "Duff Moisture Code", units = "-"))]
-    dmc,
-    /// Drought Code
-    #[strum(props(long_name = "Drought Code", units = "-"))]
-    dc,
-    /// Initial Spread Index
-    #[strum(props(long_name = "Initial Spread Index", units = "-"))]
-    isi,
-    /// Build Up Index
-    #[strum(props(long_name = "Build Up Index", units = "-"))]
-    bui,
-    /// Fire Weather Index
-    #[strum(props(long_name = "Fire Weather Index", units = "-"))]
-    fwi,
-    /// Fire Weather Index
-    #[strum(props(long_name = "IFWI", units = "-"))]
-    ifwi,
-
-    /// Input Rain
-    #[strum(props(long_name = "Input Rain", units = "mm"))]
-    rain,
-    /// Input Relative Humidity
-    #[strum(props(long_name = "Input Relative Humidity", units = "%"))]
-    humidity,
-    /// Input Temperature
-    #[strum(props(long_name = "Input Temperature", units = "°C"))]
-    temperature,
-    /// Input Wind Speed
-    #[strum(props(long_name = "Input Wind Speed", units = "km/h"))]
-    windSpeed
-
 }

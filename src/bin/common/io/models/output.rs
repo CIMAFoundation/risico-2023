@@ -6,9 +6,9 @@ use log::debug;
 use ndarray::{Array1, Zip};
 use netcdf::{extent::Extents, MutableFile};
 use rayon::prelude::*;
-use risico::modules::risico::{
+use risico::{
     constants::NODATAVAL,
-    models::{Output, OutputVariableName},
+    models::output::{Output, OutputVariableName},
 };
 use serde_derive::{Deserialize, Serialize};
 

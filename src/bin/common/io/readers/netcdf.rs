@@ -6,14 +6,15 @@ use log::warn;
 use ndarray::Array1;
 use netcdf::extent::Extents;
 use rayon::prelude::*;
-use risico::modules::risico::constants::NODATAVAL;
+
+use risico::{constants::NODATAVAL, models::input::InputVariableName};
 use serde_derive::{Deserialize, Serialize};
 use std::fs;
 use strum::IntoEnumIterator;
 
 use crate::common::io::models::grid::{Grid, IrregularGrid};
 
-use super::prelude::{InputHandler, InputVariableName};
+use super::prelude::InputHandler;
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct NetCdfInputConfiguration {

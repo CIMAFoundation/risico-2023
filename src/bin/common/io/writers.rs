@@ -6,7 +6,7 @@ use gdal::raster::{Buffer, RasterCreationOption};
 use libflate::gzip::{self, Encoder};
 use log::warn;
 use netcdf::extent::Extents;
-use risico::modules::risico::constants::NODATAVAL;
+use risico::constants::NODATAVAL;
 use risico::version::FULL_VERSION;
 
 use std::io::BufWriter;

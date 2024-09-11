@@ -1,5 +1,5 @@
 use chrono::{DateTime, Utc};
-use risico::modules::risico::models::OutputVariableName;
+use risico::models::output::OutputVariableName;
 use serde_derive::{Deserialize, Serialize};
 use serde_yaml;
 use std::fs::File;

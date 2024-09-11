@@ -8,10 +8,13 @@ use chrono::*;
 use chrono::{DateTime, Utc};
 use log::{info, warn};
 use rayon::prelude::*;
-use risico::modules::risico::{
-    config::ModelConfig,
+use risico::{
     constants::NODATAVAL,
-    models::{Output, Properties, State, WarmState},
+    models::output::Output,
+    modules::risico::{
+        config::ModelConfig,
+        models::{Properties, State, WarmState},
+    },
 };
 
 use super::{
@@ -215,7 +218,7 @@ fn read_warm_state(
     // compose the filename as base_warm_file_YYYYmmDDHHMM
     let mut file: Option<File> = None;
 
-    let mut current_date = run_date.clone();
+    let mut current_date = run_date;
 
     for days_before in 1..4 {
         current_date = run_date - Duration::try_days(days_before).expect("Should be valid");

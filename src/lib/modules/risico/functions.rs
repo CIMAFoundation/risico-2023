@@ -4,10 +4,15 @@ use std::f32::consts::PI;
 ///functions to work on the state of the risico model
 use chrono::{DateTime, Datelike, Utc};
 
+use crate::{
+    constants::NODATAVAL,
+    models::{input::InputElement, output::OutputElement},
+};
+
 use super::{
     config::ModelConfig,
     constants::*,
-    models::{InputElement, OutputElement, PropertiesElement, StateElement},
+    models::{PropertiesElement, StateElement},
 };
 
 ///calculate PPF from the date and the two values
@@ -525,5 +530,6 @@ pub fn get_output_fn(
         NDWI: ndwi,
         NDVI: ndvi,
         meteo_index,
+        ..OutputElement::default()
     }
 }
