@@ -36,6 +36,8 @@ pub fn moisture_rain_effect(moisture: f32, rain12: f32) -> f32 {
 }
 
 pub fn update_moisture(moisture: f32, rain12: f32, hum: f32, temp: f32, w_speed: f32) -> f32 {
+    // conversion from m/h into km/h - required by the FFMC formula
+    let ws: f32 = w_speed / 1000.0;
     let mut moisture_new: f32 = moisture;
     if rain12 > FFMC_MIN_RAIN {
         // rain12 effect
@@ -52,14 +54,14 @@ pub fn update_moisture(moisture: f32, rain12: f32, hum: f32, temp: f32, w_speed:
     if moisture_new > emc_dry {
         // drying process
         let k0_dry: f32 = FFMC_B1 * (1.0 - f32::powf(hum / 100.0, FFMC_B2))
-            + FFMC_B3 * f32::powf(w_speed, FFMC_B4) * (1.0 - f32::powf(hum / 100.0, FFMC_B5));
+            + FFMC_B3 * f32::powf(ws, FFMC_B4) * (1.0 - f32::powf(hum / 100.0, FFMC_B5));
         let k_dry: f32 = FFMC_B6 * k0_dry * f32::exp(FFMC_B7 * temp);
         moisture_new = emc_dry + (moisture_new - emc_dry) * f32::powf(10.0, -k_dry);
     } else if moisture_new < emc_wet {
         // wetting process
         let k0_wet: f32 = FFMC_B1 * (1.0 - f32::powf((100.0 - hum) / 100.0, FFMC_B2))
             + FFMC_B3
-                * f32::powf(w_speed, FFMC_B4)
+                * f32::powf(ws, FFMC_B4)
                 * (1.0 - f32::powf((100.0 - hum) / 100.0, FFMC_B5));
         let k_wet: f32 = FFMC_B6 * k0_wet * f32::exp(FFMC_B7 * temp);
         moisture_new = emc_wet + (moisture_new - emc_wet) * f32::powf(10.0, -k_wet);
@@ -213,8 +215,10 @@ pub fn update_dc(dc: f32, rain12: f32, temp: f32, l_f: f32) -> f32 {
 
 // ISI MODULE
 pub fn compute_isi(ffmc: f32, w_speed: f32) -> f32 {
+    // conversion from m/h into km/h - required by the ISI formula
+    let ws: f32 = w_speed / 1000.0;
     let moisture: f32 = from_ffmc_to_moisture(ffmc);
-    let fw: f32 = f32::exp(ISI_A0 * w_speed);
+    let fw: f32 = f32::exp(ISI_A0 * ws);
     let ff: f32 =
         ISI_A1 * f32::exp(ISI_A2 * moisture) * (1.0 + f32::powf(moisture, ISI_A3) / ISI_A4 * 10e7);
     let isi: f32 = ISI_A5 * fw * ff;
