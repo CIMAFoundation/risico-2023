@@ -270,7 +270,7 @@ impl ConfigContainer {
             .all(VARIABLES_KEY)
             .ok_or(format!("KEY {VARIABLES_KEY} not found"))?;
 
-        let palettes = RISICOConfigBuilder::load_palettes(&config_map);
+        let palettes = load_palettes(&config_map);
         let output_types = Self::parse_output_types(&output_types_defs, &variables_defs)?;
 
         let netcdf_input_configuration = config_map
@@ -317,30 +317,6 @@ pub struct OutputTypeConfig {
 }
 
 impl RISICOConfigBuilder {
-    fn load_palettes(config_map: &ConfigMap) -> HashMap<String, String> {
-        let mut palettes: HashMap<String, String> = HashMap::new();
-        let palettes_defs = config_map.all(PALETTE_KEY);
-        if palettes_defs.is_none() {
-            return palettes;
-        }
-        let palettes_defs = palettes_defs.expect("should be there");
-
-        for palette_def in palettes_defs {
-            let parts = palette_def.split(":").collect::<Vec<&str>>();
-            if parts.len() != 2 {
-                continue;
-            }
-            let (name, path) = (parts[0], parts[1]);
-
-            // if let Ok(palette) = Palette::load_palette(path) {
-            //     palettes.insert(name.to_string(), Box::new(palette));
-            // }
-
-            palettes.insert(name.into(), path.into());
-        }
-        palettes
-    }
-
     pub fn build(
         &self,
         date: &DateTime<Utc>,
@@ -352,30 +328,6 @@ impl RISICOConfigBuilder {
 
 
 impl FWIConfigBuilder {
-    fn load_palettes(config_map: &ConfigMap) -> HashMap<String, String> {
-        let mut palettes: HashMap<String, String> = HashMap::new();
-        let palettes_defs = config_map.all(PALETTE_KEY);
-        if palettes_defs.is_none() {
-            return palettes;
-        }
-        let palettes_defs = palettes_defs.expect("should be there");
-
-        for palette_def in palettes_defs {
-            let parts = palette_def.split(":").collect::<Vec<&str>>();
-            if parts.len() != 2 {
-                continue;
-            }
-            let (name, path) = (parts[0], parts[1]);
-
-            // if let Ok(palette) = Palette::load_palette(path) {
-            //     palettes.insert(name.to_string(), Box::new(palette));
-            // }
-
-            palettes.insert(name.into(), path.into());
-        }
-        palettes
-    }
-
     pub fn build(
         &self,
         date: &DateTime<Utc>,
@@ -383,4 +335,29 @@ impl FWIConfigBuilder {
     ) -> Result<FWIConfig, RISICOError> {
         FWIConfig::new(self, *date, palettes)
     }
+}
+
+
+pub fn load_palettes(config_map: &ConfigMap) -> HashMap<String, String> {
+    let mut palettes: HashMap<String, String> = HashMap::new();
+    let palettes_defs = config_map.all(PALETTE_KEY);
+    if palettes_defs.is_none() {
+        return palettes;
+    }
+    let palettes_defs = palettes_defs.expect("should be there");
+
+    for palette_def in palettes_defs {
+        let parts = palette_def.split(":").collect::<Vec<&str>>();
+        if parts.len() != 2 {
+            continue;
+        }
+        let (name, path) = (parts[0], parts[1]);
+
+        // if let Ok(palette) = Palette::load_palette(path) {
+        //     palettes.insert(name.to_string(), Box::new(palette));
+        // }
+
+        palettes.insert(name.into(), path.into());
+    }
+    palettes
 }
