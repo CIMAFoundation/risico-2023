@@ -1,3 +1,5 @@
+use core::time;
+
 use chrono::{DateTime, Datelike, Utc};
 
 use crate::models::{input::InputElement, output::OutputElement};
@@ -280,12 +282,49 @@ pub fn update_state_fn(
     let temperature = input.temperature;
     let wind_speed = input.wind_speed;
 
+    // native time step of the model
+    let time_step: i64 = 24; // hours
+
     if rain == NODATAVAL
         || humidity == NODATAVAL
         || temperature == NODATAVAL
         || wind_speed == NODATAVAL
     {
         // keep current humidity state if we don't have all the data
+
+        let mut ffmc_history_new: Vec<(DateTime<Utc>, f32)> = state.ffmc_history.clone();
+        let mut dmc_history_new: Vec<(DateTime<Utc>, f32)> = state.dmc_history.clone();
+        let mut dc_history_new: Vec<(DateTime<Utc>, f32)> = state.dc_history.clone();
+
+        let last_ffmc = ffmc_history_new.last().map(|(_, h)| *h).unwrap_or(FFMC_INIT);
+        let last_dmc = dmc_history_new.last().map(|(_, h)| *h).unwrap_or(DMC_INIT);
+        let last_dc = dc_history_new.last().map(|(_, h)| *h).unwrap_or(DC_INIT);
+
+        ffmc_history_new.push((*time, last_ffmc));
+        dmc_history_new.push((*time, last_dmc));
+        dc_history_new.push((*time, last_dc));
+
+        // keep only the last 24 hours
+        let ffmc_history: Vec<(DateTime<Utc>, f32)> = ffmc_history_new
+            .iter()
+            .filter(|(t, _)| time.signed_duration_since(*t).num_hours() <= time_step)
+            .map(|(t, f)| (*t, *f))
+            .collect();
+        let dmc_history: Vec<(DateTime<Utc>, f32)> = dmc_history_new
+            .iter()
+            .filter(|(t, _)| time.signed_duration_since(*t).num_hours() <= time_step)
+            .map(|(t, d)| (*t, *d))
+            .collect();
+        let dc_history: Vec<(DateTime<Utc>, f32)> = dc_history_new
+            .iter()
+            .filter(|(t, _)| time.signed_duration_since(*t).num_hours() <= time_step)
+            .map(|(t, d)| (*t, *d))
+            .collect();
+
+        state.ffmc_history = ffmc_history;
+        state.dmc_history = dmc_history;
+        state.dc_history = dc_history;
+
         return;
     }
 
@@ -295,24 +334,79 @@ pub fn update_state_fn(
     // keep only the last 24 hours
     let rain_history: Vec<(DateTime<Utc>, f32)> = rain_history_new
         .iter()
-        .filter(|(t, _)| time.signed_duration_since(*t).num_hours() <= 24)
+        .filter(|(t, _)| time.signed_duration_since(*t).num_hours() <= time_step)
         .map(|(t, r)| (*t, *r))
         .collect();
     // compute total rain in the last 24 hours
     let rain24: f32 = rain_history.iter().map(|(_, r)| r).sum();
     state.rain_history = rain_history;
 
+    // get FFMC 24 hours ago
+    let mut ffmc_history_new: Vec<(DateTime<Utc>, f32)> = state.ffmc_history.clone();
+    let first_ffmc: f32 = ffmc_history_new.first().map(|(_, f)| *f).unwrap_or(FFMC_INIT);
+    let ffmc_24hours_ago: f32 = ffmc_history_new
+        .iter()
+        .filter(|(t, _)| time.signed_duration_since(*t).num_hours() == time_step)
+        .map(|(_, f)| *f)
+        .last().unwrap_or(first_ffmc);
+
+    // get DMC 24 hours ago
+    let mut dmc_history_new: Vec<(DateTime<Utc>, f32)> = state.dmc_history.clone();
+    let first_dmc: f32 = dmc_history_new.first().map(|(_, d)| *d).unwrap_or(DMC_INIT);
+    let dmc_24hours_ago: f32 = dmc_history_new
+        .iter()
+        .filter(|(t, _)| time.signed_duration_since(*t).num_hours() == time_step)
+        .map(|(_, d)| *d)
+        .last().unwrap_or(first_dmc);
+
+    // get DC 24 hours ago
+    let mut dc_history_new: Vec<(DateTime<Utc>, f32)> = state.dc_history.clone();
+    let first_dc: f32 = dc_history_new.first().map(|(_, d)| *d).unwrap_or(DC_INIT);
+    let dc_24hours_ago: f32 = dc_history_new
+        .iter()
+        .filter(|(t, _)| time.signed_duration_since(*t).num_hours() == time_step)
+        .map(|(_, d)| *d)
+        .last().unwrap_or(first_dc);
+
     // FFMC MODULE
     // convert ffmc to moisture scale [0, 250]
-    let mut moisture: f32 = from_ffmc_to_moisture(state.ffmc);
+    let mut moisture: f32 = from_ffmc_to_moisture(ffmc_24hours_ago);
     moisture = config.moisture(moisture, rain24, humidity, temperature, wind_speed);
     // convert to ffmc scale and update state
-    state.ffmc = from_moisture_to_ffmc(moisture);
+    let new_ffmc = from_moisture_to_ffmc(moisture);
 
+    // DMC MODULE
     let l_e = get_dmc_param(time, props.lat);
-    state.dmc = config.dmc(state.dmc, rain24, temperature, humidity, l_e);
+    let new_dmc = config.dmc(dmc_24hours_ago, rain24, temperature, humidity, l_e);
+
+    // DC MODULE
     let l_f = get_dc_param(time, props.lat);
-    state.dc = config.dc(state.dc, rain24, temperature, l_f);
+    let new_dc = config.dc(dc_24hours_ago, rain24, temperature, l_f);
+
+    // update history of states
+    ffmc_history_new.push((*time, new_ffmc));
+    dmc_history_new.push((*time, new_dmc));
+    dc_history_new.push((*time, new_dc));
+    // keep only the last 24 hours
+    let ffmc_history: Vec<(DateTime<Utc>, f32)> = ffmc_history_new
+        .iter()
+        .filter(|(t, _)| time.signed_duration_since(*t).num_hours() <= time_step)
+        .map(|(t, f)| (*t, *f))
+        .collect();
+    let dmc_history: Vec<(DateTime<Utc>, f32)> = dmc_history_new
+        .iter()
+        .filter(|(t, _)| time.signed_duration_since(*t).num_hours() <= time_step)
+        .map(|(t, d)| (*t, *d))
+        .collect();
+    let dc_history: Vec<(DateTime<Utc>, f32)> = dc_history_new
+        .iter()
+        .filter(|(t, _)| time.signed_duration_since(*t).num_hours() <= time_step)
+        .map(|(t, d)| (*t, *d))
+        .collect();
+
+    state.ffmc_history = ffmc_history;
+    state.dmc_history = dmc_history;
+    state.dc_history = dc_history;
 }
 
 // COMPUTE OUTPUTS
@@ -323,32 +417,31 @@ pub fn get_output_fn(
     config: &FWIModelConfig,
 ) -> OutputElement {
     // let rain = input.rain;
+    // the rain information to save in output is the total rain in the last 24 hours
+    let rain24 = state.rain_history.iter().map(|(_, r)| r).sum();
     let humidity = input.humidity;
     let temperature = input.temperature;
     let wind_speed = input.wind_speed;
 
-    let ffmc = state.ffmc;
-    let dmc = state.dmc;
-    let dc = state.dc;
-
-    // the rain information to save in output is the total rain in the last 24 hours
-    let rain24 = state.rain_history.iter().map(|(_, r)| r).sum();
+    let ffmc_last = state.ffmc_history.last().map(|(_, f)| *f).unwrap_or(FFMC_INIT);
+    let dmc_last = state.dmc_history.last().map(|(_, d)| *d).unwrap_or(DMC_INIT);
+    let dc_last = state.dc_history.last().map(|(_, d)| *d).unwrap_or(DC_INIT);
 
     // compute fine fuel moisture in [0, 100]
-    let moisture = from_ffmc_to_moisture(ffmc);
-    let dffm = (moisture / (100.0 + moisture)) * moisture;
+    let moisture = from_ffmc_to_moisture(ffmc_last);
+    let dffm_last = (moisture / (100.0 + moisture)) * moisture;
 
-    let isi = config.isi(ffmc, wind_speed);
-    let bui = config.bui(dmc, dc);
+    let isi = config.isi(ffmc_last, wind_speed);
+    let bui = config.bui(dmc_last, dc_last);
     let fwi = config.fwi(isi, bui);
 
     let ifwi = compute_ifwi(fwi);
 
     OutputElement {
-        ffmc,
-        dffm,
-        dmc,
-        dc,
+        ffmc: ffmc_last,
+        dffm: dffm_last,
+        dmc: dmc_last,
+        dc: dc_last,
         isi,
         bui,
         fwi,

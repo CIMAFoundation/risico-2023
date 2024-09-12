@@ -1,5 +1,9 @@
 pub const NODATAVAL: f32 = -9999.0;
 
+pub const FFMC_INIT: f32 = 85.0;
+pub const DMC_INIT: f32 = 6.0;
+pub const DC_INIT: f32 = 15.0;
+
 // FFMC CONSTANTS
 pub const FFMC_S1: f32 = 147.2;
 pub const FFMC_S2: f32 = 59.4688;

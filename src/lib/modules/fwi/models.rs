@@ -50,19 +50,20 @@ impl FWIProperties {
 #[allow(non_snake_case)]
 #[derive(Debug, Clone)]
 pub struct FWIWarmState {
-    pub ffmc: f32,
-    pub dmc: f32,
-    pub dc: f32,
+    pub ffmc_history: Vec<(DateTime<Utc>, f32)>,
+    pub dmc_history: Vec<(DateTime<Utc>, f32)>,
+    pub dc_history: Vec<(DateTime<Utc>, f32)>,
     pub rain_history: Vec<(DateTime<Utc>, f32)>
 }
 
 impl Default for FWIWarmState {
     fn default() -> Self {
-        FWIWarmState {
-            ffmc: 85.0,
-            dmc: 6.0,
-            dc: 15.0,
-            rain_history: vec![]
+        FWIWarmState 
+        {
+            ffmc_history: vec![],
+            dmc_history: vec![],
+            dc_history: vec![],
+            rain_history: vec![],
         }
     }
 }
@@ -71,11 +72,12 @@ impl Default for FWIWarmState {
 #[derive(Debug)]
 #[allow(non_snake_case)]
 pub struct FWIStateElement {
-    pub ffmc: f32,
-    pub dmc: f32,
-    pub dc: f32,
+    pub ffmc_history: Vec<(DateTime<Utc>, f32)>,
+    pub dmc_history: Vec<(DateTime<Utc>, f32)>,
+    pub dc_history: Vec<(DateTime<Utc>, f32)>,
     pub rain_history: Vec<(DateTime<Utc>, f32)>
 }
+
 
 #[derive(Debug)]
 pub struct FWIState {
@@ -93,9 +95,9 @@ impl FWIState {
             warm_state
                 .iter()
                 .map(|w| FWIStateElement {
-                    ffmc: w.ffmc,
-                    dmc: w.dmc,
-                    dc: w.dc,
+                    ffmc_history: w.ffmc_history.clone(),
+                    dmc_history: w.dmc_history.clone(),
+                    dc_history: w.dc_history.clone(),
                     rain_history: w.rain_history.clone()
                 })
                 .collect(),

@@ -659,15 +659,45 @@ impl FWIConfig {
             let line = line.expect("Should unwrap line");
 
             let components: Vec<&str> = line.split_whitespace().collect();
-            let ffmc = components[0]
-                .parse::<f32>()
-                .unwrap_or_else(|_| panic!("Could not parse dffm from {}", line));
-            let dmc = components[1]
-                .parse::<f32>()
-                .unwrap_or_else(|_| panic!("Could not parse dffm from {}", line));
-            let dc = components[2]
-                .parse::<f32>()
-                .unwrap_or_else(|_| panic!("Could not parse dffm from {}", line));
+            let ffmc_history = components[0]
+                .split(",")
+                .map(|ffmc| {
+                    let ffmc_parts: Vec<&str> = ffmc.split(":").collect();
+                    let date = ffmc_parts[0]
+                        .parse::<DateTime<Utc>>()
+                        .unwrap_or_else(|_| panic!("Could not parse FFMC date from {}", ffmc));
+                    let value = ffmc_parts[1]
+                        .parse::<f32>()
+                        .unwrap_or_else(|_| panic!("Could not parse FFMC value from {}", ffmc));
+                    (date, value)
+                })
+                .collect();
+            let dmc_history = components[1]
+                .split(",")
+                .map(|dmc| {
+                    let dmc_parts: Vec<&str> = dmc.split(":").collect();
+                    let date = dmc_parts[0]
+                        .parse::<DateTime<Utc>>()
+                        .unwrap_or_else(|_| panic!("Could not parse DMC date from {}", dmc));
+                    let value = dmc_parts[1]
+                        .parse::<f32>()
+                        .unwrap_or_else(|_| panic!("Could not parse DMC value from {}", dmc));
+                    (date, value)
+                })
+            .collect();
+            let dc_history = components[2]
+                .split(",")
+                .map(|dc| {
+                    let dc_parts: Vec<&str> = dc.split(":").collect();
+                    let date = dc_parts[0]
+                        .parse::<DateTime<Utc>>()
+                        .unwrap_or_else(|_| panic!("Could not parse DC date from {}", dc));
+                    let value = dc_parts[1]
+                        .parse::<f32>()
+                        .unwrap_or_else(|_| panic!("Could not parse DC value from {}", dc));
+                    (date, value)
+                })
+                .collect();
             let rain_history = components[3]
                 .split(",")
                 .map(|rain| {
@@ -683,9 +713,9 @@ impl FWIConfig {
                 .collect();
 
             warm_state.push(FWIWarmState {
-                ffmc,
-                dmc,
-                dc,
+                ffmc_history,
+                dmc_history,
+                dc_history,
                 rain_history
             });
         }
@@ -704,14 +734,17 @@ impl FWIConfig {
         let mut warm_state_writer = BufWriter::new(&mut warm_state_file);
 
         for state in &state.data {
-            let ffmc = state.ffmc;
-            let dmc = state.dmc;
-            let dc = state.dc;
+            let ffmc_history = state.ffmc_history.clone();
+            let dmc_history = state.dmc_history.clone();
+            let dc_history = state.dc_history.clone();
             let rain_history = state.rain_history.clone();
 
             let line = format!(
                 "{}\t{}\t{}\t{}",
-                ffmc, dmc, dc, rain_history.iter().map(|(date, value)| format!("{}:{}", date, value)).collect::<Vec<String>>().join(",")
+                ffmc_history.iter().map(|(date, value)| format!("{}:{}", date, value)).collect::<Vec<String>>().join(","),
+                dmc_history.iter().map(|(date, value)| format!("{}:{}", date, value)).collect::<Vec<String>>().join(","),
+                dc_history.iter().map(|(date, value)| format!("{}:{}", date, value)).collect::<Vec<String>>().join(","),
+                rain_history.iter().map(|(date, value)| format!("{}:{}", date, value)).collect::<Vec<String>>().join(",")
             );
             writeln!(warm_state_writer, "{}", line)
                 .map_err(|error| format!("error writing to {}, {}", &warm_state_name, error))?;
