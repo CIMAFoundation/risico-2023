@@ -126,7 +126,7 @@ impl RISICOConfig {
 
         let ppf_file = &config_defs.ppf_file;
         let ppf = match ppf_file {
-            Some(ppf_file) => read_ppf(ppf_file)
+            Some(ppf_file) => RISICOConfig::read_ppf(ppf_file)
                 .map_err(|error| format!("error reading {}, {}", &ppf_file, error))?,
             None => vec![(1.0, 1.0); n_cells],
         };
@@ -297,6 +297,36 @@ impl RISICOConfig {
         }
 
         Result::Ok(vegetations)
+    }
+
+    /// Reads the PPF file and returns a vector of with (ppf_summer, ppf_winter) tuples
+    /// The PPF file is a text file with the following structure:
+    /// ppf_summer ppf_winter
+    /// where ppf_summer and ppf_winter are floats
+    pub fn read_ppf(ppf_file: &str) -> Result<Vec<(f32, f32)>, RISICOError> {
+        let file = File::open(ppf_file)
+            .map_err(|error| format!("Could not open file {}: {}", ppf_file, error))?;
+
+        let reader = io::BufReader::new(file);
+        let mut ppf: Vec<(f32, f32)> = Vec::new();
+        for line in reader.lines() {
+            let line = match line {
+                Ok(line) => line,
+                Err(error) => {
+                    return Err(format!("Error reading PPF file {}: {}", ppf_file, error).into());
+                }
+            };
+            let components: Vec<&str> = line.split_whitespace().collect();
+            let ppf_summer = components[0]
+                .parse::<f32>()
+                .map_err(|err| format!("Could not parse value from PPF file {}: {}", ppf_file, err))?;
+
+            let ppf_winter = components[1]
+                .parse::<f32>()
+                .map_err(|err| format!("Could not parse value from PPF file {}: {}", ppf_file, err))?;
+            ppf.push((ppf_summer, ppf_winter));
+        }
+        Ok(ppf)
     }
 
     pub fn get_properties(&self) -> &RISICOProperties {
@@ -688,32 +718,3 @@ pub fn load_palettes(palettes_defs: &HashMap<String, String>) -> HashMap<String,
     palettes
 }
 
-/// Reads the PPF file and returns a vector of with (ppf_summer, ppf_winter) tuples
-/// The PPF file is a text file with the following structure:
-/// ppf_summer ppf_winter
-/// where ppf_summer and ppf_winter are floats
-pub fn read_ppf(ppf_file: &str) -> Result<Vec<(f32, f32)>, RISICOError> {
-    let file = File::open(ppf_file)
-        .map_err(|error| format!("Could not open file {}: {}", ppf_file, error))?;
-
-    let reader = io::BufReader::new(file);
-    let mut ppf: Vec<(f32, f32)> = Vec::new();
-    for line in reader.lines() {
-        let line = match line {
-            Ok(line) => line,
-            Err(error) => {
-                return Err(format!("Error reading PPF file {}: {}", ppf_file, error).into());
-            }
-        };
-        let components: Vec<&str> = line.split_whitespace().collect();
-        let ppf_summer = components[0]
-            .parse::<f32>()
-            .map_err(|err| format!("Could not parse value from PPF file {}: {}", ppf_file, err))?;
-
-        let ppf_winter = components[1]
-            .parse::<f32>()
-            .map_err(|err| format!("Could not parse value from PPF file {}: {}", ppf_file, err))?;
-        ppf.push((ppf_summer, ppf_winter));
-    }
-    Ok(ppf)
-}
