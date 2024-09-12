@@ -12,14 +12,18 @@ use risico::{
     constants::NODATAVAL,
     models::output::Output,
     modules::risico::{
-        config::ModelConfig,
-        models::{Properties, State, WarmState},
+        config::RISICOModelConfig,
+        models::{RISICOProperties, RISICOState, RISICOWarmState},
     },
+    modules::fwi::{
+        config::FWIModelConfig,
+        models::{FWIProperties, FWIState, FWIWarmState},
+    }
 };
 
 use super::{
-    builder::{OutputTypeConfig, RISICOConfigBuilder},
-    data::{from_file, read_vegetation},
+    builder::{OutputTypeConfig, RISICOConfigBuilder, FWIConfigBuilder},
+    data::{risico_properties_from_file, read_vegetation, fwi_properties_from_file},
 };
 use crate::common::helpers::RISICOError;
 use crate::common::io::models::{output::OutputType, palette::Palette};
@@ -30,12 +34,24 @@ pub type PaletteMap = HashMap<String, Box<Palette>>;
 pub struct RISICOConfig {
     run_date: DateTime<Utc>,
     warm_state_path: String,
-    warm_state: Vec<WarmState>,
+    warm_state: Vec<RISICOWarmState>,
     warm_state_time: DateTime<Utc>,
-    properties: Properties,
+    properties: RISICOProperties,
     palettes: PaletteMap,
     // use_temperature_effect: bool,
     // use_ndvi: bool,
+    output_time_resolution: u32,
+    output_types_defs: Vec<OutputTypeConfig>,
+    model_version: String,
+}
+
+pub struct FWIConfig {
+    run_date: DateTime<Utc>,
+    warm_state_path: String,
+    warm_state: Vec<FWIWarmState>,
+    warm_state_time: DateTime<Utc>,
+    properties: FWIProperties,
+    palettes: PaletteMap,
     output_time_resolution: u32,
     output_types_defs: Vec<OutputTypeConfig>,
     model_version: String,
@@ -96,7 +112,7 @@ impl RISICOConfig {
 
         let cells_file = &config_defs.cells_file_path;
 
-        let props_container = from_file(cells_file)
+        let props_container = risico_properties_from_file(cells_file)
             .map_err(|error| format!("error reading {}, {error}", cells_file))?;
 
         let n_cells = props_container.lons.len();
@@ -111,9 +127,9 @@ impl RISICOConfig {
         let vegetations_dict = read_vegetation(&config_defs.vegetation_file)
             .map_err(|error| format!("error reading {}, {error}", &config_defs.vegetation_file))?;
 
-        let (warm_state, warm_state_time) = read_warm_state(&config_defs.warm_state_path, date)
+        let (warm_state, warm_state_time) = RISICOConfig::read_warm_state(&config_defs.warm_state_path, date)
             .unwrap_or((
-                vec![WarmState::default(); n_cells],
+                vec![RISICOWarmState::default(); n_cells],
                 date - Duration::try_days(1).expect("Should be a valid duration"),
             ));
 
@@ -126,7 +142,7 @@ impl RISICOConfig {
         let ppf_summer = ppf.iter().map(|(s, _)| *s).collect();
         let ppf_winter = ppf.iter().map(|(_, w)| *w).collect();
 
-        let props = Properties::new(props_container, vegetations_dict, ppf_summer, ppf_winter);
+        let props = RISICOProperties::new(props_container, vegetations_dict, ppf_summer, ppf_winter);
 
         let config = RISICOConfig {
             run_date: date,
@@ -146,14 +162,14 @@ impl RISICOConfig {
         Ok(config)
     }
 
-    pub fn get_properties(&self) -> &Properties {
+    pub fn get_properties(&self) -> &RISICOProperties {
         &self.properties
     }
 
-    pub fn new_state(&self) -> State {
+    pub fn new_state(&self) -> RISICOState {
         log::info!("Model version: {}", &self.model_version);
-        let config = ModelConfig::new(&self.model_version);
-        State::new(&self.warm_state, &self.warm_state_time, config)
+        let config = RISICOModelConfig::new(&self.model_version);
+        RISICOState::new(&self.warm_state, &self.warm_state_time, config)
     }
 
     pub fn get_output_writer(&self) -> Result<OutputWriter, RISICOError> {
@@ -171,7 +187,113 @@ impl RISICOConfig {
     }
 
     #[allow(non_snake_case)]
-    pub fn write_warm_state(&self, state: &State) -> Result<(), RISICOError> {
+    /// Reads the warm state from the file
+    /// The warm state is stored in a file with the following structure:
+    /// base_warm_file_YYYYmmDDHHMM
+    /// where <base_warm_file> is the base name of the file and `YYYYmmDDHHMM` is the date of the warm state
+    /// The warm state is stored in a text file with the following structure:
+    /// dffm
+    pub fn read_warm_state(
+        base_warm_file: &str,
+        run_date: DateTime<Utc>,
+    ) -> Option<(Vec<RISICOWarmState>, DateTime<Utc>)> {
+        // for the last n days before date, try to read the warm state
+        // compose the filename as base_warm_file_YYYYmmDDHHMM
+        let mut file: Option<File> = None;
+    
+        let mut current_date = run_date;
+    
+        for days_before in 1..4 {
+            current_date = run_date - Duration::try_days(days_before).expect("Should be valid");
+    
+            let filename = format!("{}{}", base_warm_file, current_date.format("%Y%m%d%H%M"));
+    
+            let file_handle = File::open(filename);
+            if file_handle.is_err() {
+                continue;
+            }
+            file = Some(file_handle.expect("Should unwrap"));
+            break;
+        }
+        let file = match file {
+            Some(file) => file,
+            None => {
+                warn!(
+                    "WARNING: Could not find a valid warm state file for run date {}",
+                    run_date.format("%Y-%m-%d")
+                );
+                return None;
+            }
+        };
+    
+        info!(
+            "Loading warm state from {}",
+            current_date.format("%Y-%m-%d")
+        );
+        let mut warm_state: Vec<RISICOWarmState> = Vec::new();
+    
+        let reader = io::BufReader::new(file);
+    
+        for line in reader.lines() {
+            if let Err(line) = line {
+                warn!("Error reading warm state file: {}", line);
+                return None;
+            }
+            let line = line.expect("Should unwrap line");
+    
+            let components: Vec<&str> = line.split_whitespace().collect();
+            let dffm = components[0]
+                .parse::<f32>()
+                .unwrap_or_else(|_| panic!("Could not parse dffm from {}", line));
+            let snow_cover = components[1]
+                .parse::<f32>()
+                .unwrap_or_else(|_| panic!("Could not parse snow_cover from {}", line));
+            let snow_cover_time = components[2]
+                .parse::<f32>()
+                .unwrap_or_else(|_| panic!("Could not parse snow_cover_time from {}", line));
+            let MSI = components[3]
+                .parse::<f32>()
+                .unwrap_or_else(|_| panic!("Could not parse MSI from {}", line));
+            let MSI_TTL = components[4]
+                .parse::<f32>()
+                .unwrap_or_else(|_| panic!("Could not parse MSI_TTL from {}", line));
+            let NDVI = components[5]
+                .parse::<f32>()
+                .unwrap_or_else(|_| panic!("Could not parse NDVI from {}", line));
+            let NDVI_TIME = components[6]
+                .parse::<f32>()
+                .unwrap_or_else(|_| panic!("Could not parse NDVI_TIME from {}", line));
+    
+            let mut NDWI = NODATAVAL;
+            let mut NDWI_TIME = 0.0;
+    
+            if components.len() > 7 {
+                NDWI = components[7]
+                    .parse::<f32>()
+                    .unwrap_or_else(|_| panic!("Could not parse NDWI from {}", line));
+                NDWI_TIME = components[8]
+                    .parse::<f32>()
+                    .unwrap_or_else(|_| panic!("Could not parse NDWI_TIME from {}", line));
+            }
+    
+            warm_state.push(RISICOWarmState {
+                dffm,
+                snow_cover,
+                snow_cover_time,
+                MSI,
+                MSI_TTL,
+                NDVI,
+                NDVI_TIME,
+                NDWI,
+                NDWI_TIME,
+            });
+        }
+    
+        Some((warm_state, current_date))
+    }
+
+    #[allow(non_snake_case)]
+    pub fn write_warm_state(&self, state: &RISICOState) -> Result<(), RISICOError> {
         let warm_state_time = state.time;
         let date_string = warm_state_time.format("%Y%m%d%H%M").to_string();
         let warm_state_name = format!("{}{}", self.warm_state_path, date_string);
@@ -203,111 +325,189 @@ impl RISICOConfig {
     }
 }
 
-#[allow(non_snake_case)]
-/// Reads the warm state from the file
-/// The warm state is stored in a file with the following structure:
-/// base_warm_file_YYYYmmDDHHMM
-/// where <base_warm_file> is the base name of the file and `YYYYmmDDHHMM` is the date of the warm state
-/// The warm state is stored in a text file with the following structure:
-/// dffm
-fn read_warm_state(
-    base_warm_file: &str,
-    run_date: DateTime<Utc>,
-) -> Option<(Vec<WarmState>, DateTime<Utc>)> {
-    // for the last n days before date, try to read the warm state
-    // compose the filename as base_warm_file_YYYYmmDDHHMM
-    let mut file: Option<File> = None;
 
-    let mut current_date = run_date;
+impl FWIConfig {
+    fn load_palettes(palettes_defs: &HashMap<String, String>) -> HashMap<String, Box<Palette>> {
+        let mut palettes: HashMap<String, Box<Palette>> = HashMap::new();
 
-    for days_before in 1..4 {
-        current_date = run_date - Duration::try_days(days_before).expect("Should be valid");
-
-        let filename = format!("{}{}", base_warm_file, current_date.format("%Y%m%d%H%M"));
-
-        let file_handle = File::open(filename);
-        if file_handle.is_err() {
-            continue;
+        for (name, path) in palettes_defs.iter() {
+            if let Ok(palette) = Palette::load_palette(path) {
+                palettes.insert(name.to_string(), Box::new(palette));
+            }
         }
-        file = Some(file_handle.expect("Should unwrap"));
-        break;
+        palettes
     }
-    let file = match file {
-        Some(file) => file,
-        None => {
-            warn!(
-                "WARNING: Could not find a valid warm state file for run date {}",
-                run_date.format("%Y-%m-%d")
+
+    pub fn new(
+        config_defs: &FWIConfigBuilder,
+        date: DateTime<Utc>,
+        palettes: &HashMap<String, String>,
+    ) -> Result<FWIConfig, RISICOError> {
+        let palettes = FWIConfig::load_palettes(palettes);
+
+        let cells_file = &config_defs.cells_file_path;
+
+        let props_container = fwi_properties_from_file(cells_file)
+            .map_err(|error| format!("error reading {}, {error}", cells_file))?;
+
+        let n_cells = props_container.lons.len();
+        if n_cells != props_container.lats.len()
+        {
+            panic!("All properties must have the same length");
+        }
+
+        // DA MODIFICARE
+        let (warm_state, warm_state_time) = FWIConfig::read_warm_state(&config_defs.warm_state_path, date)
+            .unwrap_or((
+                vec![FWIWarmState::default(); n_cells],
+                date - Duration::try_days(1).expect("Should be a valid duration"),
+            ));
+
+        let props = FWIProperties::new(props_container);
+
+        let config = FWIConfig {
+            run_date: date,
+            // model_name: config_defs.model_name.clone(),
+            warm_state_path: config_defs.warm_state_path.clone(),
+            warm_state,
+            warm_state_time,
+            properties: props,
+            palettes,
+            output_time_resolution: config_defs.output_time_resolution,
+            model_version: config_defs.model_version.clone(),
+            output_types_defs: config_defs.output_types.clone(),
+        };
+
+        Ok(config)
+    }
+
+    pub fn get_properties(&self) -> &FWIProperties {
+        &self.properties
+    }
+
+    pub fn new_state(&self) -> FWIState {
+        log::info!("Model version: {}", &self.model_version);
+        let config = FWIModelConfig::new(&self.model_version);
+        FWIState::new(&self.warm_state, &self.warm_state_time, config)
+    }
+
+    pub fn get_output_writer(&self) -> Result<OutputWriter, RISICOError> {
+        Ok(OutputWriter::new(
+            self.output_types_defs.as_slice(),
+            &self.run_date,
+            &self.palettes,
+        ))
+    }
+
+    pub fn should_write_output(&self, time: &DateTime<Utc>) -> bool {
+        let time_diff = time.signed_duration_since(self.run_date);
+        let hours = time_diff.num_hours();
+        hours % self.output_time_resolution as i64 == 0
+    }
+
+    #[allow(non_snake_case)]
+    /// Reads the warm state from the file
+    /// The warm state is stored in a file with the following structure:
+    /// base_warm_file_YYYYmmDDHHMM
+    /// where <base_warm_file> is the base name of the file and `YYYYmmDDHHMM` is the date of the warm state
+    /// The warm state is stored in a text file with the following structure:
+    /// dffm
+    pub fn read_warm_state(
+        base_warm_file: &str,
+        run_date: DateTime<Utc>,
+    ) -> Option<(Vec<FWIWarmState>, DateTime<Utc>)> {
+        // for the last n days before date, try to read the warm state
+        // compose the filename as base_warm_file_YYYYmmDDHHMM
+        let mut file: Option<File> = None;
+
+        let mut current_date = run_date;
+
+        for days_before in 1..4 {
+            current_date = run_date - Duration::try_days(days_before).expect("Should be valid");
+
+            let filename = format!("{}{}", base_warm_file, current_date.format("%Y%m%d%H%M"));
+
+            let file_handle = File::open(filename);
+            if file_handle.is_err() {
+                continue;
+            }
+            file = Some(file_handle.expect("Should unwrap"));
+            break;
+        }
+        let file = match file {
+            Some(file) => file,
+            None => {
+                warn!(
+                    "WARNING: Could not find a valid warm state file for run date {}",
+                    run_date.format("%Y-%m-%d")
+                );
+                return None;
+            }
+        };
+
+        info!(
+            "Loading warm state from {}",
+            current_date.format("%Y-%m-%d")
+        );
+        let mut warm_state: Vec<FWIWarmState> = Vec::new();
+
+        let reader = io::BufReader::new(file);
+
+        for line in reader.lines() {
+            if let Err(line) = line {
+                warn!("Error reading warm state file: {}", line);
+                return None;
+            }
+            let line = line.expect("Should unwrap line");
+
+            let components: Vec<&str> = line.split_whitespace().collect();
+            let ffmc = components[0]
+                .parse::<f32>()
+                .unwrap_or_else(|_| panic!("Could not parse dffm from {}", line));
+            let dmc = components[1]
+                .parse::<f32>()
+                .unwrap_or_else(|_| panic!("Could not parse dffm from {}", line));
+            let dc = components[2]
+                .parse::<f32>()
+                .unwrap_or_else(|_| panic!("Could not parse dffm from {}", line));
+
+            warm_state.push(FWIWarmState {
+                ffmc,
+                dmc,
+                dc
+            });
+        }
+
+        Some((warm_state, current_date))
+    }
+
+    #[allow(non_snake_case)]
+    pub fn write_warm_state(&self, state: &FWIState) -> Result<(), RISICOError> {
+        let warm_state_time = state.time;
+        let date_string = warm_state_time.format("%Y%m%d%H%M").to_string();
+        let warm_state_name = format!("{}{}", self.warm_state_path, date_string);
+        let mut warm_state_file = File::create(&warm_state_name)
+            .map_err(|error| format!("error creating {}, {}", &warm_state_name, error))?;
+
+        let mut warm_state_writer = BufWriter::new(&mut warm_state_file);
+
+        for state in &state.data {
+            let ffmc = state.ffmc;
+            let dmc = state.dmc;
+            let dc = state.dc;
+
+            let line = format!(
+                "{}\t{}\t{}",
+                ffmc, dmc, dc
             );
-            return None;
+            writeln!(warm_state_writer, "{}", line)
+                .map_err(|error| format!("error writing to {}, {}", &warm_state_name, error))?;
         }
-    };
-
-    info!(
-        "Loading warm state from {}",
-        current_date.format("%Y-%m-%d")
-    );
-    let mut warm_state: Vec<WarmState> = Vec::new();
-
-    let reader = io::BufReader::new(file);
-
-    for line in reader.lines() {
-        if let Err(line) = line {
-            warn!("Error reading warm state file: {}", line);
-            return None;
-        }
-        let line = line.expect("Should unwrap line");
-
-        let components: Vec<&str> = line.split_whitespace().collect();
-        let dffm = components[0]
-            .parse::<f32>()
-            .unwrap_or_else(|_| panic!("Could not parse dffm from {}", line));
-        let snow_cover = components[1]
-            .parse::<f32>()
-            .unwrap_or_else(|_| panic!("Could not parse snow_cover from {}", line));
-        let snow_cover_time = components[2]
-            .parse::<f32>()
-            .unwrap_or_else(|_| panic!("Could not parse snow_cover_time from {}", line));
-        let MSI = components[3]
-            .parse::<f32>()
-            .unwrap_or_else(|_| panic!("Could not parse MSI from {}", line));
-        let MSI_TTL = components[4]
-            .parse::<f32>()
-            .unwrap_or_else(|_| panic!("Could not parse MSI_TTL from {}", line));
-        let NDVI = components[5]
-            .parse::<f32>()
-            .unwrap_or_else(|_| panic!("Could not parse NDVI from {}", line));
-        let NDVI_TIME = components[6]
-            .parse::<f32>()
-            .unwrap_or_else(|_| panic!("Could not parse NDVI_TIME from {}", line));
-
-        let mut NDWI = NODATAVAL;
-        let mut NDWI_TIME = 0.0;
-
-        if components.len() > 7 {
-            NDWI = components[7]
-                .parse::<f32>()
-                .unwrap_or_else(|_| panic!("Could not parse NDWI from {}", line));
-            NDWI_TIME = components[8]
-                .parse::<f32>()
-                .unwrap_or_else(|_| panic!("Could not parse NDWI_TIME from {}", line));
-        }
-
-        warm_state.push(WarmState {
-            dffm,
-            snow_cover,
-            snow_cover_time,
-            MSI,
-            MSI_TTL,
-            NDVI,
-            NDVI_TIME,
-            NDWI,
-            NDWI_TIME,
-        });
+        Ok(())
     }
-
-    Some((warm_state, current_date))
 }
+
+
 
 /// Reads the PPF file and returns a vector of with (ppf_summer, ppf_winter) tuples
 /// The PPF file is a text file with the following structure:

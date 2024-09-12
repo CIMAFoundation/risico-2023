@@ -13,7 +13,10 @@ use crate::common::io::models::grid::ClusterMode;
 use crate::common::io::models::output::OutputVariable;
 use crate::common::io::readers::netcdf::NetCdfInputConfiguration;
 
-use super::models::RISICOConfig;
+use super::models::{
+    RISICOConfig,
+    FWIConfig
+};
 
 pub type PaletteMap = HashMap<String, String>;
 pub type ConfigMap = HashMap<String, Vec<String>>;
@@ -111,6 +114,8 @@ pub struct FWIConfigBuilder {
     pub warm_state_path: String,
     pub output_types: Vec<OutputTypeConfig>,
     pub palettes: PaletteMap,
+    pub output_time_resolution: u32,
+    pub model_version: String,
 }
 
 #[allow(clippy::upper_case_acronyms)]
@@ -342,5 +347,40 @@ impl RISICOConfigBuilder {
         palettes: &PaletteMap,
     ) -> Result<RISICOConfig, RISICOError> {
         RISICOConfig::new(self, *date, palettes)
+    }
+}
+
+
+impl FWIConfigBuilder {
+    fn load_palettes(config_map: &ConfigMap) -> HashMap<String, String> {
+        let mut palettes: HashMap<String, String> = HashMap::new();
+        let palettes_defs = config_map.all(PALETTE_KEY);
+        if palettes_defs.is_none() {
+            return palettes;
+        }
+        let palettes_defs = palettes_defs.expect("should be there");
+
+        for palette_def in palettes_defs {
+            let parts = palette_def.split(":").collect::<Vec<&str>>();
+            if parts.len() != 2 {
+                continue;
+            }
+            let (name, path) = (parts[0], parts[1]);
+
+            // if let Ok(palette) = Palette::load_palette(path) {
+            //     palettes.insert(name.to_string(), Box::new(palette));
+            // }
+
+            palettes.insert(name.into(), path.into());
+        }
+        palettes
+    }
+
+    pub fn build(
+        &self,
+        date: &DateTime<Utc>,
+        palettes: &PaletteMap,
+    ) -> Result<FWIConfig, RISICOError> {
+        FWIConfig::new(self, *date, palettes)
     }
 }

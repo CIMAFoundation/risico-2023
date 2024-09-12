@@ -4,14 +4,17 @@ use std::io::BufReader;
 use std::sync::Arc;
 use std::{collections::HashMap, io::BufRead};
 
-use risico::modules::risico::models::{CellPropertiesContainer, Vegetation};
+use risico::modules::{
+    risico::models::{RISICOCellPropertiesContainer, RISICOVegetation},
+    fwi::models::FWICellPropertiesContainer
+};
 
 use crate::common::helpers::RISICOError;
 
 /// Read the cells from a file.
 /// :param file_path: The path to the file.
 /// :return: A list of cells.
-pub fn from_file(file_path: &str) -> Result<CellPropertiesContainer, RISICOError> {
+pub fn risico_properties_from_file(file_path: &str) -> Result<RISICOCellPropertiesContainer, RISICOError> {
     let file = fs::File::open(file_path).map_err(|err| format!("can't open file: {err}."))?;
 
     let mut lons: Vec<f32> = Vec::new();
@@ -64,7 +67,7 @@ pub fn from_file(file_path: &str) -> Result<CellPropertiesContainer, RISICOError
         vegetations.push(vegetation);
     }
 
-    let props = CellPropertiesContainer {
+    let props = RISICOCellPropertiesContainer {
         lats,
         lons,
         slopes,
@@ -74,14 +77,57 @@ pub fn from_file(file_path: &str) -> Result<CellPropertiesContainer, RISICOError
     Ok(props)
 }
 
+
+pub fn fwi_properties_from_file(file_path: &str) -> Result<FWICellPropertiesContainer, RISICOError> {
+    let file = fs::File::open(file_path).map_err(|err| format!("can't open file: {err}."))?;
+
+    let mut lons: Vec<f32> = Vec::new();
+    let mut lats: Vec<f32> = Vec::new();
+
+    let reader = BufReader::new(file);
+
+    for line in reader.lines() {
+        let line = line.map_err(|err| format!("can't read from file: {err}."))?;
+        if line.starts_with("#") {
+            // skip header
+            continue;
+        }
+
+        let line_parts: Vec<&str> = line.trim().split(' ').collect();
+
+        if line_parts.len() < 2 {
+            let error_message = format!("Invalid line in file: {}", line);
+            return Err(error_message.into());
+        }
+
+        //  [TODO] refactor this for using error handling
+        let lon = line_parts[0]
+            .parse::<f32>()
+            .unwrap_or_else(|_| panic!("Invalid line in file: {}", line));
+
+        let lat = line_parts[1]
+            .parse::<f32>()
+            .unwrap_or_else(|_| panic!("Invalid line in file: {}", line));
+
+        lons.push(lon);
+        lats.push(lat);
+    }
+
+    let props = FWICellPropertiesContainer {
+        lats,
+        lons,
+    };
+    Ok(props)
+}
+
 /// Read the cells from a file.
 /// :param file_path: The path to the file.
 /// :return: A list of cells.
 pub fn read_vegetation(
     file_path: &str,
-) -> Result<HashMap<String, Arc<Vegetation>>, std::io::Error> {
+) -> Result<HashMap<String, Arc<RISICOVegetation>>, std::io::Error> {
     let file = fs::File::open(file_path)?;
-    let mut vegetations: HashMap<String, Arc<Vegetation>> = HashMap::new();
+    let mut vegetations: HashMap<String, Arc<RISICOVegetation>> = HashMap::new();
 
     let reader = BufReader::new(file);
 
@@ -135,7 +181,7 @@ pub fn read_vegetation(
 
         let veg_id = id.clone();
 
-        let veg = Arc::new(Vegetation {
+        let veg = Arc::new(RISICOVegetation {
             id,
             d0,
             d1,
