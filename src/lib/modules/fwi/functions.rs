@@ -3,9 +3,9 @@ use chrono::{DateTime, Datelike, Utc};
 use crate::models::{input::InputElement, output::OutputElement};
 
 use super::{
-    config::ModelConfig,
+    config::FWIModelConfig,
     constants::*,
-    models::{PropertiesElement, StateElement},
+    models::{FWIPropertiesElement, FWIStateElement},
 };
 
 // FFMC MODULE
@@ -269,11 +269,11 @@ pub fn compute_ifwi(fwi: f32) -> f32 {
 // UPDATE STATES
 #[allow(non_snake_case)]
 pub fn update_state_fn(
-    state: &mut StateElement,
-    props: &PropertiesElement,
+    state: &mut FWIStateElement,
+    props: &FWIPropertiesElement,
     input: &InputElement,
     time: &DateTime<Utc>,
-    config: &ModelConfig,
+    config: &FWIModelConfig,
 ) {
     let rain = input.rain;
     let humidity = input.humidity;
@@ -305,9 +305,9 @@ pub fn update_state_fn(
 // COMPUTE OUTPUTS
 #[allow(non_snake_case)]
 pub fn get_output_fn(
-    state: &StateElement,
+    state: &FWIStateElement,
     input: &InputElement,
-    config: &ModelConfig,
+    config: &FWIModelConfig,
 ) -> OutputElement {
     let rain = input.rain;
     let humidity = input.humidity;

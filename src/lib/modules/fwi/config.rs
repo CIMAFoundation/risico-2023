@@ -6,7 +6,7 @@ use super::functions::{
 /// configuration structure for model config
 /// can be used to store functions and constants
 #[derive(Debug)]
-pub struct ModelConfig {
+pub struct FWIModelConfig {
     pub model_version: String,
 
     moisture_fn: fn(f32, f32, f32, f32, f32) -> f32,
@@ -17,7 +17,7 @@ pub struct ModelConfig {
     fwi_fn: fn(f32, f32) -> f32
 }
 
-impl ModelConfig {
+impl FWIModelConfig {
     pub fn new(model_version_str: &str) -> Self {
         let moisture_fn: fn(f32, f32, f32, f32, f32) -> f32;
         let dmc_fn: fn(f32, f32, f32, f32, f32) -> f32;
@@ -45,7 +45,7 @@ impl ModelConfig {
             }
         }
 
-        ModelConfig {
+        FWIModelConfig {
             model_version: model_version_str.to_owned(),
             moisture_fn,
             dmc_fn,

@@ -3,35 +3,35 @@ use chrono::prelude::*;
 use ndarray::{Array1, Zip};
 
 use super::{
-    config::ModelConfig,
+    config::FWIModelConfig,
     functions::{get_output_fn, update_state_fn},
 };
 
 // CELLS PROPERTIES
 #[derive(Debug)]
-pub struct PropertiesElement {
+pub struct FWIPropertiesElement {
     pub lon: f32,
     pub lat: f32,
 }
 
 #[derive(Debug)]
-pub struct Properties {
-    pub data: Array1<PropertiesElement>,
+pub struct FWIProperties {
+    pub data: Array1<FWIPropertiesElement>,
     pub len: usize,
 }
 
-pub struct CellPropertiesContainer {
+pub struct FWICellPropertiesContainer {
     pub lons: Vec<f32>,
     pub lats: Vec<f32>,
 }
 
-impl Properties {
-    pub fn new(props: CellPropertiesContainer) -> Self {
-        let data: Array1<PropertiesElement> = props
+impl FWIProperties {
+    pub fn new(props: FWICellPropertiesContainer) -> Self {
+        let data: Array1<FWIPropertiesElement> = props
             .lons
             .into_iter()
             .zip(props.lats)
-            .map(|(lon, lat)| PropertiesElement { lon, lat })
+            .map(|(lon, lat)| FWIPropertiesElement { lon, lat })
             .collect();
 
         let len = data.len();
@@ -43,20 +43,21 @@ impl Properties {
         let lons: Vec<f32> = self.data.iter().map(|p| p.lon).collect();
         (lats, lons)
     }
+
 }
 
 // WARM STATE
 #[allow(non_snake_case)]
 #[derive(Debug, Clone)]
-pub struct WarmState {
+pub struct FWIWarmState {
     pub ffmc: f32,
     pub dmc: f32,
     pub dc: f32,
 }
 
-impl Default for WarmState {
+impl Default for FWIWarmState {
     fn default() -> Self {
-        WarmState {
+        FWIWarmState {
             ffmc: 85.0,
             dmc: 6.0,
             dc: 15.0,
@@ -67,28 +68,28 @@ impl Default for WarmState {
 // STATE
 #[derive(Debug)]
 #[allow(non_snake_case)]
-pub struct StateElement {
+pub struct FWIStateElement {
     pub ffmc: f32,
     pub dmc: f32,
     pub dc: f32,
 }
 
 #[derive(Debug)]
-pub struct State {
+pub struct FWIState {
     pub time: DateTime<Utc>,
-    pub data: Array1<StateElement>,
+    pub data: Array1<FWIStateElement>,
     len: usize,
-    config: ModelConfig,
+    config: FWIModelConfig,
 }
 
-impl State {
+impl FWIState {
     #[allow(dead_code, non_snake_case)]
     /// Create a new state.
-    pub fn new(warm_state: &[WarmState], time: &DateTime<Utc>, config: ModelConfig) -> State {
+    pub fn new(warm_state: &[FWIWarmState], time: &DateTime<Utc>, config: FWIModelConfig) -> FWIState {
         let data = Array1::from_vec(
             warm_state
                 .iter()
-                .map(|w| StateElement {
+                .map(|w| FWIStateElement {
                     ffmc: w.ffmc,
                     dmc: w.dmc,
                     dc: w.dc,
@@ -96,7 +97,7 @@ impl State {
                 .collect(),
         );
 
-        State {
+        FWIState {
             time: *time,
             data,
             len: warm_state.len(),
@@ -113,7 +114,7 @@ impl State {
     }
 
     #[allow(non_snake_case)]
-    fn update_state(&mut self, props: &Properties, input: &Input) {
+    fn update_state(&mut self, props: &FWIProperties, input: &Input) {
         let time = &self.time;
         Zip::from(&mut self.data)
             .and(&props.data)
@@ -124,7 +125,7 @@ impl State {
     }
 
     #[allow(non_snake_case)]
-    pub fn get_output(self: &State, input: &Input) -> Output {
+    pub fn get_output(self: &FWIState, input: &Input) -> Output {
         let time = &self.time;
 
         let output_data = Zip::from(&self.data)
@@ -135,7 +136,7 @@ impl State {
     }
 
     /// Update the state of the cells
-    pub fn update(&mut self, props: &Properties, input: &Input) {
+    pub fn update(&mut self, props: &FWIProperties, input: &Input) {
         let new_time = &input.time;
         self.time = *new_time;
         self.update_state(props, input);
