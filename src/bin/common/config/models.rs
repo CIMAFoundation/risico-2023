@@ -92,23 +92,13 @@ impl OutputWriter {
 }
 
 impl RISICOConfig {
-    fn load_palettes(palettes_defs: &HashMap<String, String>) -> HashMap<String, Box<Palette>> {
-        let mut palettes: HashMap<String, Box<Palette>> = HashMap::new();
-
-        for (name, path) in palettes_defs.iter() {
-            if let Ok(palette) = Palette::load_palette(path) {
-                palettes.insert(name.to_string(), Box::new(palette));
-            }
-        }
-        palettes
-    }
 
     pub fn new(
         config_defs: &RISICOConfigBuilder,
         date: DateTime<Utc>,
         palettes: &HashMap<String, String>,
     ) -> Result<RISICOConfig, RISICOError> {
-        let palettes = RISICOConfig::load_palettes(palettes);
+        let palettes = load_palettes(palettes);
 
         let cells_file = &config_defs.cells_file_path;
 
@@ -327,23 +317,13 @@ impl RISICOConfig {
 
 
 impl FWIConfig {
-    fn load_palettes(palettes_defs: &HashMap<String, String>) -> HashMap<String, Box<Palette>> {
-        let mut palettes: HashMap<String, Box<Palette>> = HashMap::new();
-
-        for (name, path) in palettes_defs.iter() {
-            if let Ok(palette) = Palette::load_palette(path) {
-                palettes.insert(name.to_string(), Box::new(palette));
-            }
-        }
-        palettes
-    }
 
     pub fn new(
         config_defs: &FWIConfigBuilder,
         date: DateTime<Utc>,
         palettes: &HashMap<String, String>,
     ) -> Result<FWIConfig, RISICOError> {
-        let palettes = FWIConfig::load_palettes(palettes);
+        let palettes = load_palettes(palettes);
 
         let cells_file = &config_defs.cells_file_path;
 
@@ -508,6 +488,16 @@ impl FWIConfig {
 }
 
 
+pub fn load_palettes(palettes_defs: &HashMap<String, String>) -> HashMap<String, Box<Palette>> {
+    let mut palettes: HashMap<String, Box<Palette>> = HashMap::new();
+
+    for (name, path) in palettes_defs.iter() {
+        if let Ok(palette) = Palette::load_palette(path) {
+            palettes.insert(name.to_string(), Box::new(palette));
+        }
+    }
+    palettes
+}
 
 /// Reads the PPF file and returns a vector of with (ppf_summer, ppf_winter) tuples
 /// The PPF file is a text file with the following structure:
