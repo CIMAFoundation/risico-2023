@@ -103,12 +103,65 @@ fn run_risico(
 }
 
 fn run_fwi(
-    _model_config: &FWIConfigBuilder,
-    _date: &DateTime<Utc>,
-    _handler: &dyn InputHandler,
-    _palettes: &PaletteMap,
+    model_config: &FWIConfigBuilder,
+    date: &DateTime<Utc>,
+    handler: &dyn InputHandler,
+    palettes: &PaletteMap,
 ) -> Result<(), RISICOError> {
-    unimplemented!()
+    // run risico
+    let config = model_config
+        .build(date, palettes)
+        .map_err(|_| "Could not configure model")?;
+
+    let mut output_writer = config
+        .get_output_writer()
+        .map_err(|_| "Could not configure output writer")?;
+
+    let props = config.get_properties();
+    let mut state = config.new_state();
+
+    let (lats, lons) = config.get_properties().get_coords();
+    let (lats, lons) = (lats.as_slice(), lons.as_slice());
+
+    let current_time = Utc::now();
+    trace!(
+        "Loading input configuration took {} seconds",
+        Utc::now() - current_time
+    );
+
+    let len = state.len();
+    let timeline = handler.get_timeline();
+    for time in timeline {
+        let step_time = Utc::now();
+        info!("Processing {}", time.format("%Y-%m-%d %H:%M"));
+        let input = get_input(handler, &time, len);
+
+        let c = Utc::now();
+        state.update(props, &input);
+        trace!("Updating state took {} seconds", Utc::now() - c);
+
+        if config.should_write_output(&state.time) {
+            let c = Utc::now();
+            let output = state.output(&input);
+            trace!("Generating output took {} seconds", Utc::now() - c);
+
+            let c = Utc::now();
+            if let Err(err) = output_writer.write_output(lats, lons, &output) {
+                warn!("Error writing output: {}", err);
+            }
+            trace!("Writing output took {} seconds", Utc::now() - c);
+        }
+
+        if time.hour() == 0 {
+            let c = Utc::now();
+            if let Err(err) = config.write_warm_state(&state) {
+                warn!("Error writing warm state: {}", err);
+            }
+            trace!("Writing warm state took {} seconds", Utc::now() - c);
+        }
+        trace!("Step took {} seconds", Utc::now() - step_time);
+    }
+    Ok(())
 }
 
 fn get_input_handler(
