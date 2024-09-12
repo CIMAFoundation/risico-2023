@@ -10,25 +10,25 @@ use crate::{
 };
 
 use super::{
-    config::ModelConfig,
+    config::RISICOModelConfig,
     constants::SATELLITE_DATA_SECONDS_VALIDITY,
     functions::{get_output_fn, update_moisture_fn},
 };
 
 #[derive(Debug)]
-pub struct PropertiesElement {
+pub struct RISICOPropertiesElement {
     pub lon: f32,
     pub lat: f32,
     pub slope: f32,
     pub aspect: f32,
     pub ppf_summer: f32,
     pub ppf_winter: f32,
-    pub vegetation: Arc<Vegetation>,
+    pub vegetation: Arc<RISICOVegetation>,
 }
 
 #[allow(non_snake_case)]
 #[derive(Debug)]
-pub struct Vegetation {
+pub struct RISICOVegetation {
     pub id: String,
     pub d0: f32,
     pub d1: f32,
@@ -41,7 +41,7 @@ pub struct Vegetation {
     pub use_ndvi: bool,
 }
 
-impl Default for Vegetation {
+impl Default for RISICOVegetation {
     fn default() -> Self {
         Self {
             id: "default".to_string(),
@@ -60,7 +60,7 @@ impl Default for Vegetation {
 
 #[allow(non_snake_case)]
 #[derive(Debug, Clone)]
-pub struct WarmState {
+pub struct RISICOWarmState {
     pub dffm: f32,
     pub snow_cover: f32,
     pub snow_cover_time: f32,
@@ -72,9 +72,9 @@ pub struct WarmState {
     pub NDWI_TIME: f32,
 }
 
-impl Default for WarmState {
+impl Default for RISICOWarmState {
     fn default() -> Self {
-        WarmState {
+        RISICOWarmState {
             dffm: 40.0,
             snow_cover: 0.0,
             snow_cover_time: 0.0,
@@ -90,7 +90,7 @@ impl Default for WarmState {
 
 #[derive(Debug)]
 #[allow(non_snake_case)]
-pub struct StateElement {
+pub struct RISICOStateElement {
     pub dffm: f32,
     pub snow_cover: f32,
     pub snow_cover_time: f32,
@@ -103,21 +103,21 @@ pub struct StateElement {
 }
 
 #[derive(Debug)]
-pub struct State {
+pub struct RISICOState {
     pub time: DateTime<Utc>,
-    pub data: Array1<StateElement>,
+    pub data: Array1<RISICOStateElement>,
     len: usize,
-    config: ModelConfig,
+    config: RISICOModelConfig,
 }
 
-impl State {
+impl RISICOState {
     #[allow(dead_code, non_snake_case)]
     /// Create a new state.
-    pub fn new(warm_state: &[WarmState], time: &DateTime<Utc>, config: ModelConfig) -> State {
+    pub fn new(warm_state: &[RISICOWarmState], time: &DateTime<Utc>, config: RISICOModelConfig) -> RISICOState {
         let data = Array1::from_vec(
             warm_state
                 .iter()
-                .map(|w| StateElement {
+                .map(|w| RISICOStateElement {
                     dffm: w.dffm,
                     snow_cover: w.snow_cover,
                     snow_cover_time: w.snow_cover_time,
@@ -131,7 +131,7 @@ impl State {
                 .collect(),
         );
 
-        State {
+        RISICOState {
             time: *time,
             // props,
             data,
@@ -232,7 +232,7 @@ impl State {
     }
 
     #[allow(non_snake_case)]
-    fn update_moisture(&mut self, props: &Properties, input: &Input, dt: f32) {
+    fn update_moisture(&mut self, props: &RISICOProperties, input: &Input, dt: f32) {
         let dt = dt.clamp(1.0, 72.0);
 
         Zip::from(&mut self.data)
@@ -245,7 +245,7 @@ impl State {
     }
 
     #[allow(non_snake_case)]
-    pub fn get_output(self: &State, props: &Properties, input: &Input) -> Output {
+    pub fn get_output(self: &RISICOState, props: &RISICOProperties, input: &Input) -> Output {
         let time = &self.time;
 
         let output_data = Zip::from(&self.data)
@@ -259,7 +259,7 @@ impl State {
     }
 
     /// Update the state of the cells.
-    pub fn update(&mut self, props: &Properties, input: &Input) {
+    pub fn update(&mut self, props: &RISICOProperties, input: &Input) {
         let new_time = &input.time;
         let dt = new_time.signed_duration_since(self.time).num_seconds() as f32 / 3600.0;
         self.time = *new_time;
@@ -268,22 +268,22 @@ impl State {
         self.update_moisture(props, input, dt);
     }
 
-    pub fn output(&self, props: &Properties, input: &Input) -> Output {
+    pub fn output(&self, props: &RISICOProperties, input: &Input) -> Output {
         self.get_output(props, input)
     }
 }
 
 #[derive(Debug)]
-pub struct Properties {
-    pub data: Array1<PropertiesElement>,
-    pub vegetations_dict: HashMap<String, Arc<Vegetation>>,
+pub struct RISICOProperties {
+    pub data: Array1<RISICOPropertiesElement>,
+    pub vegetations_dict: HashMap<String, Arc<RISICOVegetation>>,
     pub len: usize,
 }
 
-impl Properties {
+impl RISICOProperties {
     pub fn new(
-        props: CellPropertiesContainer,
-        vegetations_dict: HashMap<String, Arc<Vegetation>>,
+        props: RISICOCellPropertiesContainer,
+        vegetations_dict: HashMap<String, Arc<RISICOVegetation>>,
         ppf_summer: Vec<f32>,
         ppf_winter: Vec<f32>,
     ) -> Self {
@@ -297,12 +297,12 @@ impl Properties {
 
         // }
 
-        let default_veg = Arc::new(Vegetation::default());
-        let data: Array1<PropertiesElement> = props
+        let default_veg = Arc::new(RISICOVegetation::default());
+        let data: Array1<RISICOPropertiesElement> = props
             .vegetations
             .iter()
             .enumerate()
-            .map(|(idx, v)| PropertiesElement {
+            .map(|(idx, v)| RISICOPropertiesElement {
                 lon: props.lons[idx],
                 lat: props.lats[idx],
                 slope: props.slopes[idx],
@@ -328,7 +328,7 @@ impl Properties {
     }
 }
 
-pub struct CellPropertiesContainer {
+pub struct RISICOCellPropertiesContainer {
     pub lons: Vec<f32>,
     pub lats: Vec<f32>,
     pub slopes: Vec<f32>,

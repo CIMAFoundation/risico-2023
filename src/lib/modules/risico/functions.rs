@@ -10,9 +10,9 @@ use crate::{
 };
 
 use super::{
-    config::ModelConfig,
+    config::RISICOModelConfig,
     constants::*,
-    models::{PropertiesElement, StateElement},
+    models::{RISICOPropertiesElement, RISICOStateElement},
 };
 
 ///calculate PPF from the date and the two values
@@ -367,10 +367,10 @@ pub fn index_from_swi(dffm: f32, swi: f32) -> f32 {
 
 #[allow(non_snake_case)]
 pub fn update_moisture_fn(
-    state: &mut StateElement,
-    props: &PropertiesElement,
+    state: &mut RISICOStateElement,
+    props: &RISICOPropertiesElement,
     input_data: &InputElement,
-    config: &ModelConfig,
+    config: &RISICOModelConfig,
     dt: f32,
 ) {
     let veg = &props.vegetation;
@@ -452,10 +452,10 @@ pub fn get_meteo_index(dffm: f32, w_effect: f32) -> f32 {
 
 #[allow(non_snake_case)]
 pub fn get_output_fn(
-    state: &StateElement,
-    props: &PropertiesElement,
+    state: &RISICOStateElement,
+    props: &RISICOPropertiesElement,
     input: &InputElement,
-    config: &ModelConfig,
+    config: &RISICOModelConfig,
     time: &DateTime<Utc>,
 ) -> OutputElement {
     let veg = &props.vegetation;

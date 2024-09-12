@@ -8,7 +8,7 @@ type RosFnType = fn(f32, f32, f32, f32, f32, f32, f32, f32, f32, f32) -> (f32, f
 /// configuration structure for model config
 /// can be used to store functions and constants
 #[derive(Debug)]
-pub struct ModelConfig {
+pub struct RISICOModelConfig {
     pub model_version: String,
 
     pub use_t_effect: bool,
@@ -17,7 +17,7 @@ pub struct ModelConfig {
     ros_fn: RosFnType,
 }
 
-impl ModelConfig {
+impl RISICOModelConfig {
     pub fn new(model_version_str: &str) -> Self {
         let ffmc_no_rain_fn: fn(f32, f32, f32, f32, f32, f32, f32) -> f32;
         let ffmc_rain_fn: fn(f32, f32, f32) -> f32;
@@ -41,7 +41,7 @@ impl ModelConfig {
             }
         }
 
-        ModelConfig {
+        RISICOModelConfig {
             model_version: model_version_str.to_owned(),
             use_t_effect: false,
             ffmc_no_rain_fn,
