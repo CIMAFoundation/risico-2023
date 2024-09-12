@@ -17,8 +17,8 @@ pub fn from_moisture_to_ffmc(moisture: f32) -> f32 {
     FFMC_S3 * ((250.0 - moisture) / (FFMC_S1 + moisture))
 }
 
-pub fn moisture_rain_effect(moisture: f32, rain12: f32) -> f32 {
-    let rain_eff: f32 = rain12 - FFMC_MIN_RAIN;
+pub fn moisture_rain_effect(moisture: f32, rain24: f32) -> f32 {
+    let rain_eff: f32 = rain24 - FFMC_MIN_RAIN;
     let mut moisture_new: f32 = moisture
         + FFMC_R1
             * rain_eff
@@ -35,13 +35,13 @@ pub fn moisture_rain_effect(moisture: f32, rain12: f32) -> f32 {
     moisture_new
 }
 
-pub fn update_moisture(moisture: f32, rain12: f32, hum: f32, temp: f32, w_speed: f32) -> f32 {
+pub fn update_moisture(moisture: f32, rain24: f32, hum: f32, temp: f32, w_speed: f32) -> f32 {
     // conversion from m/h into km/h - required by the FFMC formula
     let ws: f32 = w_speed / 1000.0;
     let mut moisture_new: f32 = moisture;
-    if rain12 > FFMC_MIN_RAIN {
-        // rain12 effect
-        moisture_new = moisture_rain_effect(moisture, rain12);
+    if rain24 > FFMC_MIN_RAIN {
+        // rain24 effect
+        moisture_new = moisture_rain_effect(moisture, rain24);
     }
     // no-rain conditions
     let emc_dry: f32 = FFMC_A1D * f32::powf(hum, FFMC_A2D)
@@ -110,8 +110,8 @@ fn get_dmc_param(date: &DateTime<Utc>, latitude: f32) -> f32 {
     }
 }
 
-pub fn dmc_rain_effect(dmc: f32, rain12: f32) -> f32 {
-    let re: f32 = DMC_R1 * rain12 - DMC_R2;
+pub fn dmc_rain_effect(dmc: f32, rain24: f32) -> f32 {
+    let re: f32 = DMC_R1 * rain24 - DMC_R2;
     let b: f32 = if dmc <= DMC_A1 {
         100.0 / (DMC_R3 + DMC_R4 * dmc)
     } else if dmc > DMC_A2 {
@@ -130,11 +130,11 @@ pub fn dmc_rain_effect(dmc: f32, rain12: f32) -> f32 {
     dmc_new
 }
 
-pub fn update_dmc(dmc: f32, rain12: f32, temp: f32, hum: f32, l_e: f32) -> f32 {
+pub fn update_dmc(dmc: f32, rain24: f32, temp: f32, hum: f32, l_e: f32) -> f32 {
     let mut dmc_new: f32 = dmc;
-    if rain12 > DMC_MIN_RAIN {
+    if rain24 > DMC_MIN_RAIN {
         // rain effect
-        dmc_new = dmc_rain_effect(dmc, rain12);
+        dmc_new = dmc_rain_effect(dmc, rain24);
     }
     if temp >= DMC_MIN_TEMP {
         // temperature effect
@@ -187,19 +187,19 @@ fn get_dc_param(date: &DateTime<Utc>, latitude: f32) -> f32 {
     }
 }
 
-pub fn dc_rain_effect(dc: f32, rain12: f32) -> f32 {
-    let rd: f32 = DC_R1 * rain12 - DC_R2;
+pub fn dc_rain_effect(dc: f32, rain24: f32) -> f32 {
+    let rd: f32 = DC_R1 * rain24 - DC_R2;
     let q0: f32 = DC_R3 * f32::exp(-dc / DC_R4);
     let qr: f32 = q0 + DC_R5 * rd;
     let dc_new: f32 = DC_R4 * f32::ln(DC_R3 / qr);
     dc_new
 }
 
-pub fn update_dc(dc: f32, rain12: f32, temp: f32, l_f: f32) -> f32 {
+pub fn update_dc(dc: f32, rain24: f32, temp: f32, l_f: f32) -> f32 {
     let mut dc_new = dc;
-    if rain12 > DC_MIN_RAIN {
+    if rain24 > DC_MIN_RAIN {
         // rain effect
-        dc_new = dc_rain_effect(dc, rain12);
+        dc_new = dc_rain_effect(dc, rain24);
     }
     let v: f32 = DC_T1 * (temp + DC_T2) + l_f;
     if v > DC_MIN_TEMP {
@@ -289,17 +289,30 @@ pub fn update_state_fn(
         return;
     }
 
+    // update rain history
+    let mut rain_history_new: Vec<(DateTime<Utc>, f32)> = state.rain_history.clone();
+    rain_history_new.push((*time, rain));
+    // keep only the last 24 hours
+    let rain_history: Vec<(DateTime<Utc>, f32)> = rain_history_new
+        .iter()
+        .filter(|(t, _)| time.signed_duration_since(*t).num_hours() <= 24)
+        .map(|(t, r)| (*t, *r))
+        .collect();
+    // compute total rain in the last 24 hours
+    let rain24: f32 = rain_history.iter().map(|(_, r)| r).sum();
+    state.rain_history = rain_history;
+
     // FFMC MODULE
     // convert ffmc to moisture scale [0, 250]
     let mut moisture: f32 = from_ffmc_to_moisture(state.ffmc);
-    moisture = config.moisture(moisture, rain, humidity, temperature, wind_speed);
+    moisture = config.moisture(moisture, rain24, humidity, temperature, wind_speed);
     // convert to ffmc scale and update state
     state.ffmc = from_moisture_to_ffmc(moisture);
 
     let l_e = get_dmc_param(time, props.lat);
-    state.dmc = config.dmc(state.dmc, rain, temperature, humidity, l_e);
+    state.dmc = config.dmc(state.dmc, rain24, temperature, humidity, l_e);
     let l_f = get_dc_param(time, props.lat);
-    state.dc = config.dc(state.dc, rain, temperature, l_f);
+    state.dc = config.dc(state.dc, rain24, temperature, l_f);
 }
 
 // COMPUTE OUTPUTS

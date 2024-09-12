@@ -53,6 +53,7 @@ pub struct FWIWarmState {
     pub ffmc: f32,
     pub dmc: f32,
     pub dc: f32,
+    pub rain_history: Vec<(DateTime<Utc>, f32)>
 }
 
 impl Default for FWIWarmState {
@@ -61,6 +62,7 @@ impl Default for FWIWarmState {
             ffmc: 85.0,
             dmc: 6.0,
             dc: 15.0,
+            rain_history: vec![]
         }
     }
 }
@@ -72,6 +74,7 @@ pub struct FWIStateElement {
     pub ffmc: f32,
     pub dmc: f32,
     pub dc: f32,
+    pub rain_history: Vec<(DateTime<Utc>, f32)>
 }
 
 #[derive(Debug)]
@@ -93,6 +96,7 @@ impl FWIState {
                     ffmc: w.ffmc,
                     dmc: w.dmc,
                     dc: w.dc,
+                    rain_history: w.rain_history.clone()
                 })
                 .collect(),
         );

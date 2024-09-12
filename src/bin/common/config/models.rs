@@ -513,7 +513,6 @@ impl FWIConfig {
             panic!("All properties must have the same length");
         }
 
-        // DA MODIFICARE
         let (warm_state, warm_state_time) = FWIConfig::read_warm_state(&config_defs.warm_state_path, date)
             .unwrap_or((
                 vec![FWIWarmState::default(); n_cells],
@@ -669,11 +668,25 @@ impl FWIConfig {
             let dc = components[2]
                 .parse::<f32>()
                 .unwrap_or_else(|_| panic!("Could not parse dffm from {}", line));
+            let rain_history = components[3]
+                .split(",")
+                .map(|rain| {
+                    let rain_parts: Vec<&str> = rain.split(":").collect();
+                    let date = rain_parts[0]
+                        .parse::<DateTime<Utc>>()
+                        .unwrap_or_else(|_| panic!("Could not parse rain date from {}", rain));
+                    let value = rain_parts[1]
+                        .parse::<f32>()
+                        .unwrap_or_else(|_| panic!("Could not parse rain value from {}", rain));
+                    (date, value)
+                })
+                .collect();
 
             warm_state.push(FWIWarmState {
                 ffmc,
                 dmc,
-                dc
+                dc,
+                rain_history
             });
         }
 
@@ -694,10 +707,11 @@ impl FWIConfig {
             let ffmc = state.ffmc;
             let dmc = state.dmc;
             let dc = state.dc;
+            let rain_history = state.rain_history.clone();
 
             let line = format!(
-                "{}\t{}\t{}",
-                ffmc, dmc, dc
+                "{}\t{}\t{}\t{}",
+                ffmc, dmc, dc, rain_history.iter().map(|(date, value)| format!("{}:{}", date, value)).collect::<Vec<String>>().join(",")
             );
             writeln!(warm_state_writer, "{}", line)
                 .map_err(|error| format!("error writing to {}, {}", &warm_state_name, error))?;
