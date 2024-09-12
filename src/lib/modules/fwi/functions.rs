@@ -322,7 +322,7 @@ pub fn get_output_fn(
     input: &InputElement,
     config: &FWIModelConfig,
 ) -> OutputElement {
-    let rain = input.rain;
+    // let rain = input.rain;
     let humidity = input.humidity;
     let temperature = input.temperature;
     let wind_speed = input.wind_speed;
@@ -330,6 +330,9 @@ pub fn get_output_fn(
     let ffmc = state.ffmc;
     let dmc = state.dmc;
     let dc = state.dc;
+
+    // the rain information to save in output is the total rain in the last 24 hours
+    let rain24 = state.rain_history.iter().map(|(_, r)| r).sum();
 
     // compute fine fuel moisture in [0, 100]
     let moisture = from_ffmc_to_moisture(ffmc);
@@ -350,7 +353,7 @@ pub fn get_output_fn(
         bui,
         fwi,
         ifwi,
-        rain,
+        rain: rain24,
         humidity,
         temperature,
         wind_speed,
