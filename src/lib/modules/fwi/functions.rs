@@ -1,6 +1,5 @@
-use core::time;
-
 use chrono::{DateTime, Datelike, Utc};
+use itertools::izip;
 
 use crate::models::{input::InputElement, output::OutputElement};
 
@@ -288,26 +287,28 @@ pub fn update_state_fn(
         || wind_speed == NODATAVAL
     {
         // keep current humidity state if we don't have all the data
-        let last_ffmc = state.ffmc_history.last().map(|(_, h)| *h).unwrap_or(FFMC_INIT);
-        let last_dmc = state.dmc_history.last().map(|(_, h)| *h).unwrap_or(DMC_INIT);
-        let last_dc = state.dc_history.last().map(|(_, h)| *h).unwrap_or(DC_INIT);
-
-        state.add_value("ffmc", time, last_ffmc);
-        state.add_value("dmc", time, last_dmc);
-        state.add_value("dc", time, last_dc);
+        let last_ffmc = state.ffmc.iter().map(|&x| x).last().unwrap_or(FFMC_INIT);
+        let last_dmc = state.dmc.iter().map(|&x| x).last().unwrap_or(DMC_INIT);
+        let last_dc = state.dc.iter().map(|&x| x).last().unwrap_or(DC_INIT);
+        let rain_nan = std::f32::NAN;
+        state.update(time, last_ffmc, last_dmc, last_dc, rain_nan);
 
         return;
     }
 
-    // update rain history
-    state.add_value("rain", time, rain);
-    // get last 24 hours of rain and aggregate
-    let rain24 = state.get_24h("rain", time).iter().map(|(_, r)| r).sum();
+    // add last rain in input, get 24 hours of rain and aggregate
+    let (mut dates , _, _, _, mut history_rain) = state.get_time_window(time);
+    dates.push(*time);
+    history_rain.push(rain);
+    let rain24 = izip!(
+        dates.iter(),
+        history_rain.iter())
+    .filter(|(t, _)| time.signed_duration_since(**t).num_hours() <= TIME_WINDOW)
+    .filter(|(_, r)| !r.is_nan())
+    .map(|(_, r)| *r).sum();
 
-    // get moisture values of 24 hours ago
-    let ffmc_24h_ago: f32 = state.get_24h("ffmc", time).iter().map(|(_, r)| *r).next().unwrap_or(FFMC_INIT);
-    let dmc_24h_ago: f32 = state.get_24h("dmc", time).iter().map(|(_, r)| *r).next().unwrap_or(DMC_INIT);
-    let dc_24h_ago: f32 = state.get_24h("dc", time).iter().map(|(_, r)| *r).next().unwrap_or(DC_INIT);
+    // get moisture values of 24 hours ago - first element
+    let (ffmc_24h_ago, dmc_24h_ago, dc_24h_ago) = state.get_initial_moisture(time);
 
     // FFMC MODULE
     // convert ffmc to moisture scale [0, 250]
@@ -325,9 +326,7 @@ pub fn update_state_fn(
     let new_dc = config.dc(dc_24h_ago, rain24, temperature, l_f);
 
     // update history of states
-    state.add_value("ffmc", time, new_ffmc);
-    state.add_value("dmc", time, new_dmc);
-    state.add_value("dc", time, new_dc);
+    state.update(time, new_ffmc, new_dmc, new_dc, rain);
 
 }
 
@@ -338,17 +337,18 @@ pub fn get_output_fn(
     input: &InputElement,
     config: &FWIModelConfig,
 ) -> OutputElement {
-    // let rain = input.rain;
-    // the rain information to save in output is the total rain in the last 24 hours
-    let rain24 = state.rain_history.iter().map(|(_, r)| r).sum();
+    // let rain = input.rain;  // DEPRECATED
+    // the rain information to save in output is the total rain in the state time window
+    let rain_tot: f32 = state.rain.iter().filter(|&r| !r.is_nan()).sum();
+    
     let humidity = input.humidity;
     let temperature = input.temperature;
     let wind_speed = input.wind_speed;
 
-    // get last moisture values
-    let ffmc_last = state.ffmc_history.last().map(|(_, f)| *f).unwrap_or(FFMC_INIT);
-    let dmc_last = state.dmc_history.last().map(|(_, d)| *d).unwrap_or(DMC_INIT);
-    let dc_last = state.dc_history.last().map(|(_, d)| *d).unwrap_or(DC_INIT);
+    // get last moisture values to save in output
+    let ffmc_last = state.ffmc.iter().map(|&x| x).last().unwrap_or(FFMC_INIT);
+    let dmc_last = state.dmc.iter().map(|&x| x).last().unwrap_or(DMC_INIT);
+    let dc_last = state.dc.iter().map(|&x| x).last().unwrap_or(DC_INIT);
 
     // compute fine fuel moisture in [0, 100]
     let moisture = from_ffmc_to_moisture(ffmc_last);
@@ -369,7 +369,7 @@ pub fn get_output_fn(
         bui,
         fwi,
         ifwi,
-        rain: rain24,
+        rain: rain_tot,
         humidity,
         temperature,
         wind_speed,

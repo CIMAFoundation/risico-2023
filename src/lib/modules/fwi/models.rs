@@ -1,6 +1,7 @@
 use crate::models::{input::Input, output::Output};
 use chrono::prelude::*;
 use ndarray::{Array1, Zip};
+use itertools::izip;
 
 use super::{
     constants::*,
@@ -51,20 +52,22 @@ impl FWIProperties {
 #[allow(non_snake_case)]
 #[derive(Debug, Clone)]
 pub struct FWIWarmState {
-    pub ffmc_history: Vec<(DateTime<Utc>, f32)>,
-    pub dmc_history: Vec<(DateTime<Utc>, f32)>,
-    pub dc_history: Vec<(DateTime<Utc>, f32)>,
-    pub rain_history: Vec<(DateTime<Utc>, f32)>
+    pub dates: Vec<DateTime<Utc>>,
+    pub ffmc: Vec<f32>,
+    pub dmc: Vec<f32>,
+    pub dc: Vec<f32>,
+    pub rain: Vec<f32>
 }
 
 impl Default for FWIWarmState {
     fn default() -> Self {
         FWIWarmState 
         {
-            ffmc_history: vec![],
-            dmc_history: vec![],
-            dc_history: vec![],
-            rain_history: vec![],
+            dates: vec![],
+            ffmc: vec![],
+            dmc: vec![],
+            dc: vec![],
+            rain: vec![],
         }
     }
 }
@@ -73,64 +76,58 @@ impl Default for FWIWarmState {
 #[derive(Debug)]
 #[allow(non_snake_case)]
 pub struct FWIStateElement {
-    pub ffmc_history: Vec<(DateTime<Utc>, f32)>,
-    pub dmc_history: Vec<(DateTime<Utc>, f32)>,
-    pub dc_history: Vec<(DateTime<Utc>, f32)>,
-    pub rain_history: Vec<(DateTime<Utc>, f32)>
+    pub dates: Vec<DateTime<Utc>>,
+    pub ffmc: Vec<f32>,
+    pub dmc: Vec<f32>,
+    pub dc: Vec<f32>,
+    pub rain: Vec<f32>
 }
 
 impl FWIStateElement {
 
-    pub fn get_24h(&self, variable: &str, time: &DateTime<Utc>) -> Vec<(DateTime<Utc>, f32)> {
-        match variable {
-            "ffmc" => self.ffmc_history
-                        .iter()
-                        .filter(|(t, _)| time.signed_duration_since(*t).num_hours() <= TIME_STEP)
-                        .map(|(t, r)| (*t, *r))
-                        .collect(),
-            "dmc" => self.dmc_history
-                        .iter()
-                        .filter(|(t, _)| time.signed_duration_since(*t).num_hours() <= TIME_STEP)
-                        .map(|(t, r)| (*t, *r))
-                        .collect(),
-            "dc" => self.dc_history
-                        .iter()
-                        .filter(|(t, _)| time.signed_duration_since(*t).num_hours() <= TIME_STEP)
-                        .map(|(t, r)| (*t, *r))
-                        .collect(),
-            "rain" => self.rain_history
-                        .iter()
-                        .filter(|(t, _)| time.signed_duration_since(*t).num_hours() <= TIME_STEP)
-                        .map(|(t, r)| (*t, *r))
-                        .collect(),
-            _ => Vec::new(),
-        }
+    pub fn get_time_window(&self, time: &DateTime<Utc>) -> (Vec<DateTime<Utc>>, Vec<f32>, Vec<f32>, Vec<f32>, Vec<f32>) {
+        // zip with dates and take only moistures where history < 24 hours
+        let combined = izip!(
+            self.dates.iter(),
+            self.ffmc.iter(),
+            self.dmc.iter(),
+            self.dc.iter(),
+            self.rain.iter())
+        .filter(|(t, _, _, _, _)| time.signed_duration_since(**t).num_hours() <= TIME_WINDOW)
+        .map(|(t, f, d, c, r)| (*t, *f, *d, *c, *r))
+        .collect::<Vec<_>>();
+        let dates: Vec<DateTime<Utc>> = combined.iter().map(|(t, _, _, _, _)| *t).collect();
+        let ffmc: Vec<f32> =  combined.iter().map(|(_, f, _, _, _)| *f).collect();
+        let dmc: Vec<f32> = combined.iter().map(|(_, _, d, _, _)| *d).collect();
+        let dc: Vec<f32> =  combined.iter().map(|(_, _, _, c, _)| *c).collect();
+        let rain: Vec<f32> = combined.iter().map(|(_, _, _, _, r)| *r).collect();
+        (dates, ffmc , dmc, dc, rain)
     }
 
-    pub fn add_value(&mut self, variable: &str, time: &DateTime<Utc>, value: f32) {
-        match variable {
-            "ffmc" => {
-                self.ffmc_history.push((*time, value));
-                // Remove values older than 24 hours
-                self.ffmc_history.retain(|(t, _)| time.signed_duration_since(*t).num_hours() <= TIME_STEP);
-            },
-            "dmc" => {
-                self.dmc_history.push((*time, value));
-                // Remove values older than 24 hours
-                self.dmc_history.retain(|(t, _)| time.signed_duration_since(*t).num_hours() <= TIME_STEP);
-            },
-            "dc" => {
-                self.dc_history.push((*time, value));
-                // Remove values older than 24 hours
-                self.dc_history.retain(|(t, _)| time.signed_duration_since(*t).num_hours() <= TIME_STEP);
-            },
-            "rain" => {
-                self.rain_history.push((*time, value));
-                // Remove values older than 24 hours
-                self.rain_history.retain(|(t, _)| time.signed_duration_since(*t).num_hours() <= TIME_STEP);
-            },
-            _ => (),
-        }
+    pub fn get_initial_moisture(&self, time: &DateTime<Utc>) -> (f32, f32, f32) {
+        // get the initial value of the moisture variables for computation
+        let (_, ffmc_tw, dmc_tw, dc_tw, _) = self.get_time_window(time);
+        let ffmc_initial = ffmc_tw.first().unwrap_or(&FFMC_INIT).clone();
+        let dmc_initial = dmc_tw.first().unwrap_or(&DMC_INIT).clone();
+        let dc_initial = dc_tw.first().unwrap_or(&DC_INIT).clone();
+        (ffmc_initial, dmc_initial, dc_initial)
+    }
+
+    pub fn update(&mut self, time: &DateTime<Utc>, ffmc: f32, dmc: f32, dc: f32, rain: f32) {
+        // add new values
+        self.dates.push(*time);
+        self.ffmc.push(ffmc);
+        self.dmc.push(dmc);
+        self.dc.push(dc);
+        self.rain.push(rain);
+        // get the time window
+        let (new_dates, new_ffmc, new_dmc, new_dc, new_rain) = self.get_time_window(time);
+        // update the values
+        self.dates = new_dates;
+        self.ffmc = new_ffmc;
+        self.dmc = new_dmc;
+        self.dc = new_dc;
+        self.rain = new_rain;
     }
 
 }
@@ -151,10 +148,11 @@ impl FWIState {
             warm_state
                 .iter()
                 .map(|w| FWIStateElement {
-                    ffmc_history: w.ffmc_history.clone(),
-                    dmc_history: w.dmc_history.clone(),
-                    dc_history: w.dc_history.clone(),
-                    rain_history: w.rain_history.clone()
+                    dates: w.dates.clone(),
+                    ffmc: w.ffmc.clone(),
+                    dmc: w.dmc.clone(),
+                    dc: w.dc.clone(),
+                    rain: w.rain.clone()
                 })
                 .collect(),
         );
