@@ -4,6 +4,8 @@ pub const FFMC_INIT: f32 = 85.0;
 pub const DMC_INIT: f32 = 6.0;
 pub const DC_INIT: f32 = 15.0;
 
+pub const TIME_STEP: i64 = 24;  // hours
+
 // FFMC CONSTANTS
 pub const FFMC_S1: f32 = 147.2;
 pub const FFMC_S2: f32 = 59.4688;

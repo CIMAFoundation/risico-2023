@@ -3,6 +3,7 @@ use chrono::prelude::*;
 use ndarray::{Array1, Zip};
 
 use super::{
+    constants::*,
     config::FWIModelConfig,
     functions::{get_output_fn, update_state_fn},
 };
@@ -78,6 +79,61 @@ pub struct FWIStateElement {
     pub rain_history: Vec<(DateTime<Utc>, f32)>
 }
 
+impl FWIStateElement {
+
+    pub fn get_24h(&self, variable: &str, time: &DateTime<Utc>) -> Vec<(DateTime<Utc>, f32)> {
+        match variable {
+            "ffmc" => self.ffmc_history
+                        .iter()
+                        .filter(|(t, _)| time.signed_duration_since(*t).num_hours() <= TIME_STEP)
+                        .map(|(t, r)| (*t, *r))
+                        .collect(),
+            "dmc" => self.dmc_history
+                        .iter()
+                        .filter(|(t, _)| time.signed_duration_since(*t).num_hours() <= TIME_STEP)
+                        .map(|(t, r)| (*t, *r))
+                        .collect(),
+            "dc" => self.dc_history
+                        .iter()
+                        .filter(|(t, _)| time.signed_duration_since(*t).num_hours() <= TIME_STEP)
+                        .map(|(t, r)| (*t, *r))
+                        .collect(),
+            "rain" => self.rain_history
+                        .iter()
+                        .filter(|(t, _)| time.signed_duration_since(*t).num_hours() <= TIME_STEP)
+                        .map(|(t, r)| (*t, *r))
+                        .collect(),
+            _ => Vec::new(),
+        }
+    }
+
+    pub fn add_value(&mut self, variable: &str, time: &DateTime<Utc>, value: f32) {
+        match variable {
+            "ffmc" => {
+                self.ffmc_history.push((*time, value));
+                // Remove values older than 24 hours
+                self.ffmc_history.retain(|(t, _)| time.signed_duration_since(*t).num_hours() <= TIME_STEP);
+            },
+            "dmc" => {
+                self.dmc_history.push((*time, value));
+                // Remove values older than 24 hours
+                self.dmc_history.retain(|(t, _)| time.signed_duration_since(*t).num_hours() <= TIME_STEP);
+            },
+            "dc" => {
+                self.dc_history.push((*time, value));
+                // Remove values older than 24 hours
+                self.dc_history.retain(|(t, _)| time.signed_duration_since(*t).num_hours() <= TIME_STEP);
+            },
+            "rain" => {
+                self.rain_history.push((*time, value));
+                // Remove values older than 24 hours
+                self.rain_history.retain(|(t, _)| time.signed_duration_since(*t).num_hours() <= TIME_STEP);
+            },
+            _ => (),
+        }
+    }
+
+}
 
 #[derive(Debug)]
 pub struct FWIState {
