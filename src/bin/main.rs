@@ -43,7 +43,7 @@ struct Args {
 fn run_risico(
     model_config: &RISICOConfigBuilder,
     date: &DateTime<Utc>,
-    handler: &dyn InputHandler,
+    handler: &mut dyn InputHandler,
     palettes: &PaletteMap,
 ) -> Result<(), RISICOError> {
     // run risico
@@ -60,6 +60,8 @@ fn run_risico(
 
     let (lats, lons) = config.get_properties().get_coords();
     let (lats, lons) = (lats.as_slice(), lons.as_slice());
+
+    handler.set_coordinates(lats, lons).expect("Should set coordinates");
 
     let current_time = Utc::now();
     trace!(
@@ -105,7 +107,7 @@ fn run_risico(
 fn run_fwi(
     model_config: &FWIConfigBuilder,
     date: &DateTime<Utc>,
-    handler: &dyn InputHandler,
+    handler: &mut dyn InputHandler,
     palettes: &PaletteMap,
 ) -> Result<(), RISICOError> {
     // run risico
@@ -122,6 +124,8 @@ fn run_fwi(
 
     let (lats, lons) = config.get_properties().get_coords();
     let (lats, lons) = (lats.as_slice(), lons.as_slice());
+
+    handler.set_coordinates(lats, lons).expect("Should set coordinates");
 
     let current_time = Utc::now();
     trace!(
@@ -227,19 +231,19 @@ fn main() -> Result<(), Box<dyn Error>> {
     for model_config in &configs.models {
         let start_time = Utc::now();
         // check if input_path is a file or a directory
-        let input_handler = get_input_handler(&input_path_str, &configs)?;
+        let mut input_handler = get_input_handler(&input_path_str, &configs)?;
 
         let model_run = match model_config {
             ConfigBuilderType::FWI(model_config) => run_fwi(
                 model_config,
                 &date,
-                input_handler.as_ref(),
+                input_handler.as_mut(),
                 &configs.palettes,
             ),
             ConfigBuilderType::RISICO(model_config) => run_risico(
                 model_config,
                 &date,
-                input_handler.as_ref(),
+                input_handler.as_mut(),
                 &configs.palettes,
             ),
         };
