@@ -13,13 +13,13 @@
                     "build",
                     "--bin",
                     "risico-2023",
-                    "--features=build-binary,static_deps",
+                    // "--features=build-binary,static_deps",
                 ]
             },
             "args": [
-                "202408160000",
-                "/opt/risico/RISICO2023/configuration.txt",
-                "/opt/risico/RISICO2023/INPUT-NC/ALL"
+                "202005010000",
+                "../test_risico2023/fwi/configuration.yaml",
+                "../test_risico2023/fwi/INPUT/202005010000/input.txt",
             ],
             "env": {
                 "RUST_LOG": "debug",

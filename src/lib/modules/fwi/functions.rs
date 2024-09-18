@@ -290,9 +290,9 @@ pub fn update_state_fn(
         let last_ffmc = state.ffmc.iter().map(|&x| x).last().unwrap_or(FFMC_INIT);
         let last_dmc = state.dmc.iter().map(|&x| x).last().unwrap_or(DMC_INIT);
         let last_dc = state.dc.iter().map(|&x| x).last().unwrap_or(DC_INIT);
-        let rain_nan = std::f32::NAN;
+        let rain_nan = std::f32::NAN;  // add NaN to rain history
+        // update state
         state.update(time, last_ffmc, last_dmc, last_dc, rain_nan);
-
         return;
     }
 
@@ -307,7 +307,7 @@ pub fn update_state_fn(
     .filter(|(_, r)| !r.is_nan())
     .map(|(_, r)| *r).sum();
 
-    // get moisture values of 24 hours ago - first element
+    // get moisture values to start computation - initial moisture values on the time window
     let (ffmc_24h_ago, dmc_24h_ago, dc_24h_ago) = state.get_initial_moisture(time);
 
     // FFMC MODULE
