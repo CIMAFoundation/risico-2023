@@ -662,7 +662,8 @@ impl FWIConfig {
             let dates = components[0]
                 .split(",")
                 .map(|date| {
-                    date.parse::<DateTime<Utc>>()
+                    NaiveDateTime::parse_from_str(date, "%Y%m%d%H%M")
+                    .map(|naive| DateTime::from_naive_utc_and_offset(naive, Utc))
                         .unwrap_or_else(|_| panic!("Could not parse date from {}", date))
                 })
                 .collect();
