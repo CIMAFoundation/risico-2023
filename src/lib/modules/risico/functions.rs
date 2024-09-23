@@ -514,6 +514,8 @@ pub fn get_output_fn(
         NODATAVAL
     };
 
+    let wind_speed_out = wind_speed / 3600.0; // convert to m/s
+
     OutputElement {
         V: ros,
         W: wind_effect,
@@ -521,7 +523,7 @@ pub fn get_output_fn(
         I: intensity,
         temperature,
         humidity,
-        wind_speed,
+        wind_speed: wind_speed_out,
         wind_dir,
         rain,
         snow_cover,

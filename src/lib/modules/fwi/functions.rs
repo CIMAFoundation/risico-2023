@@ -359,6 +359,8 @@ pub fn get_output_fn(
 
     let ifwi = compute_ifwi(fwi);
 
+    let wind_speed_out = wind_speed / 3600.0; // convert from m/h to m/s
+
     OutputElement {
         ffmc: ffmc_last,
         dffm: dffm_last,
@@ -371,7 +373,7 @@ pub fn get_output_fn(
         rain: rain_tot,
         humidity,
         temperature,
-        wind_speed,
+        wind_speed: wind_speed_out,
         ..OutputElement::default()
     }
 }
