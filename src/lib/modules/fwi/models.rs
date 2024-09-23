@@ -101,7 +101,7 @@ impl FWIStateElement {
         let dmc: Vec<f32> = combined.iter().map(|(_, _, d, _, _)| *d).collect();
         let dc: Vec<f32> =  combined.iter().map(|(_, _, _, c, _)| *c).collect();
         let rain: Vec<f32> = combined.iter().map(|(_, _, _, _, r)| *r).collect();
-        (dates, ffmc , dmc, dc, rain)
+        (dates, ffmc, dmc, dc, rain)
     }
 
     pub fn get_initial_moisture(&self, time: &DateTime<Utc>) -> (f32, f32, f32) {

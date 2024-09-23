@@ -94,10 +94,10 @@ impl FWIModelConfig {
     #[allow(non_snake_case)]
     pub fn isi(
         &self,
-        ffmc: f32,
+        moisture: f32,
         wind_speed: f32
     ) -> f32 {
-        (self.isi_fn)(ffmc, wind_speed)
+        (self.isi_fn)(moisture, wind_speed)
     }
 
     #[allow(non_snake_case)]

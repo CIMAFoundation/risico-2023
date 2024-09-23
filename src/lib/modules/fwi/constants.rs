@@ -66,7 +66,8 @@ pub const DC_R1: f32 = 0.83;
 pub const DC_R2: f32 = 1.27;
 pub const DC_R3: f32 = 800.0;
 pub const DC_R4: f32 = 400.0;
-pub const DC_R5: f32 = 3.837;
+pub const DC_R5: f32 = 3.937;
+// temperature effect
 pub const DC_MIN_TEMP: f32 = 0.0;
 pub const DC_T1: f32 = 0.36;
 pub const DC_T2: f32 = 2.8;
@@ -97,9 +98,7 @@ pub const FWI_A6: f32 = -0.023;
 pub const FWI_A7: f32 = 2.72;
 pub const FWI_A8: f32 = 0.434;
 pub const FWI_A9: f32 = 0.647;
-pub const FWI_A10: f32 = 0.98;
-pub const FWI_A11: f32 = 1.546;
-pub const FWI_A12: f32 = 0.289;
+
 
 pub const IFWI_A1: f32 = 0.98;
 pub const IFWI_A2: f32 = 1.546;

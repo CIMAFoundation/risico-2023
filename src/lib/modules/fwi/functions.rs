@@ -15,7 +15,7 @@ pub fn from_ffmc_to_moisture(ffmc: f32) -> f32 {
 }
 
 pub fn from_moisture_to_ffmc(moisture: f32) -> f32 {
-    FFMC_S3 * ((250.0 - moisture) / (FFMC_S1 + moisture))
+    FFMC_S3 * (250.0 - moisture) / (FFMC_S1 + moisture)
 }
 
 pub fn moisture_rain_effect(moisture: f32, rain24: f32) -> f32 {
@@ -65,7 +65,7 @@ pub fn update_moisture(moisture: f32, rain24: f32, hum: f32, temp: f32, w_speed:
                 * f32::powf(ws, FFMC_B4)
                 * (1.0 - f32::powf((100.0 - hum) / 100.0, FFMC_B5));
         let k_wet: f32 = FFMC_B6 * k0_wet * f32::exp(FFMC_B7 * temp);
-        moisture_new = emc_wet + (moisture_new - emc_wet) * f32::powf(10.0, -k_wet);
+        moisture_new = emc_wet - (emc_wet - moisture_new) * f32::powf(10.0, -k_wet);
     }
     // limit moisture to [0, 250]
     moisture_new = f32::max(0.0, f32::min(250.0, moisture_new));
@@ -122,7 +122,7 @@ pub fn dmc_rain_effect(dmc: f32, rain24: f32) -> f32 {
         DMC_R5 - DMC_R6 * f32::ln(dmc)
     };
     let m0: f32 = DMC_R9 + f32::exp(-(dmc - DMC_R10) / DMC_R11);
-    let mr: f32 = m0 + 1000.0 * (re / (DMC_R12 + b * re));
+    let mr: f32 = m0 + 1000.0 * re / (DMC_R12 + b * re);
     let mut dmc_new: f32 = DMC_R10 - DMC_R11 * f32::ln(mr - DMC_R9);
     // clip to positive values
     if dmc_new < 0.0 {
@@ -154,9 +154,9 @@ fn get_dc_param(date: &DateTime<Utc>, latitude: f32) -> f32 {
     if latitude >= 0.0 {
         // North emisphere
         match date.month() {
-            1 => 1.6,
-            2 => 1.6,
-            3 => 1.6,
+            1 => -1.6,
+            2 => -1.6,
+            3 => -1.6,
             4 => 0.9,
             5 => 3.8,
             6 => 5.8,
@@ -164,8 +164,8 @@ fn get_dc_param(date: &DateTime<Utc>, latitude: f32) -> f32 {
             8 => 5.0,
             9 => 2.4,
             10 => 0.4,
-            11 => 1.6,
-            12 => 1.6,
+            11 => -1.6,
+            12 => -1.6,
             _ => 0.0,
         }
     } else {
@@ -175,11 +175,11 @@ fn get_dc_param(date: &DateTime<Utc>, latitude: f32) -> f32 {
             2 => 5.0,
             3 => 2.4,
             4 => 0.4,
-            5 => 1.6,
-            6 => 1.6,
-            7 => 1.6,
-            8 => 1.6,
-            9 => 1.6,
+            5 => -1.6,
+            6 => -1.6,
+            7 => -1.6,
+            8 => -1.6,
+            9 => -1.6,
             10 => 0.9,
             11 => 3.8,
             12 => 5.8,
@@ -215,25 +215,24 @@ pub fn update_dc(dc: f32, rain24: f32, temp: f32, l_f: f32) -> f32 {
 }
 
 // ISI MODULE
-pub fn compute_isi(ffmc: f32, w_speed: f32) -> f32 {
+pub fn compute_isi(moisture: f32, w_speed: f32) -> f32 {
     // conversion from m/h into km/h - required by the ISI formula
     let ws: f32 = w_speed / 1000.0;
-    let moisture: f32 = from_ffmc_to_moisture(ffmc);
     let fw: f32 = f32::exp(ISI_A0 * ws);
     let ff: f32 =
-        ISI_A1 * f32::exp(ISI_A2 * moisture) * (1.0 + f32::powf(moisture, ISI_A3) / ISI_A4 * 10e7);
+        ISI_A1 * f32::exp(ISI_A2 * moisture) * (1.0 + f32::powf(moisture, ISI_A3) / (ISI_A4 * 10e7));
     let isi: f32 = ISI_A5 * fw * ff;
     isi
 }
 
 // BUI MODULE
 pub fn compute_bui(dmc: f32, dc: f32) -> f32 {
-    let bui: f32 = if dmc == 0.0 {
+    let bui: f32 = if dmc <= 0.0 {
         0.0
-    } else if dmc <= BUI_A1 * dc {
-        BUI_A2 * ((dmc * dc) / (dmc + BUI_A1 * dc))
+    } else if dmc <= (BUI_A1 * dc) {
+        BUI_A2 * dmc * dc / (dmc + BUI_A1 * dc)
     } else {
-        dmc - (1.0 - BUI_A2 * (dc / (dmc + BUI_A1 * dc)))
+        dmc - (1.0 - BUI_A2 * dc / (dmc + BUI_A1 * dc))
             * (BUI_A3 + f32::powf(BUI_A4 * dmc, BUI_A5))
     };
     bui
@@ -351,10 +350,10 @@ pub fn get_output_fn(
     let dc_last = state.dc.iter().map(|&x| x).last().unwrap_or(DC_INIT);
 
     // compute fine fuel moisture in [0, 100]
-    let moisture = from_ffmc_to_moisture(ffmc_last);
-    let dffm_last = (moisture / (100.0 + moisture)) * moisture;
+    let moisture_last = from_ffmc_to_moisture(ffmc_last);
+    let dffm_last = (moisture_last / (100.0 + moisture_last)) * moisture_last;
 
-    let isi = config.isi(ffmc_last, wind_speed);
+    let isi = config.isi(moisture_last, wind_speed);
     let bui = config.bui(dmc_last, dc_last);
     let fwi = config.fwi(isi, bui);
 
