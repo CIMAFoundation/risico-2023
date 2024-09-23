@@ -351,7 +351,7 @@ pub fn get_output_fn(
 
     // compute fine fuel moisture in [0, 100]
     let moisture_last = from_ffmc_to_moisture(ffmc_last);
-    let dffm_last = (moisture_last / (100.0 + moisture_last)) * moisture_last;
+    let dffm_last = (moisture_last / (100.0 + moisture_last)) * 100.0;
 
     let isi = config.isi(moisture_last, wind_speed);
     let bui = config.bui(dmc_last, dc_last);
