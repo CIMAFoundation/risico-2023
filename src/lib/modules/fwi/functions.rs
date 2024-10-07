@@ -230,7 +230,7 @@ pub fn compute_isi(moisture: f32, w_speed: f32) -> f32 {
 
 // BUI MODULE
 pub fn compute_bui(dmc: f32, dc: f32) -> f32 {
-    let bui: f32 = if dmc > 0.0 {
+    let mut bui: f32 = if dmc > 0.0 {
         if dmc <= (0.4 * dc) {
             0.8 * dmc * dc / (dmc + 0.4 * dc)
         } else {
@@ -240,6 +240,10 @@ pub fn compute_bui(dmc: f32, dc: f32) -> f32 {
     } else {
         0.0
     };
+    // clip to positive values
+    if bui < 0.0 {
+        bui = 0.0;
+    }
     bui
 }
 
