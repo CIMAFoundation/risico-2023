@@ -1,9 +1,7 @@
 use std::{collections::HashMap, error::Error, str::FromStr};
 
-use cftime_rs::{
-    calendars::Calendar, datetime::CFDatetime, utils::get_datetime_and_unit_from_units,
-};
-use chrono::{DateTime, Utc};
+use cftime_rs::{calendars::Calendar, utils::get_datetime_and_unit_from_units};
+use chrono::{DateTime, TimeZone, Utc};
 use itertools::Itertools;
 use log::warn;
 use ndarray::Array1;
@@ -156,16 +154,36 @@ fn register_nc_file(
         })
         .collect::<Vec<InputVariableName>>();
 
-    let units = time_var.attribute("description").unwrap();
+    let units = time_var
+        .attribute("description")
+        .expect("should have 'description' attribute")
+        .name()
+        .to_owned();
     let calendar = Calendar::Standard;
-    let (cf_datetime, unit) = get_datetime_and_unit_from_units(units, calendar)?;
+    let (cf_datetime, unit) = get_datetime_and_unit_from_units(&units, calendar)?;
+    let duration = unit.to_duration(calendar);
 
-    let timeline = time_var
+    let timeline: Array1<DateTime<Utc>> = time_var
         .values::<i64, _>(Extents::All)?
         .into_iter()
-        .filter_map(|t| cf_datetime.decode(t).ok())
-        .map(|d| d.to_datetime())
-        .collect::<Array1<DateTime<Utc>>>();
+        .filter_map(|t| (&cf_datetime + (&duration * t)).ok())
+        .map(|d| {
+            let (year, month, day, hour, minute, seconds) =
+                d.ymd_hms().expect("should be a valid date");
+            let year: i32 = year.try_into().unwrap();
+            // create a UTC datetime
+            Utc.with_ymd_and_hms(
+                year,
+                month as u32,
+                day as u32,
+                hour as u32,
+                minute as u32,
+                seconds as u32,
+            )
+            .single()
+            .expect("should be a valid date")
+        })
+        .collect();
 
     let dimensions = lats_var.dimensions();
 
