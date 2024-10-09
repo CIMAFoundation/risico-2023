@@ -51,6 +51,7 @@ impl FWIProperties {
 // WARM STATE
 #[allow(non_snake_case)]
 #[derive(Debug, Clone)]
+#[derive(Default)]
 pub struct FWIWarmState {
     pub dates: Vec<DateTime<Utc>>,
     pub ffmc: Vec<f32>,
@@ -59,18 +60,6 @@ pub struct FWIWarmState {
     pub rain: Vec<f32>
 }
 
-impl Default for FWIWarmState {
-    fn default() -> Self {
-        FWIWarmState 
-        {
-            dates: vec![],
-            ffmc: vec![],
-            dmc: vec![],
-            dc: vec![],
-            rain: vec![],
-        }
-    }
-}
 
 // STATE
 #[derive(Debug)]
@@ -107,9 +96,9 @@ impl FWIStateElement {
     pub fn get_initial_moisture(&self, time: &DateTime<Utc>) -> (f32, f32, f32) {
         // get the initial value of the moisture variables for computation
         let (_, ffmc_tw, dmc_tw, dc_tw, _) = self.get_time_window(time);
-        let ffmc_initial = ffmc_tw.first().unwrap_or(&FFMC_INIT).clone();
-        let dmc_initial = dmc_tw.first().unwrap_or(&DMC_INIT).clone();
-        let dc_initial = dc_tw.first().unwrap_or(&DC_INIT).clone();
+        let ffmc_initial = *ffmc_tw.first().unwrap_or(&FFMC_INIT);
+        let dmc_initial = *dmc_tw.first().unwrap_or(&DMC_INIT);
+        let dc_initial = *dc_tw.first().unwrap_or(&DC_INIT);
         (ffmc_initial, dmc_initial, dc_initial)
     }
 

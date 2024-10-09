@@ -296,9 +296,9 @@ pub fn update_state_fn(
         || wind_speed == NODATAVAL
     {
         // keep current humidity state if we don't have all the data
-        let last_ffmc = state.ffmc.iter().map(|&x| x).last().unwrap_or(FFMC_INIT);
-        let last_dmc = state.dmc.iter().map(|&x| x).last().unwrap_or(DMC_INIT);
-        let last_dc = state.dc.iter().map(|&x| x).last().unwrap_or(DC_INIT);
+        let last_ffmc = state.ffmc.iter().copied().last().unwrap_or(FFMC_INIT);
+        let last_dmc = state.dmc.iter().copied().last().unwrap_or(DMC_INIT);
+        let last_dc = state.dc.iter().copied().last().unwrap_or(DC_INIT);
         let rain_nan = std::f32::NAN;  // add NaN to rain history
         // update state
         state.update(time, last_ffmc, last_dmc, last_dc, rain_nan);
@@ -355,9 +355,9 @@ pub fn get_output_fn(
     let wind_speed = input.wind_speed;
 
     // get last moisture values to save in output
-    let ffmc_last = state.ffmc.iter().map(|&x| x).last().unwrap_or(FFMC_INIT);
-    let dmc_last = state.dmc.iter().map(|&x| x).last().unwrap_or(DMC_INIT);
-    let dc_last = state.dc.iter().map(|&x| x).last().unwrap_or(DC_INIT);
+    let ffmc_last = state.ffmc.iter().copied().last().unwrap_or(FFMC_INIT);
+    let dmc_last = state.dmc.iter().copied().last().unwrap_or(DMC_INIT);
+    let dc_last = state.dc.iter().copied().last().unwrap_or(DC_INIT);
 
     // compute fine fuel moisture in [0, 100]
     let moisture_last = from_ffmc_to_moisture(ffmc_last);
