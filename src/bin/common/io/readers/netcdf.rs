@@ -1,10 +1,10 @@
-use std::{collections::HashMap, error::Error, str::FromStr};
+use std::{collections::HashMap, error::Error, ops::Index, str::FromStr};
 
 use chrono::{DateTime, Utc};
 use itertools::Itertools;
 use log::warn;
 use ndarray::Array1;
-use netcdf::extent::Extents;
+use netcdf::{dimension, extent::{self, Extents}};
 use rayon::prelude::*;
 
 use risico::{constants::NODATAVAL, models::input::InputVariableName};
@@ -22,6 +22,7 @@ pub struct NetCdfInputConfiguration {
     pub lat_name: String,
     pub lon_name: String,
     pub time_name: String,
+    pub coords_dims: Option<(String, String)>,
 }
 
 impl Default for NetCdfInputConfiguration {
@@ -40,6 +41,7 @@ impl Default for NetCdfInputConfiguration {
             lat_name: "latitude".into(),
             lon_name: "longitude".into(),
             time_name: "time".into(),
+            coords_dims: None,
         }
     }
 }
@@ -106,6 +108,7 @@ where
             lat_name,
             lon_name,
             time_name,
+            coords_dims: None,
         }
     }
 }
@@ -156,25 +159,43 @@ fn register_nc_file(
         .filter_map(|t| DateTime::from_timestamp_millis(t * 1000))
         .collect::<Array1<DateTime<Utc>>>();
 
+    let dimensions = lats_var.dimensions();
+
+    let (extents, nrows, ncols) = if let Some((lat_dim, lon_dim)) = &config.coords_dims {
+
+        let lat_index = dimensions.iter().position(|dim| &dim.name() == lat_dim).unwrap_or_else(|| {
+            panic!("Could not find dimension '{}'", lat_dim)
+        });
+        let lon_index = dimensions.iter().position(|dim| &dim.name() == lon_dim).unwrap_or_else(|| {
+            panic!("Could not find dimension '{}'", lon_dim)
+        });
+
+        let mut extents = (0..dimensions.len()).map(|_| 0..1).collect::<Vec<_>>();
+        extents[lat_index] = 0..dimensions[lat_index].len();
+        extents[lon_index] = 0..dimensions[lon_index].len();
+
+        let nrows = dimensions[lat_index].len();
+        let ncols = dimensions[lon_index].len();
+        (extents.as_slice().into(), nrows, ncols)
+    } else {
+        let ndims = dimensions.len();
+        if ndims != 2 {
+            return Err("Latitude & Longitude variables must have 2 dimensions".into());
+        }
+        let nrows = dimensions[0].len();
+        let ncols = dimensions[1].len();
+        (Extents::All, nrows, ncols)
+    };
+
     let nc_lats = lats_var
-        .values::<f32, _>(Extents::All)?
-        .into_iter()
-        .collect::<Array1<f32>>();
+    .values::<f32, _>(&extents)?
+    .into_iter()
+    .collect::<Array1<f32>>();
 
     let nc_lons = lons_var
-        .values::<f32, _>(Extents::All)?
+        .values::<f32, _>(&extents)?
         .into_iter()
         .collect::<Array1<f32>>();
-
-    // let's assume lats and lons are 2D arrays with the same dimensions
-    let dimensions = lats_var.dimensions();
-    let ndims = dimensions.len();
-    if ndims != 2 {
-        return Err("Latitude & Longitude variables must have 2 dimensions".into());
-    }
-
-    let nrows = dimensions[0].len();
-    let ncols = dimensions[1].len();
 
     let grid = IrregularGrid::new(nrows, ncols, nc_lats, nc_lons);
 
