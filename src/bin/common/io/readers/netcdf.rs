@@ -1,11 +1,11 @@
-use std::{collections::HashMap, error::Error, str::FromStr};
+use std::{borrow::Borrow, collections::HashMap, error::Error, str::FromStr};
 
 use cftime_rs::{calendars::Calendar, utils::get_datetime_and_unit_from_units};
 use chrono::{DateTime, TimeZone, Utc};
 use itertools::Itertools;
 use log::warn;
 use ndarray::Array1;
-use netcdf::extent::Extents;
+use netcdf::{extent::Extents, AttrValue};
 use rayon::prelude::*;
 
 use risico::{constants::NODATAVAL, models::input::InputVariableName};
@@ -154,11 +154,16 @@ fn register_nc_file(
         })
         .collect::<Vec<InputVariableName>>();
 
-    let units = time_var
-        .attribute("description")
-        .expect("should have 'description' attribute")
-        .name()
-        .to_owned();
+    let units_attr_values = time_var
+        .attribute_value("description")
+        .expect("Could not find units")
+        .unwrap();
+    let units = if let (AttrValue::Str(units)) = units_attr_values {
+        units.to_owned()
+    } else {
+        return Err("Could not find units".into());
+    };
+
     let calendar = Calendar::Standard;
     let (cf_datetime, unit) = get_datetime_and_unit_from_units(&units, calendar)?;
     let duration = unit.to_duration(calendar);
