@@ -1,10 +1,13 @@
-use std::{collections::HashMap, error::Error, ops::Index, str::FromStr};
+use std::{collections::HashMap, error::Error, str::FromStr};
 
+use cftime_rs::{
+    calendars::Calendar, datetime::CFDatetime, utils::get_datetime_and_unit_from_units,
+};
 use chrono::{DateTime, Utc};
 use itertools::Itertools;
 use log::warn;
 use ndarray::Array1;
-use netcdf::{dimension, extent::{self, Extents}};
+use netcdf::extent::Extents;
 use rayon::prelude::*;
 
 use risico::{constants::NODATAVAL, models::input::InputVariableName};
@@ -153,22 +156,28 @@ fn register_nc_file(
         })
         .collect::<Vec<InputVariableName>>();
 
+    let units = time_var.attribute("description").unwrap();
+    let calendar = Calendar::Standard;
+    let (cf_datetime, unit) = get_datetime_and_unit_from_units(units, calendar)?;
+
     let timeline = time_var
         .values::<i64, _>(Extents::All)?
         .into_iter()
-        .filter_map(|t| DateTime::from_timestamp_millis(t * 1000))
+        .filter_map(|t| cf_datetime.decode(t).ok())
+        .map(|d| d.to_datetime())
         .collect::<Array1<DateTime<Utc>>>();
 
     let dimensions = lats_var.dimensions();
 
     let (extents, nrows, ncols) = if let Some((lat_dim, lon_dim)) = &config.coords_dims {
-
-        let lat_index = dimensions.iter().position(|dim| &dim.name() == lat_dim).unwrap_or_else(|| {
-            panic!("Could not find dimension '{}'", lat_dim)
-        });
-        let lon_index = dimensions.iter().position(|dim| &dim.name() == lon_dim).unwrap_or_else(|| {
-            panic!("Could not find dimension '{}'", lon_dim)
-        });
+        let lat_index = dimensions
+            .iter()
+            .position(|dim| &dim.name() == lat_dim)
+            .unwrap_or_else(|| panic!("Could not find dimension '{}'", lat_dim));
+        let lon_index = dimensions
+            .iter()
+            .position(|dim| &dim.name() == lon_dim)
+            .unwrap_or_else(|| panic!("Could not find dimension '{}'", lon_dim));
 
         let mut extents = (0..dimensions.len()).map(|_| 0..1).collect::<Vec<_>>();
         extents[lat_index] = 0..dimensions[lat_index].len();
@@ -188,9 +197,9 @@ fn register_nc_file(
     };
 
     let nc_lats = lats_var
-    .values::<f32, _>(&extents)?
-    .into_iter()
-    .collect::<Array1<f32>>();
+        .values::<f32, _>(&extents)?
+        .into_iter()
+        .collect::<Array1<f32>>();
 
     let nc_lons = lons_var
         .values::<f32, _>(&extents)?
