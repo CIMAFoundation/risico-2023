@@ -133,7 +133,7 @@ fn extract_time(
     let default_units_name: String = String::from("units");
     let time_units_attr_name = time_units.as_ref().unwrap_or(&default_units_name);
 
-    let units_attr = time_var.attribute(&time_units_attr_name);
+    let units_attr = time_var.attribute(time_units_attr_name);
     let timeline = if units_attr.is_none() && time_units.is_none() {
         // if the units attribute is not found, try to use the default units which are "seconds since 1970-01-01 00:00:00"
         time_var
@@ -179,7 +179,7 @@ fn extract_time(
             })
             .collect::<Array1<DateTime<Utc>>>()
     };
-    return Ok(timeline);
+    Ok(timeline)
 }
 
 /// inspect a single netcdf file and builds a record
