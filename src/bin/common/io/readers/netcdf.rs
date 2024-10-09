@@ -1,11 +1,11 @@
-use std::{borrow::Borrow, collections::HashMap, error::Error, str::FromStr};
+use std::{collections::HashMap, error::Error, str::FromStr};
 
 use cftime_rs::{calendars::Calendar, utils::get_datetime_and_unit_from_units};
 use chrono::{DateTime, TimeZone, Utc};
 use itertools::Itertools;
 use log::warn;
 use ndarray::Array1;
-use netcdf::{extent::Extents, AttrValue};
+use netcdf::{extent::Extents, AttrValue, Variable};
 use rayon::prelude::*;
 
 use risico::{constants::NODATAVAL, models::input::InputVariableName};
@@ -24,6 +24,7 @@ pub struct NetCdfInputConfiguration {
     pub lon_name: String,
     pub time_name: String,
     pub coords_dims: Option<(String, String)>,
+    pub time_units: Option<String>,
 }
 
 impl Default for NetCdfInputConfiguration {
@@ -43,6 +44,7 @@ impl Default for NetCdfInputConfiguration {
             lon_name: "longitude".into(),
             time_name: "time".into(),
             coords_dims: None,
+            time_units: None,
         }
     }
 }
@@ -110,6 +112,7 @@ where
             lon_name,
             time_name,
             coords_dims: None,
+            time_units: None,
         }
     }
 }
@@ -120,6 +123,63 @@ pub struct NetCdfFileInputRecord {
     variables: Vec<InputVariableName>,
     grid: IrregularGrid,
     indexes: Option<Array1<Option<usize>>>,
+}
+
+/// extract the time from a netcdf file using the given attribute
+fn extract_time(
+    time_var: &Variable,
+    time_units: &Option<String>,
+) -> Result<Array1<DateTime<Utc>>, Box<dyn Error>> {
+    let default_units_name: String = String::from("units");
+    let time_units_attr_name = time_units.as_ref().unwrap_or(&default_units_name);
+
+    let units_attr = time_var.attribute(&time_units_attr_name);
+    let timeline = if units_attr.is_none() && time_units.is_none() {
+        // if the units attribute is not found, try to use the default units which are "seconds since 1970-01-01 00:00:00"
+        time_var
+            .values::<i64, _>(Extents::All)?
+            .into_iter()
+            .filter_map(|t| DateTime::from_timestamp_millis(t * 1000))
+            .collect::<Array1<DateTime<Utc>>>()
+    } else {
+        let units_attr_values = units_attr
+            .expect("should have units attribute")
+            .value()
+            .expect("should have a value");
+
+        let units = if let AttrValue::Str(units) = units_attr_values {
+            units.to_owned()
+        } else {
+            return Err("Could not find units".into());
+        };
+
+        let calendar = Calendar::Standard;
+        let (cf_datetime, unit) = get_datetime_and_unit_from_units(&units, calendar)?;
+        let duration = unit.to_duration(calendar);
+
+        time_var
+            .values::<i64, _>(Extents::All)?
+            .into_iter()
+            .filter_map(|t| (&cf_datetime + (&duration * t)).ok())
+            .map(|d| {
+                let (year, month, day, hour, minute, seconds) =
+                    d.ymd_hms().expect("should be a valid date");
+                let year: i32 = year.try_into().unwrap();
+                // create a UTC datetime
+                Utc.with_ymd_and_hms(
+                    year,
+                    month as u32,
+                    day as u32,
+                    hour as u32,
+                    minute as u32,
+                    seconds as u32,
+                )
+                .single()
+                .expect("should be a valid date")
+            })
+            .collect::<Array1<DateTime<Utc>>>()
+    };
+    return Ok(timeline);
 }
 
 /// inspect a single netcdf file and builds a record
@@ -154,41 +214,7 @@ fn register_nc_file(
         })
         .collect::<Vec<InputVariableName>>();
 
-    let units_attr_values = time_var
-        .attribute_value("description")
-        .expect("Could not find units")
-        .unwrap();
-    let units = if let (AttrValue::Str(units)) = units_attr_values {
-        units.to_owned()
-    } else {
-        return Err("Could not find units".into());
-    };
-
-    let calendar = Calendar::Standard;
-    let (cf_datetime, unit) = get_datetime_and_unit_from_units(&units, calendar)?;
-    let duration = unit.to_duration(calendar);
-
-    let timeline: Array1<DateTime<Utc>> = time_var
-        .values::<i64, _>(Extents::All)?
-        .into_iter()
-        .filter_map(|t| (&cf_datetime + (&duration * t)).ok())
-        .map(|d| {
-            let (year, month, day, hour, minute, seconds) =
-                d.ymd_hms().expect("should be a valid date");
-            let year: i32 = year.try_into().unwrap();
-            // create a UTC datetime
-            Utc.with_ymd_and_hms(
-                year,
-                month as u32,
-                day as u32,
-                hour as u32,
-                minute as u32,
-                seconds as u32,
-            )
-            .single()
-            .expect("should be a valid date")
-        })
-        .collect();
+    let timeline = extract_time(time_var, &config.time_units)?;
 
     let dimensions = lats_var.dimensions();
 
