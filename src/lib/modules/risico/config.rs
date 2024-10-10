@@ -1,6 +1,6 @@
 use super::functions::{
     get_v, get_v_legacy, update_dffm_dry, update_dffm_dry_legacy, update_dffm_rain,
-    update_dffm_rain_legacy,
+    update_dffm_rain_legacy, get_meteo_index, get_meteo_index_legacy,
 };
 
 type RosFnType = fn(f32, f32, f32, f32, f32, f32, f32, f32, f32, f32) -> (f32, f32);
@@ -15,6 +15,7 @@ pub struct ModelConfig {
     ffmc_no_rain_fn: fn(f32, f32, f32, f32, f32, f32, f32) -> f32,
     ffmc_rain_fn: fn(f32, f32, f32) -> f32,
     ros_fn: RosFnType,
+    meteo_index_fn: fn(f32, f32) -> f32,
 }
 
 impl ModelConfig {
@@ -22,22 +23,26 @@ impl ModelConfig {
         let ffmc_no_rain_fn: fn(f32, f32, f32, f32, f32, f32, f32) -> f32;
         let ffmc_rain_fn: fn(f32, f32, f32) -> f32;
         let ros_fn: RosFnType;
+        let meteo_index_fn: fn(f32, f32) -> f32;
 
         match model_version_str {
             "legacy" => {
                 ffmc_no_rain_fn = update_dffm_dry_legacy;
                 ffmc_rain_fn = update_dffm_rain_legacy;
                 ros_fn = get_v_legacy;
+                meteo_index_fn = get_meteo_index_legacy;
             }
             "v2023" => {
                 ffmc_no_rain_fn = update_dffm_dry;
                 ffmc_rain_fn = update_dffm_rain;
                 ros_fn = get_v;
+                meteo_index_fn = get_meteo_index;
             }
             _ => {
                 ffmc_no_rain_fn = update_dffm_dry_legacy;
                 ffmc_rain_fn = update_dffm_rain_legacy;
                 ros_fn = get_v_legacy;
+                meteo_index_fn = get_meteo_index_legacy;
             }
         }
 
@@ -47,6 +52,7 @@ impl ModelConfig {
             ffmc_no_rain_fn,
             ffmc_rain_fn,
             ros_fn,
+            meteo_index_fn,
         }
     }
 
@@ -85,5 +91,10 @@ impl ModelConfig {
         (self.ros_fn)(
             v0, d0, _d1, snow_cover, dffm, slope, aspect, wind_speed, wind_dir, t_effect,
         )
+    }
+
+    #[allow(non_snake_case, clippy::too_many_arguments)]
+    pub fn meteo_index(&self, dffm: f32, W: f32) -> f32 {
+        (self.meteo_index_fn)(dffm, W)
     }
 }
