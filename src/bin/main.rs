@@ -228,10 +228,11 @@ fn main() -> Result<(), Box<dyn Error>> {
     let configs = ConfigContainer::from_file(&config_path_str)
         .map_err(|err| format!("Failed to load config: {}", err))?;
 
+    // check if input_path is a file or a directory
+    let mut input_handler = get_input_handler(&input_path_str, &configs)?;
+
     for model_config in &configs.models {
         let start_time = Utc::now();
-        // check if input_path is a file or a directory
-        let mut input_handler = get_input_handler(&input_path_str, &configs)?;
 
         let model_run = match model_config {
             ConfigBuilderType::FWI(model_config) => run_fwi(
