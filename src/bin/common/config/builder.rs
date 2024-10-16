@@ -129,6 +129,15 @@ pub enum ConfigBuilderType {
     FWI(FWIConfigBuilder),
 }
 
+impl ConfigBuilderType {
+    pub fn get_model_name(&self) -> &str {
+        match self {
+            ConfigBuilderType::RISICO(_) => "RISICO",
+            ConfigBuilderType::FWI(_) => "FWI",
+        }
+    }
+}
+
 #[derive(Debug, Serialize, Deserialize)]
 pub struct ConfigContainer {
     pub models: Vec<ConfigBuilderType>,

@@ -232,6 +232,7 @@ fn main() -> Result<(), Box<dyn Error>> {
     let mut input_handler = get_input_handler(&input_path_str, &configs)?;
 
     for model_config in &configs.models {
+        info!("Running model: {:?}", model_config.get_model_name());
         let start_time = Utc::now();
 
         let model_run = match model_config {
