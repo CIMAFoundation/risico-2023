@@ -92,7 +92,7 @@ fn run_risico(
             trace!("Writing output took {} seconds", Utc::now() - c);
         }
 
-        if time.hour() == 0 {
+        if config.should_write_warm_state(&state.time) {
             let c = Utc::now();
             if let Err(err) = config.write_warm_state(&state) {
                 warn!("Error writing warm state: {}", err);
@@ -156,7 +156,7 @@ fn run_fwi(
             trace!("Writing output took {} seconds", Utc::now() - c);
         }
 
-        if time.hour() == 0 {
+        if config.should_write_warm_state(&time) {
             let c = Utc::now();
             if let Err(err) = config.write_warm_state(&state) {
                 warn!("Error writing warm state: {}", err);

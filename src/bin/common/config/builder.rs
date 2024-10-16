@@ -23,6 +23,7 @@ pub type ConfigMap = HashMap<String, Vec<String>>;
 
 const MODEL_NAME_KEY: &str = "MODELNAME";
 const WARM_STATE_PATH_KEY: &str = "STATO0";
+const WARM_STATE_OFFSET_KEY: &str = "STATO0_OFFSET";
 const CELLS_FILE_KEY: &str = "CELLE";
 const VEGETATION_FILE_KEY: &str = "VEG";
 const PPF_FILE_KEY: &str = "PPF";
@@ -99,6 +100,7 @@ pub struct RISICOConfigBuilder {
     pub cells_file_path: String,
     pub vegetation_file: String,
     pub warm_state_path: String,
+    pub warm_state_offset: i64,
     pub ppf_file: Option<String>,
     pub output_types: Vec<OutputTypeConfig>,
     pub use_temperature_effect: bool,
@@ -112,6 +114,7 @@ pub struct FWIConfigBuilder {
     pub model_name: String,
     pub cells_file_path: String,
     pub warm_state_path: String,
+    pub warm_state_offset: i64,
     pub output_types: Vec<OutputTypeConfig>,
     // pub palettes: PaletteMap,
     pub output_time_resolution: u32,
@@ -228,6 +231,12 @@ impl ConfigContainer {
         let warm_state_path = config_map
             .first(WARM_STATE_PATH_KEY)
             .ok_or(format!("Error: {WARM_STATE_PATH_KEY} not found in config"))?;
+        
+        // try to get the warm state offset, otherwise default to 0
+        let warm_state_offset = match config_map.first(WARM_STATE_OFFSET_KEY) {
+            Some(value) => value.parse::<i64>().unwrap_or(0),
+            None => 0,
+        };
 
         let cells_file_path = config_map
             .first(CELLS_FILE_KEY)
@@ -281,6 +290,7 @@ impl ConfigContainer {
         let config = RISICOConfigBuilder {
             model_name,
             warm_state_path,
+            warm_state_offset,
             cells_file_path,
             vegetation_file,
             ppf_file,

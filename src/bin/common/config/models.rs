@@ -37,6 +37,7 @@ pub struct RISICOConfig {
     warm_state_path: String,
     warm_state: Vec<RISICOWarmState>,
     warm_state_time: DateTime<Utc>,
+    warm_state_offset: i64,
     properties: RISICOProperties,
     palettes: PaletteMap,
     // use_temperature_effect: bool,
@@ -51,6 +52,7 @@ pub struct FWIConfig {
     warm_state_path: String,
     warm_state: Vec<FWIWarmState>,
     warm_state_time: DateTime<Utc>,
+    warm_state_offset: i64,
     properties: FWIProperties,
     palettes: PaletteMap,
     output_time_resolution: u32,
@@ -118,7 +120,7 @@ impl RISICOConfig {
         let vegetations_dict = RISICOConfig::read_vegetation(&config_defs.vegetation_file)
             .map_err(|error| format!("error reading {}, {error}", &config_defs.vegetation_file))?;
 
-        let (warm_state, warm_state_time) = RISICOConfig::read_warm_state(&config_defs.warm_state_path, date)
+        let (warm_state, warm_state_time) = RISICOConfig::read_warm_state(&config_defs.warm_state_path, date, &config_defs.warm_state_offset)
             .unwrap_or((
                 vec![RISICOWarmState::default(); n_cells],
                 date - Duration::try_days(1).expect("Should be a valid duration"),
@@ -141,6 +143,7 @@ impl RISICOConfig {
             warm_state_path: config_defs.warm_state_path.clone(),
             warm_state,
             warm_state_time,
+            warm_state_offset: config_defs.warm_state_offset.clone(),
             properties: props,
             palettes,
             // use_temperature_effect: config_defs.use_temperature_effect,
@@ -353,6 +356,12 @@ impl RISICOConfig {
         hours % self.output_time_resolution as i64 == 0
     }
 
+    pub fn should_write_warm_state(&self, time: &DateTime<Utc>) -> bool {
+        let time_diff = time.signed_duration_since(self.run_date);
+        let hours = time_diff.num_hours();
+        (hours % self.warm_state_offset == 0) && (hours > 0)
+    }
+
     #[allow(non_snake_case)]
     /// Reads the warm state from the file
     /// The warm state is stored in a file with the following structure:
@@ -363,6 +372,7 @@ impl RISICOConfig {
     pub fn read_warm_state(
         base_warm_file: &str,
         run_date: DateTime<Utc>,
+        offset: &i64,
     ) -> Option<(Vec<RISICOWarmState>, DateTime<Utc>)> {
         // for the last n days before date, try to read the warm state
         // compose the filename as base_warm_file_YYYYmmDDHHMM
@@ -372,7 +382,9 @@ impl RISICOConfig {
     
         for days_before in 1..4 {
             current_date = run_date - Duration::try_days(days_before).expect("Should be valid");
-    
+            // add the offset to the current date
+            current_date = current_date + Duration::try_hours(*offset).expect("Should be valid");
+
             let filename = format!("{}{}", base_warm_file, current_date.format("%Y%m%d%H%M"));
     
             let file_handle = File::open(filename);
@@ -395,7 +407,7 @@ impl RISICOConfig {
     
         info!(
             "Loading warm state from {}",
-            current_date.format("%Y-%m-%d")
+            current_date.format("%Y-%m-%d %H:%M")
         );
         let mut warm_state: Vec<RISICOWarmState> = Vec::new();
     
@@ -513,7 +525,7 @@ impl FWIConfig {
             panic!("All properties must have the same length");
         }
 
-        let (warm_state, warm_state_time) = FWIConfig::read_warm_state(&config_defs.warm_state_path, date)
+        let (warm_state, warm_state_time) = FWIConfig::read_warm_state(&config_defs.warm_state_path, date, &config_defs.warm_state_offset)
             .unwrap_or((
                 vec![FWIWarmState::default(); n_cells],
                 date - Duration::try_days(1).expect("Should be a valid duration"),
@@ -527,6 +539,7 @@ impl FWIConfig {
             warm_state_path: config_defs.warm_state_path.clone(),
             warm_state,
             warm_state_time,
+            warm_state_offset: config_defs.warm_state_offset.clone(),
             properties: props,
             palettes,
             output_time_resolution: config_defs.output_time_resolution,
@@ -603,6 +616,12 @@ impl FWIConfig {
         hours % self.output_time_resolution as i64 == 0
     }
 
+    pub fn should_write_warm_state(&self, time: &DateTime<Utc>) -> bool {
+        let time_diff = time.signed_duration_since(self.run_date);
+        let hours = time_diff.num_hours();
+        (hours % self.warm_state_offset == 0) && (hours > 0)
+    }
+
     #[allow(non_snake_case)]
     /// Reads the warm state from the file
     /// The warm state is stored in a file with the following structure:
@@ -613,6 +632,7 @@ impl FWIConfig {
     pub fn read_warm_state(
         base_warm_file: &str,
         run_date: DateTime<Utc>,
+        offset: &i64,
     ) -> Option<(Vec<FWIWarmState>, DateTime<Utc>)> {
         // for the last n days before date, try to read the warm state
         // compose the filename as base_warm_file_YYYYmmDDHHMM
@@ -622,6 +642,8 @@ impl FWIConfig {
 
         for days_before in 1..4 {
             current_date = run_date - Duration::try_days(days_before).expect("Should be valid");
+            // add the offset to the current date
+            current_date = current_date + Duration::try_hours(*offset).expect("Should be valid");
 
             let filename = format!("{}{}", base_warm_file, current_date.format("%Y%m%d%H%M"));
 
@@ -645,7 +667,7 @@ impl FWIConfig {
 
         info!(
             "Loading warm state from {}",
-            current_date.format("%Y-%m-%d")
+            current_date.format("%Y-%m-%d %H:%M")
         );
         let mut warm_state: Vec<FWIWarmState> = Vec::new();
 
