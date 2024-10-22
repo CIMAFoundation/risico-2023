@@ -13,4 +13,7 @@ pub trait InputHandler {
 
     /// Returns the timeline of the input data
     fn get_timeline(&self) -> Vec<DateTime<Utc>>;
+
+    /// Return the list of input files and associated variables
+    fn info_input(&self) -> String;
 }

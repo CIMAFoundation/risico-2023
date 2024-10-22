@@ -467,4 +467,14 @@ impl InputHandler for NetCdfInputHandler {
         }
         Ok(())
     }
+
+    fn info_input(&self) -> String {
+        // print the file and variables for each record
+        let mut info = String::new();
+        for record in &self.records {
+            info.push_str(&format!("File: {}\n", record.file));
+            info.push_str(&format!("Variables: {:?}\n", record.variables));
+        }
+        info
+    }
 }

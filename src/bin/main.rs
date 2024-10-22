@@ -230,6 +230,7 @@ fn main() -> Result<(), Box<dyn Error>> {
 
     // check if input_path is a file or a directory
     let mut input_handler = get_input_handler(&input_path_str, &configs)?;
+    info!("Input files:\n{}", input_handler.info_input());
 
     for model_config in &configs.models {
         info!("Running model: {:?}", model_config.get_model_name());

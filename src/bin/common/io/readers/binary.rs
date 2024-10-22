@@ -341,4 +341,15 @@ impl InputHandler for BinaryInputHandler {
 
         Ok(())
     }
+
+    fn info_input(&self) -> String {
+        let mut info = String::new();
+        for (date, input_files) in self.data_map.iter() {
+            info.push_str(&format!("Date: {}\n", date));
+            for (var, input_file) in input_files.iter() {
+                info.push_str(&format!("Variable: {:?} File: {}\n", var, input_file.path));
+            }
+        }
+        info
+    }
 }
