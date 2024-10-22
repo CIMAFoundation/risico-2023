@@ -3,7 +3,7 @@ use std::{collections::HashMap, error::Error, str::FromStr};
 use cftime_rs::{calendars::Calendar, utils::get_datetime_and_unit_from_units, parser::Unit};
 use chrono::{DateTime, TimeZone, Utc};
 use itertools::Itertools;
-use log::warn;
+use log::{warn, debug};
 use ndarray::Array1;
 use netcdf::{extent::Extents, AttrValue, Variable};
 use rayon::prelude::*;
@@ -249,7 +249,7 @@ fn extract_time(
 fn register_nc_file(
     file: &str,
     config: &NetCdfInputConfiguration,
-) -> Result<NetCdfFileInputRecord, Box<dyn Error>> {
+) -> Result<Option<NetCdfFileInputRecord>, Box<dyn Error>> {
     let nc_file = netcdf::open(file)?;
 
     let lats_var = &nc_file
@@ -282,6 +282,11 @@ fn register_nc_file(
             })
     })
     .unzip();
+
+    // If no variables are found, return None
+    if variables.is_empty() {
+        return Ok(None);
+    }
 
     // check it all offests are the same, and extract the unique value, otherwise return an error
     let offset: &i64 = if offsets.is_empty() {
@@ -345,7 +350,7 @@ fn register_nc_file(
         indexes: None,
     };
 
-    Ok(record)
+    Ok(Some(record))
 }
 
 /// read a slice of a variable from a netcdf file
@@ -394,8 +399,15 @@ impl NetCdfInputHandler {
 
             // Call the inspect_nc_file function to build the record
             match register_nc_file(&file_path_str, config) {
-                Ok(record) => records.push(record),
-                Err(e) => warn!("Error inspecting file {}: {}", file_path_str, e),
+                Ok(Some(record)) => {
+                    records.push(record);
+                }
+                Ok(None) => {
+                    debug!("No specified variables found in file {}", file_path_str);
+                }
+                Err(e) => {
+                    warn!("Error inspecting file {}: {}", file_path_str, e);
+                }
             }
         }
 
