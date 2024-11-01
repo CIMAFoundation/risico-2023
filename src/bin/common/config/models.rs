@@ -362,7 +362,7 @@ impl RISICOConfig {
         hours % self.output_time_resolution as i64 == 0
     }
 
-    pub fn should_write_warm_state(&self, time: &DateTime<Utc>) -> bool {
+    pub fn should_write_warm_state(&self, time: &DateTime<Utc>) -> (bool, DateTime<Utc>) {
         let time_diff = time.signed_duration_since(self.run_date);
         let minutes = time_diff.num_minutes();
         // Approximation to the closest hour
@@ -371,7 +371,9 @@ impl RISICOConfig {
         } else {
             minutes / 60
         };
-        (approximate_hours % self.warm_state_offset == 0) && (approximate_hours > 0)
+        let warm_state_time = self.run_date + Duration::try_hours(approximate_hours).expect("Should be valid");
+        let should_write= (approximate_hours % self.warm_state_offset == 0) && (approximate_hours > 0);
+        (should_write, warm_state_time)
     }
 
     #[allow(non_snake_case)]
@@ -484,8 +486,7 @@ impl RISICOConfig {
     }
 
     #[allow(non_snake_case)]
-    pub fn write_warm_state(&self, state: &RISICOState) -> Result<(), RISICOError> {
-        let warm_state_time = state.time;
+    pub fn write_warm_state(&self, state: &RISICOState, warm_state_time: DateTime<Utc>) -> Result<(), RISICOError> {
         let date_string = warm_state_time.format("%Y%m%d%H%M").to_string();
         let warm_state_name = format!("{}{}", self.warm_state_path, date_string);
         let mut warm_state_file = File::create(&warm_state_name)
@@ -634,7 +635,7 @@ impl FWIConfig {
         hours % self.output_time_resolution as i64 == 0
     }
 
-    pub fn should_write_warm_state(&self, time: &DateTime<Utc>) -> bool {
+    pub fn should_write_warm_state(&self, time: &DateTime<Utc>) -> (bool, DateTime<Utc>) {
         let time_diff = time.signed_duration_since(self.run_date);
         let minutes = time_diff.num_minutes();
         // Approximation to the closest hour
@@ -643,7 +644,9 @@ impl FWIConfig {
         } else {
             minutes / 60
         };
-        (approximate_hours % self.warm_state_offset == 0) && (approximate_hours > 0)
+        let warm_state_time = self.run_date + Duration::try_hours(approximate_hours).expect("Should be valid");
+        let should_write= (approximate_hours % self.warm_state_offset == 0) && (approximate_hours > 0);
+        (should_write, warm_state_time)
     }
 
     #[allow(non_snake_case)]
@@ -755,8 +758,7 @@ impl FWIConfig {
     }
 
     #[allow(non_snake_case)]
-    pub fn write_warm_state(&self, state: &FWIState) -> Result<(), RISICOError> {
-        let warm_state_time = state.time;
+    pub fn write_warm_state(&self, state: &FWIState, warm_state_time: DateTime<Utc>) -> Result<(), RISICOError> {
         let date_string = warm_state_time.format("%Y%m%d%H%M").to_string();
         let warm_state_name = format!("{}{}", self.warm_state_path, date_string);
         let mut warm_state_file = File::create(&warm_state_name)
