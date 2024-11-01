@@ -364,8 +364,14 @@ impl RISICOConfig {
 
     pub fn should_write_warm_state(&self, time: &DateTime<Utc>) -> bool {
         let time_diff = time.signed_duration_since(self.run_date);
-        let hours = time_diff.num_hours();
-        (hours % self.warm_state_offset == 0) && (hours > 0)
+        let minutes = time_diff.num_minutes();
+        // Approximation to the closest hour
+        let approximate_hours = if minutes % 60 >= 30 {
+            (minutes / 60) + 1
+        } else {
+            minutes / 60
+        };
+        (approximate_hours % self.warm_state_offset == 0) && (approximate_hours > 0)
     }
 
     #[allow(non_snake_case)]
@@ -630,8 +636,14 @@ impl FWIConfig {
 
     pub fn should_write_warm_state(&self, time: &DateTime<Utc>) -> bool {
         let time_diff = time.signed_duration_since(self.run_date);
-        let hours = time_diff.num_hours();
-        (hours % self.warm_state_offset == 0) && (hours > 0)
+        let minutes = time_diff.num_minutes();
+        // Approximation to the closest hour
+        let approximate_hours = if minutes % 60 >= 30 {
+            (minutes / 60) + 1
+        } else {
+            minutes / 60
+        };
+        (approximate_hours % self.warm_state_offset == 0) && (approximate_hours > 0)
     }
 
     #[allow(non_snake_case)]
