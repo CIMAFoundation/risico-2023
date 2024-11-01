@@ -120,7 +120,13 @@ impl RISICOConfig {
         let vegetations_dict = RISICOConfig::read_vegetation(&config_defs.vegetation_file)
             .map_err(|error| format!("error reading {}, {error}", &config_defs.vegetation_file))?;
 
-        let (warm_state, warm_state_time) = RISICOConfig::read_warm_state(&config_defs.warm_state_path, date, &config_defs.warm_state_offset)
+        let warm_state_offset = if config_defs.warm_state_offset > 0 {
+            config_defs.warm_state_offset.clone()
+        } else {
+            24
+        };
+
+        let (warm_state, warm_state_time) = RISICOConfig::read_warm_state(&config_defs.warm_state_path, date, &warm_state_offset)
             .unwrap_or((
                 vec![RISICOWarmState::default(); n_cells],
                 date - Duration::try_days(1).expect("Should be a valid duration"),
@@ -136,12 +142,6 @@ impl RISICOConfig {
         let ppf_winter = ppf.iter().map(|(_, w)| *w).collect();
 
         let props = RISICOProperties::new(props_container, vegetations_dict, ppf_summer, ppf_winter);
-
-        let warm_state_offset = if config_defs.warm_state_offset > 0 {
-            config_defs.warm_state_offset.clone()
-        } else {
-            24
-        };
 
         let config = RISICOConfig {
             run_date: date,
@@ -538,19 +538,19 @@ impl FWIConfig {
             panic!("All properties must have the same length");
         }
 
-        let (warm_state, warm_state_time) = FWIConfig::read_warm_state(&config_defs.warm_state_path, date, &config_defs.warm_state_offset)
+        let warm_state_offset = if config_defs.warm_state_offset > 0 {
+            config_defs.warm_state_offset.clone()
+        } else {
+            24
+        };
+
+        let (warm_state, warm_state_time) = FWIConfig::read_warm_state(&config_defs.warm_state_path, date, &warm_state_offset)
             .unwrap_or((
                 vec![FWIWarmState::default(); n_cells],
                 date - Duration::try_days(1).expect("Should be a valid duration"),
             ));
 
         let props = FWIProperties::new(props_container);
-
-        let warm_state_offset = if config_defs.warm_state_offset > 0 {
-            config_defs.warm_state_offset.clone()
-        } else {
-            24
-        };
 
         let config = FWIConfig {
             run_date: date,
