@@ -137,13 +137,19 @@ impl RISICOConfig {
 
         let props = RISICOProperties::new(props_container, vegetations_dict, ppf_summer, ppf_winter);
 
+        let warm_state_offset = if config_defs.warm_state_offset > 0 {
+            config_defs.warm_state_offset.clone()
+        } else {
+            24
+        };
+
         let config = RISICOConfig {
             run_date: date,
             // model_name: config_defs.model_name.clone(),
             warm_state_path: config_defs.warm_state_path.clone(),
             warm_state,
             warm_state_time,
-            warm_state_offset: config_defs.warm_state_offset.clone(),
+            warm_state_offset: warm_state_offset,
             properties: props,
             palettes,
             // use_temperature_effect: config_defs.use_temperature_effect,
@@ -533,13 +539,19 @@ impl FWIConfig {
 
         let props = FWIProperties::new(props_container);
 
+        let warm_state_offset = if config_defs.warm_state_offset > 0 {
+            config_defs.warm_state_offset.clone()
+        } else {
+            24
+        };
+
         let config = FWIConfig {
             run_date: date,
             // model_name: config_defs.model_name.clone(),
             warm_state_path: config_defs.warm_state_path.clone(),
             warm_state,
             warm_state_time,
-            warm_state_offset: config_defs.warm_state_offset.clone(),
+            warm_state_offset: warm_state_offset,
             properties: props,
             palettes,
             output_time_resolution: config_defs.output_time_resolution,
