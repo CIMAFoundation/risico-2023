@@ -18,39 +18,27 @@ use crate::common::io::models::grid::{Grid, IrregularGrid};
 
 use super::prelude::InputHandler;
 
-#[derive(Clone, Debug, Serialize)]
-#[serde(untagged)] 
-pub enum VariableEntry {
-    Simple(String),           // Just the variable name
-    WithOffset(String, i64),   // The variable name and an offset
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct VariableEntry {
+    pub name: String,  // variable name in netcdf file
+    pub offset: i64,  // offset in seconds to be aplied in the variable time line
 }
 
-
-impl<'de> serde::Deserialize<'de> for VariableEntry {
-    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-    where
-        D: serde::Deserializer<'de>,
-    {
-        let s = String::deserialize(deserializer)?;
-
-        // Check if the string contains an offset (split by semicolon)
-        if s.contains(';') {
-            let parts: Vec<&str> = s.split(';').collect();
-            if parts.len() == 2 {
-                let name = parts[0].to_owned();
-                let offset = parts[1].parse::<i64>().map_err(serde::de::Error::custom)?;
-                return Ok(VariableEntry::WithOffset(name, offset));
-            } else {
-                return Err(serde::de::Error::custom("Invalid format for WithOffset"));
-            }
-        }
-
-        // Otherwise, it's a Simple entry
-        Ok(VariableEntry::Simple(s))
+impl VariableEntry {
+    pub fn new(name: String, offset: i64) -> Self {
+        VariableEntry { name, offset }
     }
 }
 
-#[derive(Clone, Debug, Serialize, Deserialize)]
+// Define a helper struct for deserializing the `variable_map` in the desired YAML format.
+#[derive(Debug, Deserialize)]
+struct VariableMapEntry {
+    internal_name: String,
+    name: String,
+    offset: i64
+}
+
+#[derive(Clone, Debug, Serialize)]
 pub struct NetCdfInputConfiguration {
     pub variable_map: HashMap<InputVariableName, VariableEntry>,
     pub lat_name: String,
@@ -68,7 +56,7 @@ impl Default for NetCdfInputConfiguration {
                 return;
             }
             warn!("Variable {} not found in configuration", &var);
-            variable_map.insert(var, VariableEntry::Simple(var.to_string()));
+            variable_map.insert(var, VariableEntry::new(var.to_string(), 0));
         });
 
         NetCdfInputConfiguration {
@@ -81,6 +69,51 @@ impl Default for NetCdfInputConfiguration {
         }
     }
 }
+
+// Custom implementation for deserializing `NetCdfInputConfiguration`.
+impl<'de> serde::Deserialize<'de> for NetCdfInputConfiguration {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        // Deserialize into an intermediate structure to capture the YAML format.
+        #[derive(Deserialize)]
+        struct IntermediateConfig {
+            lat_name: String,
+            lon_name: String,
+            time_name: String,
+            coords_dims: Option<(String, String)>,
+            time_units: Option<String>,
+            variable_map: Vec<VariableMapEntry>,
+        }
+
+        // Deserialize as an `IntermediateConfig` and convert it to `NetCdfInputConfiguration`.
+        let intermediate = IntermediateConfig::deserialize(deserializer)?;
+
+        // Convert the vector of `VariableMapEntry` into a `HashMap`.
+        let variable_map: HashMap<InputVariableName, VariableEntry> = intermediate
+            .variable_map
+            .into_iter()
+            .filter_map(|entry| {
+                if let Ok(internal_name) = InputVariableName::from_str(&entry.internal_name) {
+                    Some((internal_name, VariableEntry::new(entry.name, entry.offset)))
+                } else {
+                    None
+                }
+            })
+            .collect();
+
+        Ok(NetCdfInputConfiguration {
+            variable_map,
+            lat_name: intermediate.lat_name,
+            lon_name: intermediate.lon_name,
+            time_name: intermediate.time_name,
+            coords_dims: intermediate.coords_dims,
+            time_units: intermediate.time_units,
+        })
+    }
+}
+
 
 impl<T> From<T> for NetCdfInputConfiguration
 where
@@ -116,23 +149,26 @@ where
             .get("time")
             .cloned()
             .unwrap_or_else(|| "time".to_owned());
+        
+        let coords_dims = raw_variable_map
+            .get("coords_dims")
+            .map(|s| {
+                let parts: Vec<&str> = s.split(',').collect();
+                (parts[0].to_owned(), parts[1].to_owned())
+            });
 
         let mut variable_map: HashMap<InputVariableName, VariableEntry> = raw_variable_map
             .iter()
-            .filter(|(k, _)| *k != "latitude" && *k != "longitude" && *k != "time")
+            .filter(|(k, _)| *k == "variable_map")
             .filter_map(|(k, v)| {
                 if let Ok(var) = InputVariableName::from_str(k) {
-                    let entry = if v.contains(';') {
                         let parts: Vec<&str> = v.split(';').collect();
                         let name = parts[0].to_owned();
                         let offset = parts[1].parse::<i64>().unwrap_or_else(|e| {
                             warn!("Error parsing offset: {}", e);
                             0
                         });
-                        VariableEntry::WithOffset(name, offset)
-                    } else {
-                        VariableEntry::Simple(v.clone())
-                    };
+                        let entry = VariableEntry::new(name, offset);
                     Some((var, entry))
                 } else {
                     warn!("Variable {} not recognized", k);
@@ -147,7 +183,7 @@ where
                 return;
             }
             warn!("Variable {} not found in configuration", &var);
-            variable_map.insert(var, VariableEntry::Simple(var.to_string()));
+            variable_map.insert(var, VariableEntry::new(var.to_string(), 0));
         });
 
         NetCdfInputConfiguration {
@@ -155,7 +191,7 @@ where
             lat_name,
             lon_name,
             time_name,
-            coords_dims: None,
+            coords_dims: coords_dims,
             time_units: None,
         }
     }
@@ -272,14 +308,8 @@ fn register_nc_file(
         config
             .variable_map
             .iter()
-            .find(|(_, entry)| match entry {
-                VariableEntry::Simple(name) => name == &nc_var,
-                VariableEntry::WithOffset(name, _) => name == &nc_var,
-            })
-            .map(|(k, entry)| match entry {
-                VariableEntry::Simple(_) => (k.clone(), 0),        // Add zero offest
-                VariableEntry::WithOffset(_, offset) => (k.clone(), *offset), // With offset
-            })
+            .find(|(_, entry)| entry.name == nc_var)
+            .map(|(k, entry)| (k.clone(), entry.offset))
     })
     .unzip();
 
@@ -431,10 +461,7 @@ impl InputHandler for NetCdfInputHandler {
                 panic!("Could not find variable mapping for variable '{}'", var)
             });
 
-            let variable = match variable_info {
-                VariableEntry::Simple(name) => name,
-                VariableEntry::WithOffset(name, _) => name,
-            };
+            let variable = &variable_info.name;
 
             let values = read_variable_from_file(&record.file, variable, time_index);
 
