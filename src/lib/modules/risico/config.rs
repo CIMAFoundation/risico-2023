@@ -29,6 +29,16 @@ impl RISICOModelConfig {
                 ffmc_rain_fn = update_dffm_rain_legacy;
                 ros_fn = get_v_legacy;
             }
+            "new_moisture" => {
+                ffmc_no_rain_fn = update_dffm_dry;
+                ffmc_rain_fn = update_dffm_rain;
+                ros_fn = get_v_legacy;
+            }
+            "new_ros" => {
+                ffmc_no_rain_fn = update_dffm_dry_legacy;
+                ffmc_rain_fn = update_dffm_rain_legacy;
+                ros_fn = get_v;
+            }
             "v2023" => {
                 ffmc_no_rain_fn = update_dffm_dry;
                 ffmc_rain_fn = update_dffm_rain;
