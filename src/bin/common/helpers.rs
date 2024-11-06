@@ -83,6 +83,30 @@ pub fn get_input(handler: &dyn InputHandler, time: &DateTime<Utc>, len: usize) -
                 }
             });
             replace(&mut data, &h, |i| &mut i.humidity);
+        } else {
+            // forecasted PSFC and Q2
+            let psfc = handler.get_values(PSFC, time);
+            let q2 = handler.get_values(Q2, time);
+
+            if let Some(psfc) = psfc {
+                if let Some(q2) = q2 {
+                    // forecasted RH2
+                    let mut h: Array1<f32> = Array1::ones(len) * NODATAVAL;
+                    azip!((
+                        h in &mut h,
+                        q in &q2,
+                        p in &psfc,
+                        t in &t
+                    ){
+                        if *q > (NODATAVAL+1.0) && *t > (NODATAVAL+1.0) && *p > (NODATAVAL+1.0) {
+                            // this implements the following cdo formula
+                            // T_C=T2-273.15; P_hPa=PSFC/100; denom=0.622+Q2; e=(Q2*P_hPa/denom); es=6.112*exp((17.67*T_C)/(T_C+243.5)); RH=(e/es)*100;
+                            *h = 100.0 * (q * (p/100.0) / (0.622 + q)) / (6.112 * f32::exp((17.67 * t)/(t + 243.5)));
+                        }
+                    });
+                    replace(&mut data, &h, |i| &mut i.humidity);
+                }
+            }
         }
     }
 
