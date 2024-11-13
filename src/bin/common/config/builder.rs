@@ -15,7 +15,8 @@ use crate::common::io::readers::netcdf::NetCdfInputConfiguration;
 
 use super::models::{
     RISICOConfig,
-    FWIConfig
+    FWIConfig,
+    Mark5Config
 };
 
 pub type PaletteMap = HashMap<String, String>;
@@ -116,7 +117,17 @@ pub struct FWIConfigBuilder {
     pub warm_state_path: String,
     pub warm_state_offset: i64,
     pub output_types: Vec<OutputTypeConfig>,
-    // pub palettes: PaletteMap,
+    pub output_time_resolution: u32,
+    pub model_version: String,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct Mark5ConfigBuilder {
+    pub model_name: String,
+    pub cells_file_path: String,
+    pub warm_state_path: String,
+    pub warm_state_offset: i64,
+    pub output_types: Vec<OutputTypeConfig>,
     pub output_time_resolution: u32,
     pub model_version: String,
 }
@@ -127,6 +138,7 @@ pub struct FWIConfigBuilder {
 pub enum ConfigBuilderType {
     RISICO(RISICOConfigBuilder),
     FWI(FWIConfigBuilder),
+    Mark5(Mark5ConfigBuilder),
 }
 
 impl ConfigBuilderType {
@@ -134,6 +146,7 @@ impl ConfigBuilderType {
         match self {
             ConfigBuilderType::RISICO(_) => "RISICO",
             ConfigBuilderType::FWI(_) => "FWI",
+            ConfigBuilderType::Mark5(_) => "Mark5",
         }
     }
 }
@@ -356,6 +369,17 @@ impl FWIConfigBuilder {
     }
 }
 
+
+impl  Mark5ConfigBuilder {
+    pub fn build(
+        &self,
+        date: &DateTime<Utc>,
+        palettes: &PaletteMap,
+    ) -> Result<Mark5Config, RISICOError> {
+        Mark5Config::new(self, *date, palettes)
+    }
+    
+}
 
 pub fn load_palettes(config_map: &ConfigMap) -> HashMap<String, String> {
     let mut palettes: HashMap<String, String> = HashMap::new();
