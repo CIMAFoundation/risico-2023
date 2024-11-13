@@ -43,6 +43,14 @@ pub struct OutputElement {
     /// IFWI
     pub ifwi: f32,
 
+    // ------------- Mark 5 ----------------- //
+    /// Keetch-Byram Drought Index
+    pub kbdi: f32,
+    /// Drought Factor
+    pub df: f32,
+    /// Fire Danger Index
+    pub ffdi: f32,
+
     // ----------------- INPUTS ---------------//
     /// Input temperature in celsius
     pub temperature: f32,
@@ -72,6 +80,7 @@ impl Default for OutputElement {
             NDWI: NODATAVAL,
             PPF: NODATAVAL,
             t_effect: NODATAVAL,
+            meteo_index: NODATAVAL,
 
             // FWI
             ffmc: NODATAVAL,
@@ -82,6 +91,11 @@ impl Default for OutputElement {
             fwi: NODATAVAL,
             ifwi: NODATAVAL,
 
+            // Mark 5
+            kbdi: NODATAVAL,
+            df: NODATAVAL,
+            ffdi: NODATAVAL,
+
             // input variables
             temperature: NODATAVAL,
             rain: NODATAVAL,
@@ -89,7 +103,6 @@ impl Default for OutputElement {
             wind_dir: NODATAVAL,
             humidity: NODATAVAL,
             snow_cover: NODATAVAL,
-            meteo_index: NODATAVAL,
         }
     }
 }

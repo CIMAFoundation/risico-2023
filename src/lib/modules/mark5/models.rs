@@ -6,7 +6,7 @@ use itertools::izip;
 use super::{
     constants::*,
     config::Mark5ModelConfig,
-    functions::{get_output_fn, update_state_fn},
+    functions::{store_day_fn, update_state_fn, get_output_fn},
 };
 
 // CELLS PROPERTIES
@@ -35,12 +35,18 @@ impl Mark5Properties {
             .lons
             .iter()
             .enumerate()
-            .map(|(idx, v)| Mark5PropertiesElement {
-                lon: props.lons[idx],
+            .map(|(idx, lon)| Mark5PropertiesElement {
+                lon: *lon,
                 lat: props.lats[idx],
                 mean_rain: props.mean_rains[idx],
             })
             .collect();
+    
+        let len = data.len();
+        Self {
+            data,
+            len,
+        }
     }
 
     pub fn get_coords(&self) -> (Vec<f32>, Vec<f32>) {
@@ -56,9 +62,9 @@ impl Mark5Properties {
 #[derive(Debug, Clone)]
 #[derive(Default)]
 pub struct Mark5WarmState {
-    pub dates: Vec<DateTime<Utc>>,  // dates of the previous 20 days
-    pub daily_rain: Vec<f32>,  // daily rain of the previous 20 days
-    pub kbdi: f32,  // kbdi of the previous day
+    pub dates: Vec<DateTime<Utc>>,  // dates of the previous 20 days (default time window)
+    pub daily_rain: Vec<f32>,  // daily rain of the previous 20 days (default time window)
+    pub smd: f32,  // Soil Moisture Deficit of the previous day
 }
 
 
@@ -66,49 +72,55 @@ pub struct Mark5WarmState {
 #[derive(Debug)]
 #[allow(non_snake_case)]
 pub struct Mark5StateElement {
-    pub dates: Vec<DateTime<Utc>>,
-    pub daily_rain: Vec<f32>,
-    pub kbdi: f32,
-    pub cum_rain: f32,  // cumulation of rain per day
-    pub max_temp: f32,  // max temperature per day
-    pub min_rh: f32,  // min relative humidity per day
-    pub max_wind: f32,  // max wind per day
+    pub dates: Vec<DateTime<Utc>>,  // dates of the previous 20 days (default time window)
+    pub daily_rain: Vec<f32>,  // daily rain of the previous 20 days (default time window)
+    pub smd: f32,  // Soil Moisture Deficit
+    pub cum_rain: f32,  // cumulated rain on the run day
+    pub temperature: f32,  // temperature info on the run day
+    pub humidity: f32,  // relative humidity info on the day
+    pub wind_speed: f32,  // wind speed info on the run day
 }
 
 
 impl Mark5StateElement {
 
     pub fn get_time_window(&self, time: &DateTime<Utc>) -> (Vec<DateTime<Utc>>, Vec<f32>) {
-        // zip with dates and take only cumulated rain where history < 20 days
-        let combined = izip!(
+        // zip with dates and take only cumulated rain where history < 20 days (default time window)
+        let mut combined = izip!(
             self.dates.iter(),
             self.daily_rain.iter())
         .filter(|(t, _)| time.signed_duration_since(**t).num_days() <= TIME_WINDOW)
         .map(|(t, r)| (*t, *r))
         .collect::<Vec<_>>();
+        // order the values according to the dates
+        combined.sort_by(|a: &(DateTime<Utc>, f32), b| a.0.cmp(&b.0));
+        // get the dates and daily rain
         let dates: Vec<DateTime<Utc>> = combined.iter().map(|(t, _)| *t).collect();
         let daily_rain: Vec<f32> = combined.iter().map(|(_, r)| *r).collect();
         (dates, daily_rain)
     }
 
-    pub fn update(&mut self, time: &DateTime<Utc>, rain: f32) {
+    pub fn update(&mut self,
+        time: &DateTime<Utc>,
+        rain_of_day: f32  // mm, daily run to be add to the history
+    ) {
         // add new values
         self.dates.push(*time);
-        self.daily_rain.push(rain);
+        self.daily_rain.push(rain_of_day);
         // get the time window
         let (new_dates, new_rain) = self.get_time_window(time);
         // update the values
         self.dates = new_dates;
-        self.rain = new_rain;
+        self.daily_rain = new_rain;
     }
 
-    pub fn clear_day(
+    pub fn clean_day(
         &mut self
     ) {
         self.cum_rain = 0.0;
-        self.max_temp = -1000.0;
-        self.min_rh = 100.0;
-        self.max_wind = 0.0;
+        self.temperature = NODATAVAL;
+        self.humidity = NODATAVAL;
+        self.wind_speed = NODATAVAL;
     }
 }
 
@@ -130,7 +142,11 @@ impl Mark5State {
                 .map(|w| Mark5StateElement {
                     dates: w.dates.clone(),
                     daily_rain: w.daily_rain.clone(),
-                    kbdi: w.kbdi.clone(),
+                    smd: w.smd.clone(),
+                    cum_rain: 0.0,  // start with 0 cumulated rain
+                    temperature: NODATAVAL,
+                    humidity: NODATAVAL,
+                    wind_speed: NODATAVAL,
                 })
                 .collect(),
         );
@@ -152,35 +168,46 @@ impl Mark5State {
     }
 
     #[allow(non_snake_case)]
-    fn update_state(&mut self, props: &Mark5Properties, input: &Input) {
-        let time = &self.time;
+    fn store_day(&mut self, input: &Input) {
+        let time = input.time;  // reference time of the input
+        Zip::from(&mut self.data)
+            .and(&input.data)
+            .par_for_each(|state, input_data| {
+                store_day_fn(state, input_data, &self.config, &time);
+            });
+        self.time = time;
+    }
+
+    #[allow(non_snake_case)]
+    fn update_state(&mut self, props: &Mark5Properties) {
+        let time = self.time;  // time of the update
         Zip::from(&mut self.data)
             .and(&props.data)
-            .and(&input.data)
-            .par_for_each(|state, props, input_data| {
-                update_state_fn(state, props, input_data, time, &self.config)
+            .par_for_each(|state, props_data| {
+                update_state_fn(state, props_data, &self.config, &time);
             });
     }
 
     #[allow(non_snake_case)]
-    pub fn get_output(self: &Mark5State, input: &Input) -> Output {
+    pub fn get_output(&mut self) -> Output {
         let time = &self.time;
-
-        let output_data = Zip::from(&self.data)
-            .and(&input.data)
-            .par_map_collect(|state, input| get_output_fn(state, input, &self.config));
-
+        let output_data = self.data
+                    .map(|state| get_output_fn(state, &self.config, time));
+        // clean the daily values
+        self.data.iter_mut().for_each(|state| state.clean_day());
         Output::new(*time, output_data)
     }
 
-    /// Update the state of the cells
-    pub fn update(&mut self, props: &Mark5Properties, input: &Input) {
-        let new_time = &input.time;
-        self.time = *new_time;
-        self.update_state(props, input);
+    // Update the state of the cells
+    pub fn store(&mut self, input: &Input) {
+        self.store_day(input);
     }
 
-    pub fn output(&self, input: &Input) -> Output {
-        self.get_output(input)
+    pub fn update(&mut self, props: &Mark5Properties) {
+        self.update_state(props);
+    }
+
+    pub fn output(&mut self) -> Output {
+        self.get_output()
     }
 }
