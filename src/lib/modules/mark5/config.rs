@@ -1,5 +1,5 @@
-use super::functions::{store_day_extremes, kbdi_update, kbdi_output};
-use super::models::Mark5StateElement;
+use super::functions::{store_day_extremes, store_day_local_time, kbdi_update, kbdi_output};
+use super::models::{Mark5PropertiesElement, Mark5StateElement};
 use crate::models::{input::InputElement, output::OutputElement};
 use chrono::prelude::*;
 
@@ -9,7 +9,7 @@ use chrono::prelude::*;
 pub struct Mark5ModelConfig {
     pub model_version: String,
     // store day info method
-    store_day_fn: fn(&mut Mark5StateElement, &InputElement, &DateTime<Utc>),
+    store_day_fn: fn(&mut Mark5StateElement, &InputElement, &Mark5PropertiesElement, &DateTime<Utc>),
     // soil moisture deficit function
     smd_fn: fn(f32, f32, &Vec<f32>, f32) -> f32,
     // return output element
@@ -18,11 +18,16 @@ pub struct Mark5ModelConfig {
 
 impl Mark5ModelConfig {
     pub fn new(model_version_str: &str) -> Self {
-        let store_day_fn: fn(&mut Mark5StateElement, &InputElement, &DateTime<Utc>);
+        let store_day_fn: fn(&mut Mark5StateElement, &InputElement,  &Mark5PropertiesElement, &DateTime<Utc>);
         let smd_fn: fn(f32, f32, &Vec<f32>, f32) -> f32;
         let get_output_fn: fn(f32, f32, f32, f32, f32, f32, f32) -> OutputElement;
         match model_version_str {
             "legacy" => {
+                store_day_fn = store_day_local_time;
+                smd_fn = kbdi_update;
+                get_output_fn = kbdi_output;
+            }
+            "day_extremes" => {
                 store_day_fn = store_day_extremes;
                 smd_fn = kbdi_update;
                 get_output_fn = kbdi_output;
@@ -46,9 +51,10 @@ impl Mark5ModelConfig {
     pub fn store_day(&self,
         state: &mut Mark5StateElement,
         input: &InputElement,
+        prop: &Mark5PropertiesElement,
         time: &DateTime<Utc>,
     ) {
-        (self.store_day_fn)(state, input, time);
+        (self.store_day_fn)(state, input, prop, time);
     }
 
     #[allow(non_snake_case, clippy::too_many_arguments)]

@@ -6,3 +6,4 @@ pub const KBDI_RAIN_RUNOFF: f32 = 5.0;  // mm (almost 0.2 inch) from Finkele et 
 pub const TIME_WINDOW: i64 = 20;  // days
 pub const RAIN_TH: f32 = 2.0;  // mm
 
+pub const TIME_WEATHER: u32 = 15;  // hour in local time

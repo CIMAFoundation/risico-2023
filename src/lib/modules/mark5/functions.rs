@@ -1,17 +1,25 @@
-use chrono::{DateTime, Utc};
+use chrono::{DateTime, Utc, Timelike};
+use chrono_tz::Tz;
+use tzf_rs::DefaultFinder;
+use lazy_static::lazy_static;
 
 use crate::models::{input::InputElement, output::OutputElement};
-
 use super::{
     config::Mark5ModelConfig,
     constants::*,
     models::{Mark5PropertiesElement, Mark5StateElement},
 };
 
+
+lazy_static! {
+    static ref TZ_FINDER: DefaultFinder = DefaultFinder::new();
+}
+
 // Store the daily data
 pub fn store_day_extremes(
     state: &mut Mark5StateElement,
     input: &InputElement,
+    _prop: &Mark5PropertiesElement,
     _time: &DateTime<Utc>,
 ) {
     // maximum temperature per day
@@ -28,9 +36,27 @@ pub fn store_day_extremes(
     }
 }
 
+pub fn store_day_local_time(
+    state: &mut Mark5StateElement,
+    input: &InputElement,
+    prop: &Mark5PropertiesElement,
+    time: &DateTime<Utc>,
+) {
+    let tz_name = TZ_FINDER.get_tz_name(prop.lon as f64, prop.lat as f64);
+    let tz : Tz = tz_name.parse().expect("Invalid timezone name");
+    let local_time = time.with_timezone(&tz);
+    // Store the daily info at 15 local time
+    if local_time.hour() == TIME_WEATHER {
+        state.temperature = input.temperature;
+        state.humidity = input.humidity;
+        state.wind_speed = input.wind_speed;
+    }
+}
+
 pub fn store_day_fn(
     state: &mut Mark5StateElement,
     input: &InputElement,
+    prop: &Mark5PropertiesElement,
     config: &Mark5ModelConfig,
     time: &DateTime<Utc>,
 ) {
@@ -38,7 +64,7 @@ pub fn store_day_fn(
     state.cum_rain += input.rain;
     // store the other daily info
     // usual options: extremes / values at 3pm local time
-    config.store_day(state, input, time);
+    config.store_day(state, input, prop, time);
 }
 
 

@@ -168,12 +168,13 @@ impl Mark5State {
     }
 
     #[allow(non_snake_case)]
-    fn store_day(&mut self, input: &Input) {
+    fn store_day(&mut self, input: &Input, prop: &Mark5Properties) {
         let time = input.time;  // reference time of the input
         Zip::from(&mut self.data)
             .and(&input.data)
-            .par_for_each(|state, input_data| {
-                store_day_fn(state, input_data, &self.config, &time);
+            .and(&prop.data)
+            .par_for_each(|state, input_data, prop_data| {
+                store_day_fn(state, input_data, prop_data, &self.config, &time);
             });
         self.time = time;
     }
@@ -192,8 +193,8 @@ impl Mark5State {
     }
 
     // Update the state of the cells
-    pub fn store(&mut self, input: &Input) {
-        self.store_day(input);
+    pub fn store(&mut self, input: &Input, prop: &Mark5Properties) {
+        self.store_day(input, prop);
     }
 
     pub fn output(&mut self, props: &Mark5Properties) -> Output {
