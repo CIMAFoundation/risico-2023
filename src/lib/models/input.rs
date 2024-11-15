@@ -87,4 +87,8 @@ pub enum InputVariableName {
     V,
     /// SWI Value
     SWI,
+    /// Forecasted Specific Humidity at 2m
+    Q2,
+    /// Forecasted Pressure at surface level
+    PSFC,
 }
