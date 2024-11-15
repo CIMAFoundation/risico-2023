@@ -1,5 +1,5 @@
 use super::functions::{store_day_extremes, kbdi_update, kbdi_output};
-use super::models::{Mark5StateElement, Mark5PropertiesElement};
+use super::models::Mark5StateElement;
 use crate::models::{input::InputElement, output::OutputElement};
 use chrono::prelude::*;
 
@@ -11,16 +11,16 @@ pub struct Mark5ModelConfig {
     // store day info method
     store_day_fn: fn(&mut Mark5StateElement, &InputElement, &DateTime<Utc>),
     // soil moisture deficit function
-    smd_fn: fn(&mut Mark5StateElement, &Mark5PropertiesElement, &DateTime<Utc>),
+    smd_fn: fn(f32, f32, &Vec<f32>, f32) -> f32,
     // return output element
-    get_output_fn: fn(&Mark5StateElement, f32, f32) -> OutputElement,
+    get_output_fn: fn(f32, f32, f32, f32, f32, f32, f32) -> OutputElement,
 }
 
 impl Mark5ModelConfig {
     pub fn new(model_version_str: &str) -> Self {
         let store_day_fn: fn(&mut Mark5StateElement, &InputElement, &DateTime<Utc>);
-        let smd_fn: fn(&mut Mark5StateElement, &Mark5PropertiesElement, &DateTime<Utc>);
-        let get_output_fn: fn(&Mark5StateElement, f32, f32) -> OutputElement;
+        let smd_fn: fn(f32, f32, &Vec<f32>, f32) -> f32;
+        let get_output_fn: fn(f32, f32, f32, f32, f32, f32, f32) -> OutputElement;
         match model_version_str {
             "legacy" => {
                 store_day_fn = store_day_extremes;
@@ -43,8 +43,7 @@ impl Mark5ModelConfig {
     }
 
     #[allow(non_snake_case, clippy::too_many_arguments)]
-    pub fn store_day(
-        &self,
+    pub fn store_day(&self,
         state: &mut Mark5StateElement,
         input: &InputElement,
         time: &DateTime<Utc>,
@@ -54,21 +53,25 @@ impl Mark5ModelConfig {
 
     #[allow(non_snake_case, clippy::too_many_arguments)]
     pub fn update_smd(&self,
-        state: &mut Mark5StateElement,
-        props: &Mark5PropertiesElement,
-        time: &DateTime<Utc>
-    ) {
-        (self.smd_fn)(state, props, time);
+        smd: f32,  // previous SMD value
+        temp: f32,  // temperature [°C]
+        history_rain: &Vec<f32>,  // daily rain of the last days [mm]
+        mean_annual_rain: f32,  // mean annual rain [mm]
+    ) -> f32 {
+        (self.smd_fn)(smd, temp, history_rain, mean_annual_rain)
     }
 
     #[allow(non_snake_case, clippy::too_many_arguments)]
-    pub fn get_output(
-        &self,
-        state: &Mark5StateElement,
+    pub fn get_output(&self,
+        smd: f32,
         df: f32,
         ffdi: f32,
+        temperature: f32,
+        rain: f32,
+        wind_speed: f32,
+        humidity: f32,
     ) -> OutputElement {
-        (self.get_output_fn)(state, df, ffdi)
+        (self.get_output_fn)(smd, df, ffdi, temperature, rain, wind_speed, humidity)
     }
 
 }

@@ -1,4 +1,4 @@
-use crate::models::{input::Input, output::Output};
+use crate::models::{input::Input, output::{Output, OutputElement}};
 use chrono::prelude::*;
 use ndarray::{Array1, Zip};
 use itertools::izip;
@@ -6,7 +6,7 @@ use itertools::izip;
 use super::{
     constants::*,
     config::Mark5ModelConfig,
-    functions::{store_day_fn, update_state_fn, get_output_fn},
+    functions::{store_day_fn, get_output_fn},
 };
 
 // CELLS PROPERTIES
@@ -179,20 +179,13 @@ impl Mark5State {
     }
 
     #[allow(non_snake_case)]
-    fn update_state(&mut self, props: &Mark5Properties) {
-        let time = self.time;  // time of the update
-        Zip::from(&mut self.data)
-            .and(&props.data)
-            .par_for_each(|state, props_data| {
-                update_state_fn(state, props_data, &self.config, &time);
-            });
-    }
-
-    #[allow(non_snake_case)]
-    pub fn get_output(&mut self) -> Output {
+    pub fn get_output(&mut self, props: &Mark5Properties) -> Output {
         let time = &self.time;
-        let output_data = self.data
-                    .map(|state| get_output_fn(state, &self.config, time));
+        let output_data: Array1<OutputElement> = Zip::from(&mut self.data)
+            .and(&props.data)
+            .map_collect(|state, props_data| {
+                get_output_fn(state, props_data, &self.config, &time)
+            });
         // clean the daily values
         self.data.iter_mut().for_each(|state| state.clean_day());
         Output::new(*time, output_data)
@@ -203,11 +196,7 @@ impl Mark5State {
         self.store_day(input);
     }
 
-    pub fn update(&mut self, props: &Mark5Properties) {
-        self.update_state(props);
-    }
-
-    pub fn output(&mut self) -> Output {
-        self.get_output()
+    pub fn output(&mut self, props: &Mark5Properties) -> Output {
+        self.get_output(props)
     }
 }
