@@ -1,4 +1,4 @@
-use crate::models::{input::Input, output::{Output, OutputElement}};
+use crate::models::{input::Input, output::Output};
 use chrono::prelude::*;
 use ndarray::{Array1, Zip};
 use itertools::izip;
@@ -60,13 +60,21 @@ impl Mark5Properties {
 // WARM STATE
 #[allow(non_snake_case)]
 #[derive(Debug, Clone)]
-#[derive(Default)]
 pub struct Mark5WarmState {
     pub dates: Vec<DateTime<Utc>>,  // dates of the previous 20 days (default time window)
     pub daily_rain: Vec<f32>,  // daily rain of the previous 20 days (default time window)
     pub smd: f32,  // Soil Moisture Deficit of the previous day
 }
 
+impl Default for Mark5WarmState {
+    fn default() -> Self {
+        Self {
+            dates: vec![],
+            daily_rain: vec![],
+            smd: SMD_INIT,
+        }
+    }
+}
 
 // STATE
 #[derive(Debug)]
@@ -182,11 +190,11 @@ impl Mark5State {
     #[allow(non_snake_case)]
     pub fn get_output(&mut self, props: &Mark5Properties) -> Output {
         let time = &self.time;
-        let output_data: Array1<OutputElement> = Zip::from(&mut self.data)
-            .and(&props.data)
-            .map_collect(|state, props_data| {
-                get_output_fn(state, props_data, &self.config, &time)
-            });
+        let output_data = Zip::from(&mut self.data)
+                    .and(&props.data)
+                    .par_map_collect(|state, props_data| {
+                        get_output_fn(state, props_data, &self.config, &time)
+                    });
         // clean the daily values
         self.data.iter_mut().for_each(|state| state.clean_day());
         Output::new(*time, output_data)

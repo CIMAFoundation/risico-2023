@@ -81,10 +81,12 @@ pub fn kbdi_update(
     let day_rain = history_rain[history_rain.len() - 1];
     // calculate the rain of the last days (in case they are consecutive)
     let mut last_rain = 0.0;
-    let mut idx = history_rain.len() - 2;  // starting from yesterday
-    while (idx > 0) && (history_rain[idx] > 0.0) {
-        last_rain += history_rain[idx];
-        idx -= 1;
+    if history_rain.len() >= 2 {
+        let mut idx = history_rain.len() - 2;  // starting from yesterday
+        while (idx > 0) && (history_rain[idx] > 0.0) {
+            last_rain += history_rain[idx];
+            idx -= 1;
+        }
     }
     // effective rain of the day
     let effective_rain = f32::max(0.0, day_rain - f32::max(0.0, KBDI_RAIN_RUNOFF - last_rain));    
@@ -102,9 +104,9 @@ pub fn ffdi(
     drought_factor: f32,  // [adim]
 ) -> f32 {
     // conversion of wind speed from m/h to km/h
-    let wind_speed = wind_speed * 3.6;
+    let ws_kph = wind_speed / 1000.0;
     // calculation of the FFDI
-    let ffdi = 2.0*f32::exp(-0.45+0.987*f32::ln(drought_factor)-0.0345*rh+0.0338*temp+0.0234*wind_speed);
+    let ffdi = 2.0*f32::exp(-0.45+0.987*f32::ln(drought_factor)-0.0345*rh+0.0338*temp+0.0234*ws_kph);
     ffdi
 }
 
@@ -120,10 +122,14 @@ pub fn drought_factor(
     // find the rain events
     let rain_events = find_rain_events(*time, dates, daily_rain);
     // calculate the rainfall effects for each rain event
-    let rain_effects: Vec<f32> = rain_events
-        .iter()
-        .map(|(rain, age)| rainfall_effect(*rain, *age))
-        .collect();
+    let rain_effects: Vec<f32> = if rain_events.is_empty() {
+        vec![1.0]
+    } else {
+        rain_events
+            .iter()
+            .map(|(rain, age)| rainfall_effect(*rain, *age))
+            .collect()
+    };
     // get the minimum rainfall effect among the rainfall_effects vector
     let min_rain_effect = rain_effects.iter().cloned().min_by(|a, b| a.partial_cmp(b).unwrap());
     // limitation used operationally by the Bureau of Meteorology (Australia), see Finkele et al. 2006
@@ -182,7 +188,7 @@ pub fn find_rain_events(
             }
             j += 1;
         }
-        idx = j;
+        idx = j + 1;
         if rain_cum > 0.0 {  // there is a rain event
             let n_days = (time - dates[idx_max_rain]).num_days();
             rain_events.push((rain_cum, n_days));
