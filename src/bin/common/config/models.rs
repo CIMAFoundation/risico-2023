@@ -72,7 +72,6 @@ pub struct Mark5Config {
     warm_state_offset: i64,
     properties: Mark5Properties,
     palettes: PaletteMap,
-    output_time_resolution: u32,
     output_types_defs: Vec<OutputTypeConfig>,
     model_version: String,
 }
@@ -849,7 +848,6 @@ impl Mark5Config {
             warm_state_offset: warm_state_offset,
             properties: props,
             palettes,
-            output_time_resolution: config_defs.output_time_resolution,
             model_version: config_defs.model_version.clone(),
             output_types_defs: config_defs.output_types.clone(),
         };
@@ -921,12 +919,6 @@ impl Mark5Config {
             &self.run_date,
             &self.palettes,
         ))
-    }
-
-    pub fn should_write_output(&self, time: &DateTime<Utc>) -> bool {
-        let time_diff = time.signed_duration_since(self.run_date);
-        let hours = time_diff.num_hours();
-        hours % self.output_time_resolution as i64 == 0
     }
 
     pub fn should_write_warm_state(&self, time: &DateTime<Utc>) -> (bool, DateTime<Utc>) {

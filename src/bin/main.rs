@@ -210,15 +210,13 @@ fn run_mark5(
         let input = get_input(handler, &time, len);
 
         // store the input of the day
-        state.store(&input);
+        state.store(&input, &props);
 
-        if config.should_write_output(&state.time) {
+        let (should_write_warm, warm_state_time) = config.should_write_warm_state(&time);
+        if  should_write_warm{
+            // update the state with the input of the day and compute output
             let c = Utc::now();
-            state.update(props);
-            trace!("Updating state took {} seconds", Utc::now() - c);
-
-            let c = Utc::now();
-            let output = state.output();
+            let output = state.output(&props);
             trace!("Generating output took {} seconds", Utc::now() - c);
 
             let c = Utc::now();
@@ -226,10 +224,7 @@ fn run_mark5(
                 warn!("Error writing output: {}", err);
             }
             trace!("Writing output took {} seconds", Utc::now() - c);
-        }
 
-        let (should_write_warm, warm_state_time) = config.should_write_warm_state(&time);
-        if  should_write_warm{
             info!("Writing warm state");
             let c = Utc::now();
             if let Err(err) = config.write_warm_state(&state, warm_state_time) {
