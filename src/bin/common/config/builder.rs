@@ -128,7 +128,6 @@ pub struct Mark5ConfigBuilder {
     pub warm_state_path: String,
     pub warm_state_offset: i64,
     pub output_types: Vec<OutputTypeConfig>,
-    pub output_time_resolution: u32,
     pub model_version: String,
 }
 
