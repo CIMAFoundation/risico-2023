@@ -237,6 +237,15 @@ pub enum OutputVariableName {
     /// Fire Weather Index
     #[strum(props(long_name = "IFWI", units = "-"))]
     ifwi,
+
+    #[strum(props(long_name = "Keetch-Byram Drought Index", units = "mm"))]
+    kbdi,
+
+    #[strum(props(long_name = "Drought Factor", units = "-"))]
+    df,
+
+    #[strum(props(long_name = "Mark5 Fire Danger Index", units = "-"))]
+    ffdi,
 }
 
 fn get_derived(a: &f32, b: &f32, c: Option<&f32>) -> f32 {
@@ -311,6 +320,10 @@ impl Output {
             bui => Some(self.get_array(|o| o.bui)),
             fwi => Some(self.get_array(|o| o.fwi)),
             ifwi => Some(self.get_array(|o| o.ifwi)),
+        
+            kbdi => Some(self.get_array(|o| o.kbdi)),
+            df => Some(self.get_array(|o| o.df)),
+            ffdi => Some(self.get_array(|o| o.ffdi)),
         }
     }
 }
