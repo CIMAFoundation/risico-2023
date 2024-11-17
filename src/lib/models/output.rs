@@ -43,9 +43,10 @@ pub struct OutputElement {
     /// IFWI
     pub ifwi: f32,
 
-    // ------------- Mark 5 ----------------- //
-    /// Keetch-Byram Drought Index
+    // ------------- Keetch-Byram Drought Index ----------------- //
     pub kbdi: f32,
+
+    // ------------- Mark 5 ----------------- //
     /// Drought Factor
     pub df: f32,
     /// Fire Danger Index
@@ -91,8 +92,10 @@ impl Default for OutputElement {
             fwi: NODATAVAL,
             ifwi: NODATAVAL,
 
-            // Mark 5
+            // Keech-Byram Drought Index
             kbdi: NODATAVAL,
+
+            // Mark 5
             df: NODATAVAL,
             ffdi: NODATAVAL,
 
@@ -238,12 +241,15 @@ pub enum OutputVariableName {
     #[strum(props(long_name = "IFWI", units = "-"))]
     ifwi,
 
+    // Keetch-Byram Drought Index
     #[strum(props(long_name = "Keetch-Byram Drought Index", units = "mm"))]
     kbdi,
 
+    // Mark 5 - Drought Factor
     #[strum(props(long_name = "Drought Factor", units = "-"))]
     df,
 
+    // Mark 5 - Fire Danger Index
     #[strum(props(long_name = "Mark5 Fire Danger Index", units = "-"))]
     ffdi,
 }
