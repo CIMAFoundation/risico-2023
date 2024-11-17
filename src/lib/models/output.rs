@@ -56,7 +56,7 @@ pub struct OutputElement {
     pub temperature: f32,
     /// Input rain in mm
     pub rain: f32,
-    /// Input wind speed in m/h
+    /// Input wind speed in m/s
     pub wind_speed: f32,
     /// Input wind direction in radians
     pub wind_dir: f32,

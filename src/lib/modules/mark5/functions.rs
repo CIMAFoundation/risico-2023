@@ -223,21 +223,22 @@ pub fn get_output_fn(
 }
 
 pub fn kbdi_output(
-    smd: f32,
-    df: f32,
-    ffdi: f32,
-    temperature: f32,
-    rain: f32,
-    wind_speed: f32,
-    humidity: f32,
+    smd: f32, // Soil Moisture Deficit [mm]
+    df: f32,  // Drought Factor [-]
+    ffdi: f32,  // Forest Fire Danger Index [-]
+    temperature: f32,  // Temperature [°C]
+    rain: f32,  // Rain (cumulated) [mm]
+    wind_speed: f32, // Wind Speed [m/h]
+    humidity: f32, // Relative Humidity [%]
 ) -> OutputElement {
+    let wind_speed_out = wind_speed / 3600.0;  // conversion from m/h to m/s
     OutputElement {
         kbdi: smd,
         df,
         ffdi,
         temperature,
         rain,
-        wind_speed,
+        wind_speed: wind_speed_out,
         humidity,
         ..OutputElement::default()
     }
