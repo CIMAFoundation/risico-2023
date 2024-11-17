@@ -1,4 +1,5 @@
-use super::functions::{store_day_extremes, store_day_local_time, kbdi_update, kbdi_output};
+use super::functions::{store_day_extremes, store_day_local_time, kbdi_output};
+use crate::modules::kbdi::functions::kbdi_update_mm;
 use super::models::{Mark5PropertiesElement, Mark5StateElement};
 use crate::models::{input::InputElement, output::OutputElement};
 use chrono::prelude::*;
@@ -24,17 +25,17 @@ impl Mark5ModelConfig {
         match model_version_str {
             "legacy" => {
                 store_day_fn = store_day_local_time;
-                smd_fn = kbdi_update;
+                smd_fn = kbdi_update_mm;
                 get_output_fn = kbdi_output;
             }
             "day_extremes" => {
                 store_day_fn = store_day_extremes;
-                smd_fn = kbdi_update;
+                smd_fn = kbdi_update_mm;
                 get_output_fn = kbdi_output;
             }
             _ => {
                 store_day_fn = store_day_extremes;
-                smd_fn = kbdi_update;
+                smd_fn = kbdi_update_mm;
                 get_output_fn = kbdi_output;
             }
         }
