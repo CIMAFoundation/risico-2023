@@ -29,7 +29,7 @@ pub fn store_day_fn(
 // Source: WikiFire, Finkele et al. 2006
 pub fn kbdi_update_mm(
     kbdi: f32,  // previous KBDI value [mm]
-    temp: f32,  // temperature [°C]
+    max_temp: f32,  // maximum daily temperature [°C]
     history_rain: &Vec<f32>,  // daily rain of the last days + rain of today [mm] (ordered from oldest to newest)
     mean_annual_rain: f32,  // mean annual rain [mm]
 ) -> f32 {
@@ -47,7 +47,7 @@ pub fn kbdi_update_mm(
     // effective rain of the day
     let effective_rain = f32::max(0.0, day_rain - f32::max(0.0, KBDI_RAIN_RUNOFF - last_rain));    
     let dt: f32 = 1.0;  // DAILY COMPUTATION
-    let evapo_transp: f32 =  (((203.2-kbdi) * (0.968*f32::exp(0.0875*temp+1.5552)-8.3) * dt) / (1.0+10.88*f32::exp(-0.001736*mean_annual_rain)))*10e-3;
+    let evapo_transp: f32 =  (((203.2-kbdi) * (0.968*f32::exp(0.0875*max_temp+1.5552)-8.3) * dt) / (1.0+10.88*f32::exp(-0.001736*mean_annual_rain)))*10e-3;
     kbdi - effective_rain + evapo_transp
 }
 
