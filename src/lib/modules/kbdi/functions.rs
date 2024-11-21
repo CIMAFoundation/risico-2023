@@ -14,10 +14,12 @@ pub fn store_day_fn(
     input: &InputElement,
 ) {
     // cumulated rain per day
-    state.cum_rain += input.rain;
+    if input.rain > 0.0 {
+        state.cum_rain += input.rain;
+    }
     // store the maximum temperature per day
-    if (state.temperature == NODATAVAL) || (input.temperature > state.temperature) {
-        state.temperature = input.temperature;
+    if (state.max_temp == NODATAVAL) || (input.temperature > state.max_temp) {
+        state.max_temp = input.temperature;
     }
 }
 
@@ -60,14 +62,14 @@ pub fn get_output_fn(
     state.update(time, state.cum_rain);
     // get the last rains in the time windows -> they are already ordered from oldest to newest
     let (_, daily_rains) = state.get_time_window(time);
-    let new_kbdi = config.update_kbdi(state.kbdi, state.temperature, &daily_rains, prop.mean_rain);
+    let new_kbdi = config.update_kbdi(state.kbdi, state.max_temp, &daily_rains, prop.mean_rain);
     // store the new KBDI value
     state.kbdi = new_kbdi;
     // return the output element
     OutputElement {
         kbdi: new_kbdi,
         rain: state.cum_rain,
-        temperature: state.temperature,
+        temperature: state.max_temp,
         ..OutputElement::default()
     }
 }

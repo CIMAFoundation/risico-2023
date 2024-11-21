@@ -14,7 +14,7 @@ use super::{
 pub struct KBDIPropertiesElement {
     pub lon: f32,
     pub lat: f32,
-    pub mean_rain: f32,
+    pub mean_rain: f32,  // mean annual rain [mm year^-1]
 }
 
 #[derive(Debug)]
@@ -61,9 +61,9 @@ impl KBDIProperties {
 #[allow(non_snake_case)]
 #[derive(Debug, Clone)]
 pub struct KBDIWarmState {
-    pub dates: Vec<DateTime<Utc>>,  // dates of the previous 20 days (default time window)
-    pub daily_rain: Vec<f32>,  // daily rain of the previous 20 days (default time window)
-    pub kbdi: f32,  // Keetch-Byram Dorugh Index of the previous day
+    pub dates: Vec<DateTime<Utc>>,  // dates of the time window
+    pub daily_rain: Vec<f32>,  // daily rain of the time window [mm day^-1]
+    pub kbdi: f32,  // Keetch-Byram Dorugh Index
 }
 
 impl Default for KBDIWarmState {
@@ -80,18 +80,18 @@ impl Default for KBDIWarmState {
 #[derive(Debug)]
 #[allow(non_snake_case)]
 pub struct KBDIStateElement {
-    pub dates: Vec<DateTime<Utc>>,  // dates of the previous 20 days (default time window)
-    pub daily_rain: Vec<f32>,  // daily rain of the previous 20 days (default time window)
-    pub kbdi: f32,  // Soil Moisture Deficit
+    pub dates: Vec<DateTime<Utc>>,  // dates of the time window
+    pub daily_rain: Vec<f32>,  // daily rain of the time window [mm day^-1]
+    pub kbdi: f32,  // Keetch-Byram Dorugh Index
     pub cum_rain: f32,  // cumulated rain on the run day
-    pub temperature: f32,  // temperature info on the run day
+    pub max_temp: f32,  // maximum temperature info on the run day
 }
 
 
 impl KBDIStateElement {
 
     pub fn get_time_window(&self, time: &DateTime<Utc>) -> (Vec<DateTime<Utc>>, Vec<f32>) {
-        // zip with dates and take only cumulated rain where history < 20 days (default time window)
+        // zip with dates and take only cumulated rain where history < time window
         let mut combined = izip!(
             self.dates.iter(),
             self.daily_rain.iter())
@@ -124,7 +124,7 @@ impl KBDIStateElement {
         &mut self
     ) {
         self.cum_rain = 0.0;
-        self.temperature = NODATAVAL;
+        self.max_temp = NODATAVAL;
     }
 }
 
@@ -147,8 +147,8 @@ impl KBDIState {
                     dates: w.dates.clone(),
                     daily_rain: w.daily_rain.clone(),
                     kbdi: w.kbdi.clone(),
-                    cum_rain: 0.0,  // start with 0 cumulated rain
-                    temperature: NODATAVAL,
+                    cum_rain: 0.0,  // start with 0 mm cumulated rain
+                    max_temp: NODATAVAL,
                 })
                 .collect(),
         );
