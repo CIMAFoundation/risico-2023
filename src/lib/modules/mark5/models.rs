@@ -61,9 +61,9 @@ impl Mark5Properties {
 #[allow(non_snake_case)]
 #[derive(Debug, Clone)]
 pub struct Mark5WarmState {
-    pub dates: Vec<DateTime<Utc>>,  // dates of the previous 20 days (default time window)
-    pub daily_rain: Vec<f32>,  // daily rain of the previous 20 days (default time window)
-    pub smd: f32,  // Soil Moisture Deficit of the previous day
+    pub dates: Vec<DateTime<Utc>>,  // dates of the previous time window
+    pub daily_rain: Vec<f32>,  // daily rain [mm] of the previous time window
+    pub smd: f32,  // Soil Moisture Deficit [mm] of the previous day
 }
 
 impl Default for Mark5WarmState {
@@ -80,13 +80,14 @@ impl Default for Mark5WarmState {
 #[derive(Debug)]
 #[allow(non_snake_case)]
 pub struct Mark5StateElement {
-    pub dates: Vec<DateTime<Utc>>,  // dates of the previous 20 days (default time window)
-    pub daily_rain: Vec<f32>,  // daily rain of the previous 20 days (default time window)
-    pub smd: f32,  // Soil Moisture Deficit
-    pub cum_rain: f32,  // cumulated rain on the run day
-    pub temperature: f32,  // temperature info on the run day
-    pub humidity: f32,  // relative humidity info on the day
-    pub wind_speed: f32,  // wind speed info on the run day
+    pub dates: Vec<DateTime<Utc>>,  // dates of the previous time window
+    pub daily_rain: Vec<f32>,  // daily rain [mm] of the previous time window
+    pub smd: f32,  // Soil Moisture Deficit [mm]
+    pub cum_rain: f32,  // cumulated rain [mm] on the run day
+    pub max_temp: f32,  // maximum daily temperature [°C] info on the run day
+    pub temp_15pm: f32,  // temperature [°C] at 15pm info on the run day
+    pub humidity_15pm: f32,  // relative humidity [%] at 15pm]
+    pub wind_speed_15pm: f32,  // wind speed [m/h] info on the run day
 }
 
 
@@ -126,9 +127,10 @@ impl Mark5StateElement {
         &mut self
     ) {
         self.cum_rain = 0.0;
-        self.temperature = NODATAVAL;
-        self.humidity = NODATAVAL;
-        self.wind_speed = NODATAVAL;
+        self.max_temp = NODATAVAL;
+        self.temp_15pm = NODATAVAL;
+        self.humidity_15pm = NODATAVAL;
+        self.wind_speed_15pm = NODATAVAL;
     }
 }
 
@@ -152,9 +154,10 @@ impl Mark5State {
                     daily_rain: w.daily_rain.clone(),
                     smd: w.smd.clone(),
                     cum_rain: 0.0,  // start with 0 cumulated rain
-                    temperature: NODATAVAL,
-                    humidity: NODATAVAL,
-                    wind_speed: NODATAVAL,
+                    max_temp: NODATAVAL,
+                    temp_15pm: NODATAVAL,
+                    humidity_15pm: NODATAVAL,
+                    wind_speed_15pm: NODATAVAL,
                 })
                 .collect(),
         );
@@ -182,7 +185,7 @@ impl Mark5State {
             .and(&input.data)
             .and(&prop.data)
             .par_for_each(|state, input_data, prop_data| {
-                store_day_fn(state, input_data, prop_data, &self.config, &time);
+                store_day_fn(state, input_data, prop_data, &time);
             });
         self.time = time;
     }

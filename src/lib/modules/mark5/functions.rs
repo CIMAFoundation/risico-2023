@@ -15,56 +15,30 @@ lazy_static! {
     static ref TZ_FINDER: DefaultFinder = DefaultFinder::new();
 }
 
-// Store the daily data
-pub fn store_day_extremes(
-    state: &mut Mark5StateElement,
-    input: &InputElement,
-    _prop: &Mark5PropertiesElement,
-    _time: &DateTime<Utc>,
-) {
-    // maximum temperature per day
-    if (state.temperature == NODATAVAL) || (input.temperature > state.temperature) {
-        state.temperature = input.temperature;
-    }
-    // minimum relative humidity per day
-    if (state.humidity == NODATAVAL) || (input.humidity < state.humidity) {
-        state.humidity = input.humidity;
-    }
-    // maximum wind per day
-    if (state.wind_speed == NODATAVAL) || (input.wind_speed > state.wind_speed) {
-        state.wind_speed = input.wind_speed;
-    }
-}
-
-pub fn store_day_local_time(
+// Store the daily info
+pub fn store_day_fn(
     state: &mut Mark5StateElement,
     input: &InputElement,
     prop: &Mark5PropertiesElement,
     time: &DateTime<Utc>,
 ) {
+    // info for soil moisture deficit calculation
+    // cumulated rain per day
+    state.cum_rain += input.rain;
+    // maximum temperature per day
+    if (state.max_temp == NODATAVAL) || (input.temperature > state.max_temp) {
+        state.max_temp = input.temperature;
+    }
+    // store the other daily info -> values at 3pm local time
     let tz_name = TZ_FINDER.get_tz_name(prop.lon as f64, prop.lat as f64);
     let tz : Tz = tz_name.parse().expect("Invalid timezone name");
     let local_time = time.with_timezone(&tz);
     // Store the daily info at 15 local time
     if local_time.hour() == TIME_WEATHER {
-        state.temperature = input.temperature;
-        state.humidity = input.humidity;
-        state.wind_speed = input.wind_speed;
+        state.temp_15pm = input.temperature;
+        state.humidity_15pm = input.humidity;
+        state.wind_speed_15pm = input.wind_speed;
     }
-}
-
-pub fn store_day_fn(
-    state: &mut Mark5StateElement,
-    input: &InputElement,
-    prop: &Mark5PropertiesElement,
-    config: &Mark5ModelConfig,
-    time: &DateTime<Utc>,
-) {
-    // cumulated rain per day
-    state.cum_rain += input.rain;
-    // store the other daily info
-    // usual options: extremes / values at 3pm local time
-    config.store_day(state, input, prop, time);
 }
 
 
@@ -183,15 +157,15 @@ pub fn get_output_fn(
     let (dates, daily_rains) = state.get_time_window(time);
 
     // update the soil moisture deficit
-    state.smd = config.update_smd(state.smd, state.temperature, &daily_rains, props.mean_rain);
+    state.smd = config.update_smd(state.smd, state.max_temp, &daily_rains, props.mean_rain);
 
     // calculate the drought factor
     let df = drought_factor(time, state.smd, &dates, &daily_rains);
     // calculate the FFDI
-    let ffdi = ffdi(state.temperature, state.humidity, state.wind_speed, df);
+    let ffdi = ffdi(state.temp_15pm, state.humidity_15pm, state.wind_speed_15pm, df);
 
     // return output
-    config.get_output(state.smd, df, ffdi, state.temperature, state.cum_rain, state.wind_speed, state.humidity)
+    config.get_output(state.smd, df, ffdi, state.temp_15pm, state.cum_rain, state.wind_speed_15pm, state.humidity_15pm)
 }
 
 pub fn kbdi_output(
