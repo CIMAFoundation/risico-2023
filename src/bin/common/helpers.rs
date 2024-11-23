@@ -62,7 +62,7 @@ pub fn get_input(handler: &dyn InputHandler, time: &DateTime<Utc>, len: usize) -
     let t = handler.get_values(T, time);
 
     if let Some(t) = t {
-        let t = t.mapv(|_t| if _t > 200.0 { _t - 273.15 } else { _t });
+        let t = t.mapv(|_t| if _t > 200.0 { _t - 273.15 } else { _t });  // conversion to Celsius
         replace(&mut data, &t, |i| &mut i.temperature);
 
         // Forecasted dew point temperature
@@ -83,7 +83,9 @@ pub fn get_input(handler: &dyn InputHandler, time: &DateTime<Utc>, len: usize) -
                 }
             });
             replace(&mut data, &h, |i| &mut i.humidity);
-        } else {
+            // save also the dew point temperature
+            replace(&mut data, &r, |i| &mut i.temp_dew_point);
+        } else {            
             // forecasted PSFC and Q2
             let psfc = handler.get_values(PSFC, time);
             let q2 = handler.get_values(Q2, time);
@@ -105,6 +107,25 @@ pub fn get_input(handler: &dyn InputHandler, time: &DateTime<Utc>, len: usize) -
                         }
                     });
                     replace(&mut data, &h, |i| &mut i.humidity);
+
+                    // compute the temperature dew point from the forecasted temperature and relative humidity
+                    let mut r: Array1<f32> = Array1::ones(len) * NODATAVAL;
+                    azip!((
+                        r in &mut r,
+                        h in &h,
+                        t in &t
+                    ){
+                        if *h > (NODATAVAL+1.0) && *t > (NODATAVAL+1.0) {
+                            let mut h = *h;
+                            if h > 100.0 {
+                                h = 100.0;
+                            }
+                            // Magnus formula
+                            let gamma = f32::ln(h / 100.0) + ((17.625 * t) / (t + 243.04));
+                            *r = (243.04 * gamma) / (17.625 - gamma);
+                        }
+                    });
+                    replace(&mut data, &r, |i| &mut i.temp_dew_point);
                 }
             }
         }
