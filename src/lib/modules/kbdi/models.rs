@@ -63,7 +63,7 @@ impl KBDIProperties {
 pub struct KBDIWarmState {
     pub dates: Vec<DateTime<Utc>>,  // dates of the time window
     pub daily_rain: Vec<f32>,  // daily rain of the time window [mm day^-1]
-    pub kbdi: f32,  // Keetch-Byram Dorugh Index
+    pub kbdi: f32,  // Keetch-Byram Dorugh Index [mm]
 }
 
 impl Default for KBDIWarmState {
