@@ -20,6 +20,8 @@ pub struct InputElement {
     pub humidity: f32,
     /// snow cover
     pub snow_cover: f32,
+    /// dew point temperature
+    pub temp_dew_point: f32,
 
     // satellite variables
     pub ndvi: f32,
@@ -37,6 +39,7 @@ impl Default for InputElement {
             wind_dir: NODATAVAL,
             humidity: NODATAVAL,
             snow_cover: NODATAVAL,
+            temp_dew_point: NODATAVAL,
             ndvi: NODATAVAL,
             ndwi: NODATAVAL,
             msi: NODATAVAL,
