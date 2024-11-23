@@ -8,6 +8,24 @@ use crate::constants::NODATAVAL;
 
 #[allow(non_snake_case)]
 pub struct OutputElement {
+    // ----------------- INPUTS ---------------//
+    /// Input temperature in celsius
+    pub temperature: f32,
+    /// Input rain in mm
+    pub rain: f32,
+    /// Input wind speed in m/s
+    pub wind_speed: f32,
+    /// Input wind direction in radians
+    pub wind_dir: f32,
+    /// Input relative humidity in %
+    pub humidity: f32,
+    /// Input snow cover
+    pub snow_cover: f32,
+    /// Meteorological index
+    pub meteo_index: f32,
+    /// Dew point temperature
+    pub temp_dew_point: f32,
+
     // ------------------- RISICO ------------------- //
     /// Fine fuel moisture content
     pub dffm: f32,
@@ -58,26 +76,22 @@ pub struct OutputElement {
     // ------------- Fosberg Index ----------------- //
     pub ffwi: f32,
 
-    // ----------------- INPUTS ---------------//
-    /// Input temperature in celsius
-    pub temperature: f32,
-    /// Input rain in mm
-    pub rain: f32,
-    /// Input wind speed in m/s
-    pub wind_speed: f32,
-    /// Input wind direction in radians
-    pub wind_dir: f32,
-    /// Input relative humidity in %
-    pub humidity: f32,
-    /// Input snow cover
-    pub snow_cover: f32,
-    /// Meteorological index
-    pub meteo_index: f32,
+    // ------------- Nesterov Index ----------------- //
+    pub nesterov: f32,
 }
 
 impl Default for OutputElement {
     fn default() -> Self {
         Self {
+            // input variables
+            temperature: NODATAVAL,
+            rain: NODATAVAL,
+            wind_speed: NODATAVAL,
+            wind_dir: NODATAVAL,
+            humidity: NODATAVAL,
+            snow_cover: NODATAVAL,
+            temp_dew_point: NODATAVAL,
+
             // RISICO
             dffm: NODATAVAL,
             W: NODATAVAL,
@@ -111,13 +125,8 @@ impl Default for OutputElement {
             // Fosberg
             ffwi: NODATAVAL,
 
-            // input variables
-            temperature: NODATAVAL,
-            rain: NODATAVAL,
-            wind_speed: NODATAVAL,
-            wind_dir: NODATAVAL,
-            humidity: NODATAVAL,
-            snow_cover: NODATAVAL,
+            // Nesterov
+            nesterov: NODATAVAL,
         }
     }
 }
@@ -138,6 +147,31 @@ impl Default for OutputElement {
 )]
 #[strum(ascii_case_insensitive)]
 pub enum OutputVariableName {
+
+    /// ----------- INPUTS ----------------- //
+    /// Input Temperature
+    #[strum(props(long_name = "Input Temperature", units = "°C"))]
+    temperature,
+    /// Input Rain
+    #[strum(props(long_name = "Input Rain", units = "mm"))]
+    rain,
+    /// Input Wind Speed
+    #[strum(props(long_name = "Input Wind Speed", units = "m/s"))]
+    windSpeed,
+    /// Input Wind Direction
+    #[strum(props(long_name = "Input Wind Direction", units = "°"))]
+    windDir,
+    /// Input Relative Humidity
+    #[strum(props(long_name = "Input Relative Humidity", units = "%"))]
+    humidity,
+    /// Input Snow Cover
+    #[strum(props(long_name = "Input Snow Cover", units = "mm"))]
+    snowCover,
+    /// Dew Point Temperature
+    #[strum(props(long_name = "Dew Point Temperature", units = "°C"))]
+    tempDewPoint,
+
+    /// ----------- RISICO ----------------- //
     /// Fine Fuel Moisture
     #[strum(props(long_name = "Fine Fuel Moisture", units = "%"))]
     dffm,
@@ -150,42 +184,15 @@ pub enum OutputVariableName {
     /// Fire Intensity
     #[strum(props(long_name = "Fire Intensity", units = "kW/m"))]
     I,
-
     /// Temperature Effect on Fire Spread
     #[strum(props(long_name = "Temperature Effect on Fire Spread", units = "-"))]
     contrT,
-
-    /// Input Temperature
-    #[strum(props(long_name = "Input Temperature", units = "°C"))]
-    temperature,
-    /// Input Rain
-    #[strum(props(long_name = "Input Rain", units = "mm"))]
-    rain,
-
-    /// Input Wind Speed
-    #[strum(props(long_name = "Input Wind Speed", units = "m/s"))]
-    windSpeed,
-
-    /// Input Wind Direction
-    #[strum(props(long_name = "Input Wind Direction", units = "°"))]
-    windDir,
-
-    /// Input Relative Humidity
-    #[strum(props(long_name = "Input Relative Humidity", units = "%"))]
-    humidity,
-
-    /// Input Snow Cover
-    #[strum(props(long_name = "Input Snow Cover", units = "mm"))]
-    snowCover,
-
     /// NDVI factor
     #[strum(props(long_name = "NDVI factor", units = "-"))]
     NDVI,
-
     /// NDWI factor
     #[strum(props(long_name = "NDWI factor", units = "-"))]
     NDWI,
-
     /// Meteorological Index
     #[strum(
         props(long_name = "Meteorological Index", units = "-"),
@@ -193,37 +200,30 @@ pub enum OutputVariableName {
         serialize = "meteoIndex2"
     )]
     meteoIndex2,
-
     /// Fire Spread Rate + PPF
     #[strum(props(long_name = "Fire Spread Rate + PPF", units = "m/h"))]
     VPPF,
-
     /// Fire Intensity + PPF
     #[strum(props(long_name = "Fire Intensity + PPF", units = "kW/m"))]
     IPPF,
-
     /// Fire Intensity + NDWI factor
     #[strum(props(long_name = "Fire Intensity + NDWI factor", units = "kW/m"))]
     INDWI,
-
     /// Fire Spread rate + NDWI factor
     #[strum(props(long_name = "Fire Spread rate + NDWI factor", units = "m/h"))]
     VNDWI,
-
     /// Fire Intensity + NDVI factor
     #[strum(props(long_name = "Fire Intensity + NDVI factor", units = "kW/m"))]
     INDVI,
     /// Fire Spread rate + NDVI factor
     #[strum(props(long_name = "Fire Spread rate + NDVI factor", units = "m/h"))]
     VNDVI,
-
     /// Fire Spread rate + PPF + NDWI factor
     #[strum(props(long_name = "Fire Spread rate + PPF + NDWI factor", units = "m/h"))]
     VPPFNDWI,
     /// Fire Intensity + PPF + NDWI factor
     #[strum(props(long_name = "Fire Intensity + PPF + NDWI factor", units = "kW/m"))]
     IPPFNDWI,
-
     /// Fire Spread rate + PPF + NDVI factor
     #[strum(props(long_name = "Fire Spread rate + PPF + NDVI factor", units = "m/h"))]
     VPPFNDVI,
@@ -231,6 +231,7 @@ pub enum OutputVariableName {
     #[strum(props(long_name = "Fire Intensity + PPF + NDVI factor", units = "kW/m"))]
     IPPFNDVI,
 
+    /// ----------- FWI ----------------- //
     /// Fine Fuel Moisture Code
     #[strum(props(long_name = "Fine Fuel Moisture Code", units = "-"))]
     ffmc,
@@ -253,25 +254,29 @@ pub enum OutputVariableName {
     #[strum(props(long_name = "IFWI", units = "-"))]
     ifwi,
 
-    // Keetch-Byram Drought Index
+    /// ---------- Keetch-Byram Drought Index ----------------- //
     #[strum(props(long_name = "Keetch-Byram Drought Index", units = "mm"))]
     kbdi,
 
-    // Mark 5 - Drought Factor
+    /// ---------- Mark 5 ----------------- //
+    // Drought Factor
     #[strum(props(long_name = "Drought Factor", units = "-"))]
     df,
-
-    // Mark 5 - Fire Danger Index
+    // Fire Danger Index
     #[strum(props(long_name = "Mark5 Fire Danger Index", units = "-"))]
     ffdi,
 
-    // Angstrom Index
+    // ---------- Angstrom Index ----------------- //
     #[strum(props(long_name = "Angstrom Index", units = "-"))]
     angstrom,
     
-    // Fosberg Index
+    // ---------- Fosberg Index ----------------- //
     #[strum(props(long_name = "Fosberg Fire Weather Index", units = "-"))]
     ffwi,
+
+    // ---------- Nesterov Index ----------------- //
+    #[strum(props(long_name = "Nesterov Index", units = "-"))]
+    nesterov,
 }
 
 
@@ -309,17 +314,6 @@ impl Output {
     pub fn get(&self, variable: &OutputVariableName) -> Option<Array1<f32>> {
         use OutputVariableName::*;
         match variable {
-            // Output variables
-            dffm => Some(self.get_array(|o| o.dffm)),
-            W => Some(self.get_array(|o| o.W)),
-            V => Some(self.get_array(|o| o.V)),
-            I => Some(self.get_array(|o| o.I)),
-            contrT => Some(self.get_array(|o| o.t_effect)),
-
-            NDVI => Some(self.get_array(|o| o.NDVI)),
-            NDWI => Some(self.get_array(|o| o.NDWI)),
-            meteoIndex2 => Some(self.get_array(|o| o.meteo_index)),
-
             // Input variables
             temperature => Some(self.get_array(|o| o.temperature)),
             rain => Some(self.get_array(|o| o.rain)),
@@ -327,8 +321,18 @@ impl Output {
             windDir => Some(self.get_array(|o| o.wind_dir)),
             humidity => Some(self.get_array(|o| o.humidity)),
             snowCover => Some(self.get_array(|o| o.snow_cover)),
+            tempDewPoint => Some(self.get_array(|o| o.temp_dew_point)),
 
-            //Derived variables
+            // RISICO
+            dffm => Some(self.get_array(|o| o.dffm)),
+            W => Some(self.get_array(|o| o.W)),
+            V => Some(self.get_array(|o| o.V)),
+            I => Some(self.get_array(|o| o.I)),
+            contrT => Some(self.get_array(|o| o.t_effect)),
+            NDVI => Some(self.get_array(|o| o.NDVI)),
+            NDWI => Some(self.get_array(|o| o.NDWI)),
+            meteoIndex2 => Some(self.get_array(|o| o.meteo_index)),
+            // RISICO - Derived variables
             VPPF => Some(self.get_array(|o| get_derived(&o.V, &o.PPF, None))),
             IPPF => Some(self.get_array(|o| get_derived(&o.I, &o.PPF, None))),
             INDWI => Some(self.get_array(|o| get_derived(&o.I, &o.NDWI, None))),
@@ -340,6 +344,7 @@ impl Output {
             VPPFNDVI => Some(self.get_array(|o| get_derived(&o.V, &o.NDVI, Some(&o.PPF)))),
             IPPFNDVI => Some(self.get_array(|o| get_derived(&o.I, &o.NDVI, Some(&o.PPF)))),
 
+            // FWI
             ffmc => Some(self.get_array(|o| o.ffmc)),
             dmc => Some(self.get_array(|o| o.dmc)),
             dc => Some(self.get_array(|o| o.dc)),
@@ -348,13 +353,21 @@ impl Output {
             fwi => Some(self.get_array(|o| o.fwi)),
             ifwi => Some(self.get_array(|o| o.ifwi)),
         
+            // Keech-Byram Drought Index
             kbdi => Some(self.get_array(|o| o.kbdi)),
+
+            // Mark 5
             df => Some(self.get_array(|o| o.df)),
             ffdi => Some(self.get_array(|o| o.ffdi)),
 
+            // Angstrom
             angstrom => Some(self.get_array(|o| o.angstrom)),
 
+            // Fosberg
             ffwi => Some(self.get_array(|o| o.ffwi)),
+
+            // Nesterov
+            nesterov => Some(self.get_array(|o| o.nesterov)),
         }
     }
 }
