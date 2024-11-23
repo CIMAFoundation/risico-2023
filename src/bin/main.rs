@@ -12,7 +12,8 @@ use common::config::builder::{
     FWIConfigBuilder,
     Mark5ConfigBuilder,
     AngstromConfigBuilder,
-    FosbergConfigBuilder
+    FosbergConfigBuilder,
+    NesterovConfigBuilder
 };
 use common::helpers::{get_input, RISICOError};
 use common::io::readers::binary::BinaryInputHandler;
@@ -353,6 +354,76 @@ fn run_fosberg(
 }
 
 
+fn run_nesterov(
+    model_config: &NesterovConfigBuilder,
+    date: &DateTime<Utc>,
+    handler: &mut dyn InputHandler,
+    palettes: &PaletteMap,
+) -> Result<(), RISICOError> {
+    // run risico
+    let config = model_config
+        .build(date, palettes)
+        .map_err(|_| "Could not configure model")?;
+
+    let mut output_writer = config
+        .get_output_writer()
+        .map_err(|_| "Could not configure output writer")?;
+
+    let props = config.get_properties();
+    let mut state = config.new_state();
+
+    let (lats, lons) = config.get_properties().get_coords();
+    let (lats, lons) = (lats.as_slice(), lons.as_slice());
+
+    handler.set_coordinates(lats, lons).expect("Should set coordinates");
+
+    let current_time = Utc::now();
+    trace!(
+        "Loading input configuration took {} seconds",
+        Utc::now() - current_time
+    );
+
+    let len = state.len();
+    let timeline = handler.get_timeline();
+    for time in timeline {
+        let step_time = Utc::now();
+        info!("Processing {}", time.format("%Y-%m-%d %H:%M"));
+        let input = get_input(handler, &time, len);
+
+        // store the input of the day
+        state.store(&input, &props);
+
+        let (should_write_warm, warm_state_time) = config.should_write_warm_state(&time);
+        if  should_write_warm{
+            // update the state with the input of the day
+            let c = Utc::now();
+            state.update();
+            trace!("Generating update took {} seconds", Utc::now() - c);
+        
+            // compute output
+            let c = Utc::now();
+            let output = state.output();
+            trace!("Generating output took {} seconds", Utc::now() - c);
+
+            let c = Utc::now();
+            if let Err(err) = output_writer.write_output(lats, lons, &output) {
+                warn!("Error writing output: {}", err);
+            }
+            trace!("Writing output took {} seconds", Utc::now() - c);
+
+            info!("Writing warm state");
+            let c = Utc::now();
+            if let Err(err) = config.write_warm_state(&state, warm_state_time) {
+                warn!("Error writing warm state: {}", err);
+            }
+            trace!("Writing warm state took {} seconds", Utc::now() - c);
+        }
+        trace!("Step took {} seconds", Utc::now() - step_time);
+    }
+    Ok(())
+}
+
+
 fn get_input_handler(
     input_path_str: &str,
     configs: &ConfigContainer,
@@ -447,6 +518,12 @@ fn main() -> Result<(), Box<dyn Error>> {
                 &configs.palettes,
             ),
             ConfigBuilderType::Fosberg(model_config) => run_fosberg(
+                model_config,
+                &date,
+                input_handler.as_mut(),
+                &configs.palettes,
+            ),
+            ConfigBuilderType::Nesterov(model_config) => run_nesterov(
                 model_config,
                 &date,
                 input_handler.as_mut(),

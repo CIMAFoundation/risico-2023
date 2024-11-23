@@ -29,6 +29,7 @@ use risico::{
     },
     modules::angstrom::models::{AngstromCellPropertiesContainer, AngstromProperties, AngstromState},
     modules::fosberg::models::{FosbergCellPropertiesContainer, FosbergProperties, FosbergState},
+    modules::nesterov::models::{NesterovCellPropertiesContainer, NesterovProperties, NesterovState, NesterovWarmState},
 };
 
 use super::builder::{OutputTypeConfig,
@@ -36,7 +37,8 @@ use super::builder::{OutputTypeConfig,
     FWIConfigBuilder,
     Mark5ConfigBuilder,
     AngstromConfigBuilder,
-    FosbergConfigBuilder
+    FosbergConfigBuilder,
+    NesterovConfigBuilder
 };
 
 use crate::common::helpers::RISICOError;
@@ -100,6 +102,17 @@ pub struct FosbergConfig {
     properties: FosbergProperties,
     palettes: PaletteMap,
     output_time_resolution: u32,
+    output_types_defs: Vec<OutputTypeConfig>,
+}
+
+pub struct NesterovConfig {
+    run_date: DateTime<Utc>,
+    warm_state_path: String,
+    warm_state: Vec<NesterovWarmState>,
+    warm_state_time: DateTime<Utc>,
+    warm_state_offset: i64,
+    properties: NesterovProperties,
+    palettes: PaletteMap,
     output_types_defs: Vec<OutputTypeConfig>,
 }
 
@@ -1079,7 +1092,6 @@ impl Mark5Config {
 }
 
 
-
 impl AngstromConfig {
 
     pub fn new(
@@ -1273,6 +1285,222 @@ impl FosbergConfig {
     }
 }
 
+
+
+impl NesterovConfig {
+
+    pub fn new(
+        config_defs: &NesterovConfigBuilder,
+        date: DateTime<Utc>,
+        palettes: &HashMap<String, String>,
+    ) -> Result<NesterovConfig, RISICOError> {
+        let palettes = load_palettes(palettes);
+
+        let cells_file = &config_defs.cells_file_path;
+
+        let props_container = NesterovConfig::properties_from_file(cells_file)
+            .map_err(|error| format!("error reading {}, {error}", cells_file))?;
+
+        let n_cells = props_container.lons.len();
+        if n_cells != props_container.lats.len()
+        {
+            panic!("All properties must have the same length");
+        }
+
+        let warm_state_offset = if config_defs.warm_state_offset > 0 {
+            config_defs.warm_state_offset.clone()
+        } else {
+            24
+        };
+
+        let (warm_state, warm_state_time) = NesterovConfig::read_warm_state(&config_defs.warm_state_path, date, &warm_state_offset)
+            .unwrap_or((
+                vec![NesterovWarmState::default(); n_cells],
+                date - Duration::try_days(1).expect("Should be a valid duration"),
+            ));
+
+        let props = NesterovProperties::new(props_container);
+
+        let config = NesterovConfig {
+            run_date: date,
+            // model_name: config_defs.model_name.clone(),
+            warm_state_path: config_defs.warm_state_path.clone(),
+            warm_state,
+            warm_state_time,
+            warm_state_offset: warm_state_offset,
+            properties: props,
+            palettes,
+            output_types_defs: config_defs.output_types.clone(),
+        };
+
+        Ok(config)
+    }
+
+    pub fn properties_from_file(file_path: &str) -> Result<NesterovCellPropertiesContainer, RISICOError> {
+        let file = fs::File::open(file_path).map_err(|err| format!("can't open file: {err}."))?;
+    
+        let mut lons: Vec<f32> = Vec::new();
+        let mut lats: Vec<f32> = Vec::new();
+    
+        let reader = BufReader::new(file);
+    
+        for line in reader.lines() {
+            let line = line.map_err(|err| format!("can't read from file: {err}."))?;
+            if line.starts_with("#") {
+                // skip header
+                continue;
+            }
+    
+            let line_parts: Vec<&str> = line.trim().split(' ').collect();
+    
+            if line_parts.len() < 3 {
+                let error_message = format!("Invalid line in file: {}", line);
+                return Err(error_message.into());
+            }
+    
+            let lon = line_parts[0]
+                .parse::<f32>()
+                .unwrap_or_else(|_| panic!("Invalid line in file: {}", line));
+    
+            let lat = line_parts[1]
+                .parse::<f32>()
+                .unwrap_or_else(|_| panic!("Invalid line in file: {}", line));
+    
+            lons.push(lon);
+            lats.push(lat);
+        }
+    
+        let props = NesterovCellPropertiesContainer {
+            lats,
+            lons,
+        };
+        Ok(props)
+    }
+
+    pub fn get_properties(&self) -> &NesterovProperties {
+        &self.properties
+    }
+
+    pub fn new_state(&self) -> NesterovState {
+        NesterovState::new(&self.warm_state, &self.warm_state_time)
+    }
+
+    pub fn get_output_writer(&self) -> Result<OutputWriter, RISICOError> {
+        Ok(OutputWriter::new(
+            self.output_types_defs.as_slice(),
+            &self.run_date,
+            &self.palettes,
+        ))
+    }
+
+    pub fn should_write_warm_state(&self, time: &DateTime<Utc>) -> (bool, DateTime<Utc>) {
+        let time_diff = time.signed_duration_since(self.run_date);
+        let minutes = time_diff.num_minutes();
+        // Approximation to the closest hour
+        let approximate_hours = if minutes % 60 >= 30 {
+            (minutes / 60) + 1
+        } else {
+            minutes / 60
+        };
+        let warm_state_time = self.run_date + Duration::try_hours(approximate_hours).expect("Should be valid");
+        let should_write= (approximate_hours % self.warm_state_offset == 0) && (approximate_hours > 0);
+        (should_write, warm_state_time)
+    }
+
+    #[allow(non_snake_case)]
+    /// Reads the warm state from the file
+    /// The warm state is stored in a file with the following structure:
+    /// base_warm_file_YYYYmmDDHHMM
+    /// where <base_warm_file> is the base name of the file and `YYYYmmDDHHMM` is the date of the warm state
+    /// The warm state is stored in a text file with the following structure:
+    /// dffm
+    pub fn read_warm_state(
+        base_warm_file: &str,
+        run_date: DateTime<Utc>,
+        offset: &i64,
+    ) -> Option<(Vec<NesterovWarmState>, DateTime<Utc>)> {
+        // for the last n days before date, try to read the warm state
+        // compose the filename as base_warm_file_YYYYmmDDHHMM
+        let mut file: Option<File> = None;
+
+        let mut current_date = run_date;
+
+        for days_before in 1..4 {
+            current_date = run_date - Duration::try_days(days_before).expect("Should be valid");
+            // add the offset to the current date
+            current_date = current_date + Duration::try_hours(*offset).expect("Should be valid");
+
+            let filename = format!("{}{}", base_warm_file, current_date.format("%Y%m%d%H%M"));
+
+            let file_handle = File::open(filename);
+            if file_handle.is_err() {
+                continue;
+            }
+            file = Some(file_handle.expect("Should unwrap"));
+            break;
+        }
+        let file = match file {
+            Some(file) => file,
+            None => {
+                warn!(
+                    "WARNING: Could not find a valid warm state file for run date {}",
+                    run_date.format("%Y-%m-%d")
+                );
+                return None;
+            }
+        };
+
+        info!(
+            "Loading warm state from {}",
+            current_date.format("%Y-%m-%d %H:%M")
+        );
+        let mut warm_state: Vec<NesterovWarmState> = Vec::new();
+
+        let reader = io::BufReader::new(file);
+
+        for line in reader.lines() {
+            if let Err(line) = line {
+                warn!("Error reading warm state file: {}", line);
+                return None;
+            }
+            let line = line.expect("Should unwrap line");
+
+            let components: Vec<&str> = line.split_whitespace().collect();
+            let nesterov = components[0]
+                .parse::<f32>()
+                .unwrap_or_else(|_| panic!("Could not parse snow_cover from {}", line));
+
+            warm_state.push(NesterovWarmState {
+                nesterov
+            });
+        }
+
+        Some((warm_state, current_date))
+    }
+
+    #[allow(non_snake_case)]
+    pub fn write_warm_state(&self, state: &NesterovState, warm_state_time: DateTime<Utc>) -> Result<(), RISICOError> {
+        let date_string = warm_state_time.format("%Y%m%d%H%M").to_string();
+        let warm_state_name = format!("{}{}", self.warm_state_path, date_string);
+        let mut warm_state_file = File::create(&warm_state_name)
+            .map_err(|error| format!("error creating {}, {}", &warm_state_name, error))?;
+
+        let mut warm_state_writer = BufWriter::new(&mut warm_state_file);
+
+        for state in &state.data {
+            let nesterov = state.nesterov.clone();
+
+            let line = format!(
+                "{}",
+                nesterov
+
+            );
+            writeln!(warm_state_writer, "{}", line)
+                .map_err(|error| format!("error writing to {}, {}", &warm_state_name, error))?;
+        }
+        Ok(())
+    }
+}
 
 
 pub fn load_palettes(palettes_defs: &HashMap<String, String>) -> HashMap<String, Box<Palette>> {

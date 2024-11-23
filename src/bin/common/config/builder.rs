@@ -18,7 +18,8 @@ use super::models::{
     FWIConfig,
     Mark5Config,
     AngstromConfig,
-    FosbergConfig
+    FosbergConfig,
+    NesterovConfig,
 };
 
 pub type PaletteMap = HashMap<String, String>;
@@ -149,6 +150,16 @@ pub struct FosbergConfigBuilder {
     pub output_time_resolution: u32,
 }
 
+#[derive(Debug, Serialize, Deserialize)]
+pub struct NesterovConfigBuilder {
+    pub model_name: String,
+    pub cells_file_path: String,
+    pub warm_state_path: String,
+    pub warm_state_offset: i64,
+    pub output_types: Vec<OutputTypeConfig>,
+}
+
+
 #[allow(clippy::upper_case_acronyms)]
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(tag = "type")]
@@ -158,7 +169,9 @@ pub enum ConfigBuilderType {
     Mark5(Mark5ConfigBuilder),
     Angstrom(AngstromConfigBuilder),
     Fosberg(FosbergConfigBuilder),
+    Nesterov(NesterovConfigBuilder),
 }
+
 
 impl ConfigBuilderType {
     pub fn get_model_name(&self) -> &str {
@@ -168,6 +181,7 @@ impl ConfigBuilderType {
             ConfigBuilderType::Mark5(_) => "Mark5",
             ConfigBuilderType::Angstrom(_) => "Angstrom",
             ConfigBuilderType::Fosberg(_) => "Fosberg",
+            ConfigBuilderType::Nesterov(_) => "Nesterov",
         }
     }
 }
@@ -419,6 +433,16 @@ impl FosbergConfigBuilder {
         palettes: &PaletteMap,
     ) -> Result<FosbergConfig, RISICOError> {
         FosbergConfig::new(self, *date, palettes)
+    }
+}
+
+impl NesterovConfigBuilder {
+    pub fn build(
+        &self,
+        date: &DateTime<Utc>,
+        palettes: &PaletteMap,
+    ) -> Result<NesterovConfig, RISICOError> {
+        NesterovConfig::new(self, *date, palettes)
     }
 }
 
