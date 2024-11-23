@@ -55,6 +55,9 @@ pub struct OutputElement {
     // ------------- Angstrom Index ----------------- //
     pub angstrom: f32,
 
+    // ------------- Fosberg Index ----------------- //
+    pub ffwi: f32,
+
     // ----------------- INPUTS ---------------//
     /// Input temperature in celsius
     pub temperature: f32,
@@ -104,6 +107,9 @@ impl Default for OutputElement {
 
             // Angstrom
             angstrom: NODATAVAL,
+
+            // Fosberg
+            ffwi: NODATAVAL,
 
             // input variables
             temperature: NODATAVAL,
@@ -262,6 +268,10 @@ pub enum OutputVariableName {
     // Angstrom Index
     #[strum(props(long_name = "Angstrom Index", units = "-"))]
     angstrom,
+    
+    // Fosberg Index
+    #[strum(props(long_name = "Fosberg Fire Weather Index", units = "-"))]
+    ffwi,
 }
 
 
@@ -343,6 +353,8 @@ impl Output {
             ffdi => Some(self.get_array(|o| o.ffdi)),
 
             angstrom => Some(self.get_array(|o| o.angstrom)),
+
+            ffwi => Some(self.get_array(|o| o.ffwi)),
         }
     }
 }
