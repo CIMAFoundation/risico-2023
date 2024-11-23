@@ -52,6 +52,9 @@ pub struct OutputElement {
     /// Fire Danger Index
     pub ffdi: f32,
 
+    // ------------- Angstrom Index ----------------- //
+    pub angstrom: f32,
+
     // ----------------- INPUTS ---------------//
     /// Input temperature in celsius
     pub temperature: f32,
@@ -98,6 +101,9 @@ impl Default for OutputElement {
             // Mark 5
             df: NODATAVAL,
             ffdi: NODATAVAL,
+
+            // Angstrom
+            angstrom: NODATAVAL,
 
             // input variables
             temperature: NODATAVAL,
@@ -252,7 +258,12 @@ pub enum OutputVariableName {
     // Mark 5 - Fire Danger Index
     #[strum(props(long_name = "Mark5 Fire Danger Index", units = "-"))]
     ffdi,
+
+    // Angstrom Index
+    #[strum(props(long_name = "Angstrom Index", units = "-"))]
+    angstrom,
 }
+
 
 fn get_derived(a: &f32, b: &f32, c: Option<&f32>) -> f32 {
     let mut r = *a;
@@ -330,6 +341,8 @@ impl Output {
             kbdi => Some(self.get_array(|o| o.kbdi)),
             df => Some(self.get_array(|o| o.df)),
             ffdi => Some(self.get_array(|o| o.ffdi)),
+
+            angstrom => Some(self.get_array(|o| o.angstrom)),
         }
     }
 }
