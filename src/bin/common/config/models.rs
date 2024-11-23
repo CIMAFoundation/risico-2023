@@ -27,9 +27,16 @@ use risico::{
         config::Mark5ModelConfig,
         models::{Mark5CellPropertiesContainer, Mark5Properties, Mark5State, Mark5WarmState},
     },
+    modules::angstrom::models::{AngstromCellPropertiesContainer, AngstromProperties, AngstromState},
 };
 
-use super::builder::{OutputTypeConfig, RISICOConfigBuilder, FWIConfigBuilder, Mark5ConfigBuilder};
+use super::builder::{OutputTypeConfig,
+    RISICOConfigBuilder,
+    FWIConfigBuilder,
+    Mark5ConfigBuilder,
+    AngstromConfigBuilder
+};
+
 use crate::common::helpers::RISICOError;
 use crate::common::io::models::{output::OutputType, palette::Palette};
 
@@ -75,6 +82,16 @@ pub struct Mark5Config {
     output_types_defs: Vec<OutputTypeConfig>,
     model_version: String,
 }
+
+
+pub struct AngstromConfig {
+    run_date: DateTime<Utc>,
+    properties: AngstromProperties,
+    palettes: PaletteMap,
+    output_time_resolution: u32,
+    output_types_defs: Vec<OutputTypeConfig>,
+}
+
 
 pub struct OutputWriter {
     outputs: Vec<OutputType>,
@@ -1048,6 +1065,104 @@ impl Mark5Config {
                 .map_err(|error| format!("error writing to {}, {}", &warm_state_name, error))?;
         }
         Ok(())
+    }
+}
+
+
+
+impl AngstromConfig {
+
+    pub fn new(
+        config_defs: &AngstromConfigBuilder,
+        date: DateTime<Utc>,
+        palettes: &HashMap<String, String>,
+    ) -> Result<AngstromConfig, RISICOError> {
+        let palettes = load_palettes(palettes);
+
+        let cells_file = &config_defs.cells_file_path;
+
+        let props_container = AngstromConfig::properties_from_file(cells_file)
+            .map_err(|error| format!("error reading {}, {error}", cells_file))?;
+
+        let n_cells = props_container.lons.len();
+        if n_cells != props_container.lats.len()
+        {
+            panic!("All properties must have the same length");
+        }
+        let props = AngstromProperties::new(props_container);
+
+        let config = AngstromConfig {
+            run_date: date,
+            properties: props,
+            palettes,
+            output_time_resolution: config_defs.output_time_resolution,
+            output_types_defs: config_defs.output_types.clone(),
+        };
+        Ok(config)
+    }
+
+    pub fn properties_from_file(file_path: &str) -> Result<AngstromCellPropertiesContainer, RISICOError> {
+        let file = fs::File::open(file_path).map_err(|err| format!("can't open file: {err}."))?;
+    
+        let mut lons: Vec<f32> = Vec::new();
+        let mut lats: Vec<f32> = Vec::new();
+    
+        let reader = BufReader::new(file);
+    
+        for line in reader.lines() {
+            let line = line.map_err(|err| format!("can't read from file: {err}."))?;
+            if line.starts_with("#") {
+                // skip header
+                continue;
+            }
+    
+            let line_parts: Vec<&str> = line.trim().split(' ').collect();
+    
+            if line_parts.len() < 2 {
+                let error_message = format!("Invalid line in file: {}", line);
+                return Err(error_message.into());
+            }
+    
+            //  [TODO] refactor this for using error handling
+            let lon = line_parts[0]
+                .parse::<f32>()
+                .unwrap_or_else(|_| panic!("Invalid line in file: {}", line));
+    
+            let lat = line_parts[1]
+                .parse::<f32>()
+                .unwrap_or_else(|_| panic!("Invalid line in file: {}", line));
+    
+            lons.push(lon);
+            lats.push(lat);
+        }
+    
+        let props = AngstromCellPropertiesContainer {
+            lats,
+            lons,
+        };
+        Ok(props)
+    }
+
+    pub fn get_properties(&self) -> &AngstromProperties {
+        &self.properties
+    }
+
+    pub fn new_state(&self) -> AngstromState {
+        AngstromState::new(&self.run_date, self.properties.len)
+    }
+
+    pub fn get_output_writer(&self) -> Result<OutputWriter, RISICOError> {
+        Ok(OutputWriter::new(
+            self.output_types_defs.as_slice(),
+            &self.run_date,
+            &self.palettes,
+        ))
+    }
+
+    pub fn should_write_output(&self, time: &DateTime<Utc>) -> bool {
+        let time_diff = time.signed_duration_since(self.run_date);
+        let hours = time_diff.num_hours();
+        hours % self.output_time_resolution as i64 == 0
     }
 }
 

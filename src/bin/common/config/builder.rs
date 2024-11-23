@@ -16,7 +16,8 @@ use crate::common::io::readers::netcdf::NetCdfInputConfiguration;
 use super::models::{
     RISICOConfig,
     FWIConfig,
-    Mark5Config
+    Mark5Config,
+    AngstromConfig,
 };
 
 pub type PaletteMap = HashMap<String, String>;
@@ -131,6 +132,14 @@ pub struct Mark5ConfigBuilder {
     pub model_version: String,
 }
 
+#[derive(Debug, Serialize, Deserialize)]
+pub struct AngstromConfigBuilder {
+    pub model_name: String,
+    pub cells_file_path: String,
+    pub output_types: Vec<OutputTypeConfig>,
+    pub output_time_resolution: u32,
+}
+
 #[allow(clippy::upper_case_acronyms)]
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(tag = "type")]
@@ -138,6 +147,7 @@ pub enum ConfigBuilderType {
     RISICO(RISICOConfigBuilder),
     FWI(FWIConfigBuilder),
     Mark5(Mark5ConfigBuilder),
+    Angstrom(AngstromConfigBuilder),
 }
 
 impl ConfigBuilderType {
@@ -146,6 +156,7 @@ impl ConfigBuilderType {
             ConfigBuilderType::RISICO(_) => "RISICO",
             ConfigBuilderType::FWI(_) => "FWI",
             ConfigBuilderType::Mark5(_) => "Mark5",
+            ConfigBuilderType::Angstrom(_) => "Angstrom",
         }
     }
 }
@@ -378,6 +389,16 @@ impl  Mark5ConfigBuilder {
         Mark5Config::new(self, *date, palettes)
     }
     
+}
+
+impl AngstromConfigBuilder {
+    pub fn build(
+        &self,
+        date: &DateTime<Utc>,
+        palettes: &PaletteMap,
+    ) -> Result<AngstromConfig, RISICOError> {
+        AngstromConfig::new(self, *date, palettes)
+    }
 }
 
 pub fn load_palettes(config_map: &ConfigMap) -> HashMap<String, String> {
