@@ -18,6 +18,7 @@ use super::models::{
     FWIConfig,
     Mark5Config,
     AngstromConfig,
+    FosbergConfig
 };
 
 pub type PaletteMap = HashMap<String, String>;
@@ -140,6 +141,14 @@ pub struct AngstromConfigBuilder {
     pub output_time_resolution: u32,
 }
 
+#[derive(Debug, Serialize, Deserialize)]
+pub struct FosbergConfigBuilder {
+    pub model_name: String,
+    pub cells_file_path: String,
+    pub output_types: Vec<OutputTypeConfig>,
+    pub output_time_resolution: u32,
+}
+
 #[allow(clippy::upper_case_acronyms)]
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(tag = "type")]
@@ -148,6 +157,7 @@ pub enum ConfigBuilderType {
     FWI(FWIConfigBuilder),
     Mark5(Mark5ConfigBuilder),
     Angstrom(AngstromConfigBuilder),
+    Fosberg(FosbergConfigBuilder),
 }
 
 impl ConfigBuilderType {
@@ -157,6 +167,7 @@ impl ConfigBuilderType {
             ConfigBuilderType::FWI(_) => "FWI",
             ConfigBuilderType::Mark5(_) => "Mark5",
             ConfigBuilderType::Angstrom(_) => "Angstrom",
+            ConfigBuilderType::Fosberg(_) => "Fosberg",
         }
     }
 }
@@ -398,6 +409,16 @@ impl AngstromConfigBuilder {
         palettes: &PaletteMap,
     ) -> Result<AngstromConfig, RISICOError> {
         AngstromConfig::new(self, *date, palettes)
+    }
+}
+
+impl FosbergConfigBuilder {
+    pub fn build(
+        &self,
+        date: &DateTime<Utc>,
+        palettes: &PaletteMap,
+    ) -> Result<FosbergConfig, RISICOError> {
+        FosbergConfig::new(self, *date, palettes)
     }
 }
 
