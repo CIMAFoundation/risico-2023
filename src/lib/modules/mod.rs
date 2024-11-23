@@ -5,3 +5,4 @@ pub mod kbdi;
 pub mod angstrom;
 pub mod fosberg;
 pub mod nesterov;
+pub mod sharples;

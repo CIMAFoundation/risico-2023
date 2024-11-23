@@ -78,6 +78,12 @@ pub struct OutputElement {
 
     // ------------- Nesterov Index ----------------- //
     pub nesterov: f32,
+
+    // ------------- Sharples index ----------------- //
+    // fuel moisture index
+    pub fmi: f32,
+    // fire danger index
+    pub f: f32,
 }
 
 impl Default for OutputElement {
@@ -127,6 +133,10 @@ impl Default for OutputElement {
 
             // Nesterov
             nesterov: NODATAVAL,
+
+            // Sharples
+            fmi: NODATAVAL,
+            f: NODATAVAL,
         }
     }
 }
@@ -277,6 +287,14 @@ pub enum OutputVariableName {
     // ---------- Nesterov Index ----------------- //
     #[strum(props(long_name = "Nesterov Index", units = "-"))]
     nesterov,
+
+    // ---------- Sharples Index ----------------- //
+    // fuel moisture index
+    #[strum(props(long_name = "Sharples Fuel Moisture Index", units = "-"))]
+    fmi,
+    // fire danger index
+    #[strum(props(long_name = "Sharples Fire Danger Index", units = "-"))]
+    f,
 }
 
 
@@ -368,6 +386,10 @@ impl Output {
 
             // Nesterov
             nesterov => Some(self.get_array(|o| o.nesterov)),
+
+            // Sharples
+            fmi => Some(self.get_array(|o| o.fmi)),
+            f => Some(self.get_array(|o| o.f)),
         }
     }
 }
