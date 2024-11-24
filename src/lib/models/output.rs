@@ -84,7 +84,14 @@ pub struct OutputElement {
     pub fmi: f32,
     // fire danger index
     pub f: f32,
+
+    // ------------- Orieux Index ----------------- //
+    // Potential evapotranspiration (Thornthwaite Formulation)
+    pub pet_t: f32,
+    // Orieux index
+    pub orieux: f32,
 }
+
 
 impl Default for OutputElement {
     fn default() -> Self {
@@ -137,6 +144,10 @@ impl Default for OutputElement {
             // Sharples
             fmi: NODATAVAL,
             f: NODATAVAL,
+
+            // Orieux
+            pet_t: NODATAVAL,
+            orieux: NODATAVAL,
         }
     }
 }
@@ -295,6 +306,14 @@ pub enum OutputVariableName {
     // fire danger index
     #[strum(props(long_name = "Sharples Fire Danger Index", units = "-"))]
     f,
+
+    // ---------- Orieux Index ----------------- //
+    // Potential evapotranspiration
+    #[strum(props(long_name = "Potential Evapotranspiration - Thornthwaite formulation", units = "mm"))]
+    pet_t,
+    // Orieux index
+    #[strum(props(long_name = "Orieux Index", units = "-"))]
+    orieux,
 }
 
 
@@ -390,6 +409,10 @@ impl Output {
             // Sharples
             fmi => Some(self.get_array(|o| o.fmi)),
             f => Some(self.get_array(|o| o.f)),
+
+            // Orieux
+            pet_t => Some(self.get_array(|o| o.pet_t)),
+            orieux => Some(self.get_array(|o| o.orieux)),
         }
     }
 }
