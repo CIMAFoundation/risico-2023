@@ -22,6 +22,7 @@ use super::models::{
     NesterovConfig,
     SharplesConfig,
     OrieuxConfig,
+    PortugueseConfig,
 };
 
 pub type PaletteMap = HashMap<String, String>;
@@ -178,6 +179,15 @@ pub struct OrieuxConfigBuilder {
     pub output_types: Vec<OutputTypeConfig>,
 }
 
+#[derive(Debug, Serialize, Deserialize)]
+pub struct PortugueseConfigBuilder {
+    pub model_name: String,
+    pub cells_file_path: String,
+    pub warm_state_path: String,
+    pub warm_state_offset: i64,
+    pub output_types: Vec<OutputTypeConfig>,
+}
+
 
 #[allow(clippy::upper_case_acronyms)]
 #[derive(Debug, Serialize, Deserialize)]
@@ -191,6 +201,7 @@ pub enum ConfigBuilderType {
     Nesterov(NesterovConfigBuilder),
     Sharples(SharplesConfigBuilder),
     Orieux(OrieuxConfigBuilder),
+    Portuguese(PortugueseConfigBuilder),
 }
 
 
@@ -205,6 +216,7 @@ impl ConfigBuilderType {
             ConfigBuilderType::Nesterov(_) => "Nesterov",
             ConfigBuilderType::Sharples(_) => "Sharples",
             ConfigBuilderType::Orieux(_) => "Orieux",
+            ConfigBuilderType::Portuguese(_) => "Portuguese",
         }
     }
 }
@@ -488,6 +500,17 @@ impl OrieuxConfigBuilder {
         OrieuxConfig::new(self, *date, palettes)
     }
 }
+
+impl PortugueseConfigBuilder {
+    pub fn build(
+        &self,
+        date: &DateTime<Utc>,
+        palettes: &PaletteMap,
+    ) -> Result<PortugueseConfig, RISICOError> {
+        PortugueseConfig::new(self, *date, palettes)
+    }
+}
+
 
 pub fn load_palettes(config_map: &ConfigMap) -> HashMap<String, String> {
     let mut palettes: HashMap<String, String> = HashMap::new();
