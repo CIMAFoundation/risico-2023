@@ -6,3 +6,5 @@ pub mod angstrom;
 pub mod fosberg;
 pub mod nesterov;
 pub mod sharples;
+pub mod orieux;
+pub mod functions;
