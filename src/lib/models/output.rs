@@ -25,6 +25,8 @@ pub struct OutputElement {
     pub meteo_index: f32,
     /// Dew point temperature
     pub temp_dew_point: f32,
+    /// Vapor pressure deficit in hPa
+    pub vpd: f32,
 
     // ------------------- RISICO ------------------- //
     /// Fine fuel moisture content
@@ -108,6 +110,7 @@ impl Default for OutputElement {
             humidity: NODATAVAL,
             snow_cover: NODATAVAL,
             temp_dew_point: NODATAVAL,
+            vpd: NODATAVAL,
 
             // RISICO
             dffm: NODATAVAL,
@@ -199,6 +202,9 @@ pub enum OutputVariableName {
     /// Dew Point Temperature
     #[strum(props(long_name = "Dew Point Temperature", units = "°C"))]
     tempDewPoint,
+    /// Vapor Pressure Deficit
+    #[strum(props(long_name = "Vapor Pressure Deficit", units = "hPa"))]
+    vpd,
 
     /// ----------- RISICO ----------------- //
     /// Fine Fuel Moisture
@@ -373,6 +379,7 @@ impl Output {
             humidity => Some(self.get_array(|o| o.humidity)),
             snowCover => Some(self.get_array(|o| o.snow_cover)),
             tempDewPoint => Some(self.get_array(|o| o.temp_dew_point)),
+            vpd => Some(self.get_array(|o| o.vpd)),
 
             // RISICO
             dffm => Some(self.get_array(|o| o.dffm)),
