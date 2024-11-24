@@ -23,6 +23,7 @@ use super::models::{
     SharplesConfig,
     OrieuxConfig,
     PortugueseConfig,
+    HdwConfig,
 };
 
 pub type PaletteMap = HashMap<String, String>;
@@ -188,6 +189,14 @@ pub struct PortugueseConfigBuilder {
     pub output_types: Vec<OutputTypeConfig>,
 }
 
+#[derive(Debug, Serialize, Deserialize)]
+pub struct HdwConfigBuilder {
+    pub model_name: String,
+    pub cells_file_path: String,
+    pub output_types: Vec<OutputTypeConfig>,
+    pub output_time_resolution: u32,
+}
+
 
 #[allow(clippy::upper_case_acronyms)]
 #[derive(Debug, Serialize, Deserialize)]
@@ -202,6 +211,7 @@ pub enum ConfigBuilderType {
     Sharples(SharplesConfigBuilder),
     Orieux(OrieuxConfigBuilder),
     Portuguese(PortugueseConfigBuilder),
+    Hdw(HdwConfigBuilder),
 }
 
 
@@ -217,6 +227,7 @@ impl ConfigBuilderType {
             ConfigBuilderType::Sharples(_) => "Sharples",
             ConfigBuilderType::Orieux(_) => "Orieux",
             ConfigBuilderType::Portuguese(_) => "Portuguese",
+            ConfigBuilderType::Hdw(_) => "HDW",
         }
     }
 }
@@ -508,6 +519,16 @@ impl PortugueseConfigBuilder {
         palettes: &PaletteMap,
     ) -> Result<PortugueseConfig, RISICOError> {
         PortugueseConfig::new(self, *date, palettes)
+    }
+}
+
+impl HdwConfigBuilder {
+    pub fn build(
+        &self,
+        date: &DateTime<Utc>,
+        palettes: &PaletteMap,
+    ) -> Result<HdwConfig, RISICOError> {
+        HdwConfig::new(self, *date, palettes)
     }
 }
 
