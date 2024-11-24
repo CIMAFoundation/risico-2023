@@ -9,3 +9,4 @@ pub mod nesterov;
 pub mod sharples;
 pub mod orieux;
 pub mod portuguese;
+pub mod hdw;

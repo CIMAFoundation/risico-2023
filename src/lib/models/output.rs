@@ -96,6 +96,9 @@ pub struct OutputElement {
     // ------------- Portuguese index ----------------- //
     pub portuguese_ignition: f32,
     pub portuguese_fdi: f32,
+
+    // ------------- Hot-Dry-Wind Index ----------------- //
+    pub hdw: f32,
 }
 
 
@@ -159,6 +162,9 @@ impl Default for OutputElement {
             // Portuguese
             portuguese_ignition: NODATAVAL,
             portuguese_fdi: NODATAVAL,
+
+            // Hot-Dry-Wind
+            hdw: NODATAVAL,
         }
     }
 }
@@ -334,6 +340,10 @@ pub enum OutputVariableName {
     portuguese_ignition,
     #[strum(props(long_name = "Portuguese Fire Danger Index", units = "-"))]
     portuguese_fdi,
+
+    // ---------- Hot-Dry-Wind Index ----------------- //
+    #[strum(props(long_name = "Hot-Dry-Wind Index", units = "-"))]
+    hdw,
 }
 
 
@@ -435,9 +445,12 @@ impl Output {
             pet_t => Some(self.get_array(|o| o.pet_t)),
             orieux => Some(self.get_array(|o| o.orieux)),
 
-            // Portuguese
+            // Portuguese Index
             portuguese_ignition => Some(self.get_array(|o| o.portuguese_ignition)),
             portuguese_fdi => Some(self.get_array(|o| o.portuguese_fdi)),
+
+            // Hot-Dry-Wind
+            hdw => Some(self.get_array(|o| o.hdw)),
         }
     }
 }
