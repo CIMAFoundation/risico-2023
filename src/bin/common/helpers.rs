@@ -126,6 +126,21 @@ pub fn get_input(handler: &dyn InputHandler, time: &DateTime<Utc>, len: usize) -
                         }
                     });
                     replace(&mut data, &r, |i| &mut i.temp_dew_point);
+
+                    // compute the vapour pressure deficit
+                    let mut vpd: Array1<f32> = Array1::ones(len) * NODATAVAL;
+                    azip!((
+                        vpd in &mut vpd,
+                        t in &t,
+                        q in &q2,
+                        p in &psfc
+                    ){
+                        if *q > (NODATAVAL+1.0) && *p > (NODATAVAL+1.0) {
+                            // difference between saturation vapor pressure and vapor pressure
+                            *vpd = (6.112 * f32::exp((17.67 * t)/(t + 243.5))) - (q * (p/100.0) / (0.622 + q));
+                        }
+                    });
+                    replace(&mut data, &vpd, |i| &mut i.vpd);
                 }
             }
         }
