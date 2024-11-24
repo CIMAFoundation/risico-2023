@@ -35,9 +35,9 @@ pub fn store_day_fn(
     let local_time = time.with_timezone(&tz);
     // Store the daily info at 15 local time
     if local_time.hour() == TIME_WEATHER {
-        state.temp_15pm = input.temperature;
-        state.humidity_15pm = input.humidity;
-        state.wind_speed_15pm = input.wind_speed;
+        state.temp_15 = input.temperature;
+        state.humidity_15 = input.humidity;
+        state.wind_speed_15 = input.wind_speed;
     }
 }
 
@@ -162,10 +162,10 @@ pub fn get_output_fn(
     // calculate the drought factor
     let df = drought_factor(time, state.smd, &dates, &daily_rains);
     // calculate the FFDI
-    let ffdi = ffdi(state.temp_15pm, state.humidity_15pm, state.wind_speed_15pm, df);
+    let ffdi = ffdi(state.temp_15, state.humidity_15, state.wind_speed_15, df);
 
     // return output
-    config.get_output(state.smd, df, ffdi, state.temp_15pm, state.cum_rain, state.wind_speed_15pm, state.humidity_15pm)
+    config.get_output(state.smd, df, ffdi, state.temp_15, state.cum_rain, state.wind_speed_15, state.humidity_15)
 }
 
 pub fn kbdi_output(

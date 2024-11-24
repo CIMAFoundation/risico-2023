@@ -85,9 +85,9 @@ pub struct Mark5StateElement {
     pub smd: f32,  // Soil Moisture Deficit [mm]
     pub cum_rain: f32,  // cumulated rain [mm] on the run day
     pub max_temp: f32,  // maximum daily temperature [°C] info on the run day
-    pub temp_15pm: f32,  // temperature [°C] at 15pm info on the run day
-    pub humidity_15pm: f32,  // relative humidity [%] at 15pm]
-    pub wind_speed_15pm: f32,  // wind speed [m/h] info on the run day
+    pub temp_15: f32,  // temperature [°C] at 3pm info on the run day
+    pub humidity_15: f32,  // relative humidity [%] at 3pm
+    pub wind_speed_15: f32,  // wind speed [m/h] info on the run day at 3pm
 }
 
 
@@ -128,9 +128,9 @@ impl Mark5StateElement {
     ) {
         self.cum_rain = 0.0;
         self.max_temp = NODATAVAL;
-        self.temp_15pm = NODATAVAL;
-        self.humidity_15pm = NODATAVAL;
-        self.wind_speed_15pm = NODATAVAL;
+        self.temp_15 = NODATAVAL;
+        self.humidity_15 = NODATAVAL;
+        self.wind_speed_15 = NODATAVAL;
     }
 }
 
@@ -155,9 +155,9 @@ impl Mark5State {
                     smd: w.smd.clone(),
                     cum_rain: 0.0,  // start with 0 cumulated rain
                     max_temp: NODATAVAL,
-                    temp_15pm: NODATAVAL,
-                    humidity_15pm: NODATAVAL,
-                    wind_speed_15pm: NODATAVAL,
+                    temp_15: NODATAVAL,
+                    humidity_15: NODATAVAL,
+                    wind_speed_15: NODATAVAL,
                 })
                 .collect(),
         );
