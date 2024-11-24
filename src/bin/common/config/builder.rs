@@ -21,6 +21,7 @@ use super::models::{
     FosbergConfig,
     NesterovConfig,
     SharplesConfig,
+    OrieuxConfig,
 };
 
 pub type PaletteMap = HashMap<String, String>;
@@ -168,6 +169,16 @@ pub struct SharplesConfigBuilder {
     pub output_time_resolution: u32,
 }
 
+#[derive(Debug, Serialize, Deserialize)]
+pub struct OrieuxConfigBuilder {
+    pub model_name: String,
+    pub cells_file_path: String,
+    pub warm_state_path: String,
+    pub warm_state_offset: i64,
+    pub output_types: Vec<OutputTypeConfig>,
+}
+
+
 #[allow(clippy::upper_case_acronyms)]
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(tag = "type")]
@@ -179,6 +190,7 @@ pub enum ConfigBuilderType {
     Fosberg(FosbergConfigBuilder),
     Nesterov(NesterovConfigBuilder),
     Sharples(SharplesConfigBuilder),
+    Orieux(OrieuxConfigBuilder),
 }
 
 
@@ -192,6 +204,7 @@ impl ConfigBuilderType {
             ConfigBuilderType::Fosberg(_) => "Fosberg",
             ConfigBuilderType::Nesterov(_) => "Nesterov",
             ConfigBuilderType::Sharples(_) => "Sharples",
+            ConfigBuilderType::Orieux(_) => "Orieux",
         }
     }
 }
@@ -466,6 +479,15 @@ impl SharplesConfigBuilder {
     }
 }
 
+impl OrieuxConfigBuilder {
+    pub fn build(
+        &self,
+        date: &DateTime<Utc>,
+        palettes: &PaletteMap,
+    ) -> Result<OrieuxConfig, RISICOError> {
+        OrieuxConfig::new(self, *date, palettes)
+    }
+}
 
 pub fn load_palettes(config_map: &ConfigMap) -> HashMap<String, String> {
     let mut palettes: HashMap<String, String> = HashMap::new();
