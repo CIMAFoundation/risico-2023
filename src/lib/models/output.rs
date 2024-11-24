@@ -90,6 +90,10 @@ pub struct OutputElement {
     pub pet_t: f32,
     // Orieux index
     pub orieux: f32,
+
+    // ------------- Portuguese index ----------------- //
+    pub portuguese_ignition: f32,
+    pub portuguese_fdi: f32,
 }
 
 
@@ -148,6 +152,10 @@ impl Default for OutputElement {
             // Orieux
             pet_t: NODATAVAL,
             orieux: NODATAVAL,
+
+            // Portuguese
+            portuguese_ignition: NODATAVAL,
+            portuguese_fdi: NODATAVAL,
         }
     }
 }
@@ -314,6 +322,12 @@ pub enum OutputVariableName {
     // Orieux index
     #[strum(props(long_name = "Orieux Index", units = "-"))]
     orieux,
+
+    // ---------- Portuguese Index ----------------- //
+    #[strum(props(long_name = "Portuguese Ignition Index", units = "-"))]
+    portuguese_ignition,
+    #[strum(props(long_name = "Portuguese Fire Danger Index", units = "-"))]
+    portuguese_fdi,
 }
 
 
@@ -413,6 +427,10 @@ impl Output {
             // Orieux
             pet_t => Some(self.get_array(|o| o.pet_t)),
             orieux => Some(self.get_array(|o| o.orieux)),
+
+            // Portuguese
+            portuguese_ignition => Some(self.get_array(|o| o.portuguese_ignition)),
+            portuguese_fdi => Some(self.get_array(|o| o.portuguese_fdi)),
         }
     }
 }

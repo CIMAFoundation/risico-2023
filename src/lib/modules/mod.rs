@@ -1,3 +1,4 @@
+pub mod functions;
 pub mod fwi;
 pub mod risico;
 pub mod mark5;
@@ -7,4 +8,4 @@ pub mod fosberg;
 pub mod nesterov;
 pub mod sharples;
 pub mod orieux;
-pub mod functions;
+pub mod portuguese;
