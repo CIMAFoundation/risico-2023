@@ -102,6 +102,24 @@ pub fn get_input(handler: &dyn InputHandler, time: &DateTime<Utc>, len: usize) -
                     }
                 });
                 replace(&mut data, &r, |i| &mut i.temp_dew);
+
+                // compute the vapor pressure deficit from temperature and relative humidity
+                let mut vpd: Array1<f32> = Array1::ones(len) * NODATAVAL;
+                azip!((
+                    vpd in &mut vpd,
+                    h in &h,  // %
+                    t in &t  // °C
+                ){
+                    if *h > (NODATAVAL+1.0) && *t > (NODATAVAL+1.0) {
+                        let mut h = *h;
+                        if h > 100.0 {
+                            h = 100.0;
+                        }
+                        // difference between saturation vapor pressure and actual vapor pressure [hPa]
+                        *vpd = (6.112 * f32::exp((17.67 * t)/(t + 243.5))) - (h/100.0 * 6.112 * f32::exp((17.67 * t)/(t + 243.5)));
+                    }
+                });
+                replace(&mut data, &vpd, |i| &mut i.vpd);
             }
         }
 
@@ -128,16 +146,16 @@ pub fn get_input(handler: &dyn InputHandler, time: &DateTime<Utc>, len: usize) -
             });
             replace(&mut data, &h, |i| &mut i.humidity);
 
-            // compute the vapour pressure deficit
+            // compute the vapor pressure deficit
             let mut vpd: Array1<f32> = Array1::ones(len) * NODATAVAL;
             azip!((
                 vpd in &mut vpd,
-                t in &t,
-                q in &q,
-                p in &psfc
+                t in &t, // °C
+                q in &q,  // kg/kg
+                p in &psfc  // Pa
             ){
                 if *q > (NODATAVAL+1.0) && *p > (NODATAVAL+1.0) {
-                    // difference between saturation vapor pressure and actual vapor pressure
+                    // difference between saturation vapor pressure and actual vapor pressure [hPa]
                     *vpd = (6.112 * f32::exp((17.67 * t)/(t + 243.5))) - (q * (p/100.0) / (0.622 + q));
                 }
             });
