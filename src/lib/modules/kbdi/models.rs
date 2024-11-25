@@ -6,8 +6,13 @@ use itertools::izip;
 use super::{
     constants::*,
     config::KBDIModelConfig,
-    functions::{store_day_fn, get_output_fn},
+    functions::{store_day_fn, update_fn, get_output_fn},
 };
+
+
+// Keetch-Byram Drought Index
+// Source: https://wikifire.wsl.ch/tiki-indexa61f.html?page=Keetch-Byram+drought+index&structure=Fire
+
 
 // CELLS PROPERTIES
 #[derive(Debug)]
@@ -82,9 +87,9 @@ impl Default for KBDIWarmState {
 pub struct KBDIStateElement {
     pub dates: Vec<DateTime<Utc>>,  // dates of the time window
     pub daily_rain: Vec<f32>,  // daily rain of the time window [mm day^-1]
-    pub kbdi: f32,  // Keetch-Byram Dorugh Index
-    pub cum_rain: f32,  // cumulated rain on the run day
-    pub max_temp: f32,  // maximum temperature info on the run day
+    pub kbdi: f32,  // Keetch-Byram Dorugh Index [mm]
+    pub cum_rain: f32,  // cumulated daily rain [mm]
+    pub max_temp: f32,  // maximum daily temperature [°C]
 }
 
 
@@ -152,7 +157,6 @@ impl KBDIState {
                 })
                 .collect(),
         );
-
         KBDIState {
             time: *time,
             data,
@@ -179,25 +183,36 @@ impl KBDIState {
             });
     }
 
-    #[allow(non_snake_case)]
-    pub fn get_output(&mut self, props: &KBDIProperties) -> Output {
+    fn get_update(&mut self, props: &KBDIProperties) {
         let time = &self.time;
-        let output_data = Zip::from(&mut self.data)
-                    .and(&props.data)
-                    .par_map_collect(|state, props_data| {
-                        get_output_fn(state, props_data, &self.config, &time)
-                    });
+        Zip::from(&mut self.data)
+            .and(&props.data)
+            .par_map_collect(|state, props_data| {
+                update_fn(state, props_data, &self.config, &time)
+            });
+    }
+
+    #[allow(non_snake_case)]
+    pub fn get_output(&mut self) -> Output {
+        let time = &self.time;
+        let output_data = self.data
+            .map(|state| {
+                get_output_fn(state)
+            });
         // clean the daily values
         self.data.iter_mut().for_each(|state| state.clean_day());
         Output::new(*time, output_data)
     }
 
-    // Update the state of the cells
     pub fn store(&mut self, input: &Input) {
         self.store_day(input);
     }
 
-    pub fn output(&mut self, props: &KBDIProperties) -> Output {
-        self.get_output(props)
+    pub fn update(&mut self, props: &KBDIProperties) {
+        self.get_update(props);
+    }
+
+    pub fn output(&mut self) -> Output {
+        self.get_output()
     }
 }

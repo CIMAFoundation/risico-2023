@@ -1154,25 +1154,22 @@ impl Mark5Config {
 
 impl AngstromConfig {
 
+    // New Angstrom index configuration
     pub fn new(
         config_defs: &AngstromConfigBuilder,
         date: DateTime<Utc>,
         palettes: &HashMap<String, String>,
     ) -> Result<AngstromConfig, RISICOError> {
         let palettes = load_palettes(palettes);
-
         let cells_file = &config_defs.cells_file_path;
-
         let props_container = AngstromConfig::properties_from_file(cells_file)
             .map_err(|error| format!("error reading {}, {error}", cells_file))?;
-
         let n_cells = props_container.lons.len();
         if n_cells != props_container.lats.len()
         {
             panic!("All properties must have the same length");
         }
         let props = AngstromProperties::new(props_container);
-
         let config = AngstromConfig {
             run_date: date,
             properties: props,
@@ -1183,29 +1180,23 @@ impl AngstromConfig {
         Ok(config)
     }
 
+    // Read properties from file
     pub fn properties_from_file(file_path: &str) -> Result<AngstromCellPropertiesContainer, RISICOError> {
         let file = fs::File::open(file_path).map_err(|err| format!("can't open file: {err}."))?;
-    
         let mut lons: Vec<f32> = Vec::new();
         let mut lats: Vec<f32> = Vec::new();
-    
         let reader = BufReader::new(file);
-    
         for line in reader.lines() {
             let line = line.map_err(|err| format!("can't read from file: {err}."))?;
             if line.starts_with("#") {
                 // skip header
                 continue;
             }
-    
             let line_parts: Vec<&str> = line.trim().split(' ').collect();
-    
             if line_parts.len() < 2 {
                 let error_message = format!("Invalid line in file: {}", line);
                 return Err(error_message.into());
             }
-    
-            //  [TODO] refactor this for using error handling
             let lon = line_parts[0]
                 .parse::<f32>()
                 .unwrap_or_else(|_| panic!("Invalid line in file: {}", line));
@@ -1213,11 +1204,9 @@ impl AngstromConfig {
             let lat = line_parts[1]
                 .parse::<f32>()
                 .unwrap_or_else(|_| panic!("Invalid line in file: {}", line));
-    
             lons.push(lon);
             lats.push(lat);
         }
-    
         let props = AngstromCellPropertiesContainer {
             lats,
             lons,
@@ -1241,6 +1230,7 @@ impl AngstromConfig {
         ))
     }
 
+    // check for writing output condition
     pub fn should_write_output(&self, time: &DateTime<Utc>) -> bool {
         let time_diff = time.signed_duration_since(self.run_date);
         let hours = time_diff.num_hours();
@@ -1251,25 +1241,22 @@ impl AngstromConfig {
 
 impl FosbergConfig {
 
+    // New Fosberg index configuration
     pub fn new(
         config_defs: &FosbergConfigBuilder,
         date: DateTime<Utc>,
         palettes: &HashMap<String, String>,
     ) -> Result<FosbergConfig, RISICOError> {
         let palettes = load_palettes(palettes);
-
         let cells_file = &config_defs.cells_file_path;
-
         let props_container = FosbergConfig::properties_from_file(cells_file)
             .map_err(|error| format!("error reading {}, {error}", cells_file))?;
-
         let n_cells = props_container.lons.len();
         if n_cells != props_container.lats.len()
         {
             panic!("All properties must have the same length");
         }
         let props = FosbergProperties::new(props_container);
-
         let config = FosbergConfig {
             run_date: date,
             properties: props,
@@ -1280,41 +1267,32 @@ impl FosbergConfig {
         Ok(config)
     }
 
+    // Read properties from file
     pub fn properties_from_file(file_path: &str) -> Result<FosbergCellPropertiesContainer, RISICOError> {
         let file = fs::File::open(file_path).map_err(|err| format!("can't open file: {err}."))?;
-    
         let mut lons: Vec<f32> = Vec::new();
         let mut lats: Vec<f32> = Vec::new();
-    
         let reader = BufReader::new(file);
-    
         for line in reader.lines() {
             let line = line.map_err(|err| format!("can't read from file: {err}."))?;
             if line.starts_with("#") {
                 // skip header
                 continue;
             }
-    
             let line_parts: Vec<&str> = line.trim().split(' ').collect();
-    
             if line_parts.len() < 2 {
                 let error_message = format!("Invalid line in file: {}", line);
                 return Err(error_message.into());
             }
-    
-            //  [TODO] refactor this for using error handling
             let lon = line_parts[0]
                 .parse::<f32>()
                 .unwrap_or_else(|_| panic!("Invalid line in file: {}", line));
-    
             let lat = line_parts[1]
                 .parse::<f32>()
                 .unwrap_or_else(|_| panic!("Invalid line in file: {}", line));
-    
             lons.push(lon);
             lats.push(lat);
         }
-    
         let props = FosbergCellPropertiesContainer {
             lats,
             lons,
@@ -1338,6 +1316,7 @@ impl FosbergConfig {
         ))
     }
 
+    // check for writing output condition
     pub fn should_write_output(&self, time: &DateTime<Utc>) -> bool {
         let time_diff = time.signed_duration_since(self.run_date);
         let hours = time_diff.num_hours();

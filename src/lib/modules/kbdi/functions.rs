@@ -52,12 +52,12 @@ pub fn kbdi_update_mm(
 }
 
 
-pub fn get_output_fn(
+pub fn update_fn(
     state: &mut KBDIStateElement,
     prop: &KBDIPropertiesElement,
     config: &KBDIModelConfig,
     time: &DateTime<Utc>,
-) -> OutputElement {
+) {
     // store the datetime and cumulated rain for the day of the run
     state.update(time, state.cum_rain);
     // get the last rains in the time windows -> they are already ordered from oldest to newest
@@ -65,11 +65,15 @@ pub fn get_output_fn(
     let new_kbdi = config.update_kbdi(state.kbdi, state.max_temp, &daily_rains, prop.mean_rain);
     // store the new KBDI value
     state.kbdi = new_kbdi;
-    // return the output element
+}
+
+pub fn get_output_fn(
+    state: &KBDIStateElement,
+) -> OutputElement {
     OutputElement {
-        kbdi: new_kbdi,
-        rain: state.cum_rain,
-        temperature: state.max_temp,
+        kbdi: state.kbdi,  // [mm]
+        rain: state.cum_rain,  // [mm]
+        temperature: state.max_temp,  // [°C]
         ..OutputElement::default()
     }
 }
