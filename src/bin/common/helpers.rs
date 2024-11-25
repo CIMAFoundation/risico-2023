@@ -35,39 +35,29 @@ fn maybe_replace<'a>(
     }
 }
 
+
+/// Get the input data from the input handler and dave in the Input struct
+/// If the input data are not in the expected units, the function will convert them
 pub fn get_input(handler: &dyn InputHandler, time: &DateTime<Utc>, len: usize) -> Input {
     let mut data: Array1<InputElement> = Array1::default(len);
 
-    let snow = handler.get_values(SNOW, time);
-
-    maybe_replace(&mut data, &snow, |i| &mut i.snow_cover);
-
-    // Observed relative humidity
-    let h = handler.get_values(F, time);
-    maybe_replace(&mut data, &h, |i| &mut i.humidity);
-
-    // forecasted relative humidity
-    let h = handler.get_values(H, time);
-    maybe_replace(&mut data, &h, |i| &mut i.humidity);
-
     // Observed temperature
-    let t = handler.get_values(K, time);
-
+    let t = handler.get_values(TEMPERATURE_OBS, time);
     if let Some(t) = t {
-        let t = t.mapv(|_t| if _t > 200.0 { _t - 273.15 } else { _t });
+        let t = t.mapv(|_t| if _t > 200.0 { _t - 273.15 } else { _t });  // convert to Celsius
         replace(&mut data, &t, |i| &mut i.temperature);
     }
 
     // Forecasted temperature
-    let t = handler.get_values(T, time);
-
+    let t = handler.get_values(TEMPERATURE, time);
     if let Some(t) = t {
         let t = t.mapv(|_t| if _t > 200.0 { _t - 273.15 } else { _t });  // conversion to Celsius
         replace(&mut data, &t, |i| &mut i.temperature);
 
         // Forecasted dew point temperature
-        let r = handler.get_values(R, time);
+        let r = handler.get_values(TEMP_DEW, time);
         if let Some(r) = r {
+            // computation of the relative humidity from the forecasted temperature and dew point temperature
             let mut h: Array1<f32> = Array1::ones(len) * NODATAVAL;
             azip!((
                 h in &mut h,
@@ -84,25 +74,26 @@ pub fn get_input(handler: &dyn InputHandler, time: &DateTime<Utc>, len: usize) -
             });
             replace(&mut data, &h, |i| &mut i.humidity);
             // save also the dew point temperature
-            replace(&mut data, &r, |i| &mut i.temp_dew_point);
+            replace(&mut data, &r, |i| &mut i.temp_dew);
         } else {            
-            // forecasted PSFC and Q2
+            // forecasted surface pressure
             let psfc = handler.get_values(PSFC, time);
-            let q2 = handler.get_values(Q2, time);
+            // forecasted specific humidity
+            let q = handler.get_values(Q, time);
 
             if let Some(psfc) = psfc {
-                if let Some(q2) = q2 {
-                    // forecasted RH2
+                if let Some(q) = q {
+                    // compute the relative humidity from the forecasted temperature, surface pressure and specific humidity
                     let mut h: Array1<f32> = Array1::ones(len) * NODATAVAL;
                     azip!((
                         h in &mut h,
-                        q in &q2,
+                        q in &q,
                         p in &psfc,
                         t in &t
                     ){
                         if *q > (NODATAVAL+1.0) && *t > (NODATAVAL+1.0) && *p > (NODATAVAL+1.0) {
                             // this implements the following cdo formula
-                            // T_C=T2-273.15; P_hPa=PSFC/100; denom=0.622+Q2; e=(Q2*P_hPa/denom); es=6.112*exp((17.67*T_C)/(T_C+243.5)); RH=(e/es)*100;
+                            // T_C=temperature in °C; P_hPa=pressure in hPa; denom=0.622+Q2; e=(Q2*P_hPa/denom); es=6.112*exp((17.67*T_C)/(T_C+243.5)); RH=(e/es)*100;
                             *h = 100.0 * (q * (p/100.0) / (0.622 + q)) / (6.112 * f32::exp((17.67 * t)/(t + 243.5)));
                         }
                     });
@@ -120,7 +111,7 @@ pub fn get_input(handler: &dyn InputHandler, time: &DateTime<Utc>, len: usize) -
                             if h > 100.0 {
                                 h = 100.0;
                             }
-                            // Magnus formula
+                            // Magnus formula (https://en.wikipedia.org/wiki/Dew_point)
                             let gamma = f32::ln(h / 100.0) + ((17.625 * t) / (t + 243.04));
                             *r = (243.04 * gamma) / (17.625 - gamma);
                         }
@@ -146,71 +137,86 @@ pub fn get_input(handler: &dyn InputHandler, time: &DateTime<Utc>, len: usize) -
         }
     }
 
-    // Observed precipitation
-    let op = handler.get_values(O, time);
-    maybe_replace(&mut data, &op, |i| &mut i.rain);
-    // Forecast precipitation
-    let fp = handler.get_values(P, time);
-    maybe_replace(&mut data, &fp, |i| &mut i.rain);
+    // Observed relative humidity
+    let h = handler.get_values(HUMIDITY_OBS, time);
+    maybe_replace(&mut data, &h, |i| &mut i.humidity);
+    
+    // Forecasted relative humidity
+    let h = handler.get_values(HUMIDITY, time);
+    maybe_replace(&mut data, &h, |i| &mut i.humidity);
+    
 
-    // wind speed
-    let ws = handler.get_values(W, time);
-    // wind direction
-    let wd = handler.get_values(D, time);
-
-    let u = handler.get_values(U, time);
-    let v = handler.get_values(V, time);
-
+    // wind speed and wind direction
+    let ws = handler.get_values(WIND_SPEED, time);  // supposed in m/s
+    let wd = handler.get_values(WIND_DIR, time);  // supposed in degree
     if let Some(ws) = ws {
         let ws = ws.mapv(|_ws| {
             if _ws > -9998.0 {
-                _ws * 3600.0
+                _ws * 3600.0  // conversion to m/h
             } else {
                 NODATAVAL
             }
         });
+        // save data
         replace(&mut data, &ws, |i| &mut i.wind_speed);
     }
-
     if let Some(wd) = wd {
         let wd = wd.mapv(|_wd| {
-            let mut _wd = _wd / 180.0 * PI;
+            let mut _wd = _wd / 180.0 * PI;  // conversion to rad
             if _wd < 0.0 {
                 _wd += PI * 2.0;
             }
             _wd
         });
+        // save data
         replace(&mut data, &wd, |i| &mut i.wind_dir);
     }
 
+    // U and V components of the wind
+    let u = handler.get_values(U, time);  // supposed in m/s
+    let v = handler.get_values(V, time);  // supposed in m/s
     if let (Some(u), Some(v)) = (u, v) {
-        let wd = izip!(&u, &v)
-            .map(|(_u, _v)| {
-                if *_u < -9998.0 || *_v < -9998.0 {
-                    return NODATAVAL;
-                }
-                let mut wd = f32::atan2(*_u, *_v);
-
-                if wd < 0.0 {
-                    wd += PI * 2.0;
-                }
-                wd
-            })
-            .collect::<Array1<f32>>();
-
+        // compute wind speed
         let ws = izip!(&u, &v)
             .map(|(_u, _v)| {
                 if *_u < (NODATAVAL + 1.0) || *_v < (NODATAVAL + 1.0) {
                     return NODATAVAL;
                 }
 
-                f32::sqrt(_u * _u + _v * _v) * 3600.0
+                f32::sqrt(_u * _u + _v * _v) * 3600.0  // conversion to m/h
             })
             .collect::<Array1<f32>>();
+        // compute wind direction
+        let wd = izip!(&u, &v)
+            .map(|(_u, _v)| {
+                if *_u < -9998.0 || *_v < -9998.0 {
+                    return NODATAVAL;  // there is no data
+                }
+                let mut wd = f32::atan2(*_u, *_v);
+                if wd < 0.0 {
+                    wd += PI * 2.0;
+                }
+                wd
+            })
+            .collect::<Array1<f32>>();
+        // save data
         replace(&mut data, &wd, |i| &mut i.wind_dir);
-
         replace(&mut data, &ws, |i| &mut i.wind_speed);
     }
+
+    // Observed precipitation
+    let op = handler.get_values(RAIN_OBS, time);  // supposed in mm
+    maybe_replace(&mut data, &op, |i| &mut i.rain);
+
+    // Forecast precipitation
+    let fp = handler.get_values(RAIN, time);  // supposed in mm
+    maybe_replace(&mut data, &fp, |i| &mut i.rain);
+
+    // Forecasted snow cover
+    let snow = handler.get_values(SNOW, time);  // supposed in mm
+    maybe_replace(&mut data, &snow, |i| &mut i.snow_cover);
+
+    // SATELLITE VARIABLES
 
     let swi = handler.get_values(SWI, time);
     maybe_replace(&mut data, &swi, |i| &mut i.swi);
