@@ -65,31 +65,31 @@ pub struct Input {
 pub enum InputVariableName {
     /// WEATHER VARIABLES
     /// Observed relative humidity
-    HUMIDITY_OBS,
+    F,
     /// Relative humidity
-    HUMIDITY,
+    H,
     /// Observed temperature
-    TEMPERATURE_OBS,
+    K,
     /// Forecasted temperature
-    TEMPERATURE,
+    T,
     /// Forecasted dew point temperature
-    TEMP_DEW,
+    TD,
     /// Forecasted specific humidity
     Q,
     /// Forecasted pressure at surface level
     PSFC,
     /// Wind Speed
-    WIND_SPEED,
+    W,
     /// Wind Direction
-    WIND_DIR,
+    D,
     /// U component of the wind
     U,
     /// V value of the wind
     V,
     /// Observed precipitation
-    RAIN_OBS,
+    O,
     /// Forecasted precipitation
-    RAIN,
+    P,
     /// Forecasted snow cover
     SNOW,
 

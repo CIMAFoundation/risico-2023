@@ -43,28 +43,28 @@ pub fn get_input(handler: &dyn InputHandler, time: &DateTime<Utc>, len: usize) -
     let mut data: Array1<InputElement> = Array1::default(len);
 
     // Observed temperature
-    let temperature_obs = handler.get_values(TEMPERATURE_OBS, time);
+    let temperature_obs = handler.get_values(K, time);
     if let Some(mut t) = temperature_obs {
         t.mapv_inplace(|_t| if _t > 200.0 { _t - 273.15 } else { _t });  // conversion to Celsius
         replace(&mut data, &t, |i| &mut i.temperature);  // save observed temperature
     }
 
     // Observed relative humidity
-    let humidity_obs = handler.get_values(HUMIDITY_OBS, time);  // supposed in %
+    let humidity_obs = handler.get_values(F, time);  // supposed in %
     maybe_replace(&mut data, &humidity_obs, |i| &mut i.humidity);  // save observed relative humidity if any
             
     // Forecasted relative humidity
-    let humidity = handler.get_values(HUMIDITY, time);  // supposed in %
+    let humidity = handler.get_values(H, time);  // supposed in %
     maybe_replace(&mut data, &humidity, |i| &mut i.humidity);  // save forecasted relative humidity if any
 
     // Forecasted temperature
-    let temperature = handler.get_values(TEMPERATURE, time);
+    let temperature = handler.get_values(T, time);
     if let Some(mut t) = temperature {
         t.mapv_inplace(|_t| if _t > 200.0 { _t - 273.15 } else { _t });  // conversion to Celsius
         replace(&mut data, &t, |i| &mut i.temperature);  // save forecasted temperature
     
         // Forecasted dew point temperature
-        let temp_dew = handler.get_values(TEMP_DEW, time);
+        let temp_dew = handler.get_values(TD, time);
         if let Some(mut td) = temp_dew { // if the dew point temperature is available
             td.mapv_inplace(|_t| if _t > 200.0 { _t - 273.15 } else { _t });  // conversion to Celsius
             replace(&mut data, &td, |i| &mut i.temp_dew);
@@ -164,8 +164,8 @@ pub fn get_input(handler: &dyn InputHandler, time: &DateTime<Utc>, len: usize) -
     }
 
     // wind speed and wind direction
-    let ws = handler.get_values(WIND_SPEED, time);  // supposed in m/s
-    let wd = handler.get_values(WIND_DIR, time);  // supposed in degree
+    let ws = handler.get_values(W, time);  // supposed in m/s
+    let wd = handler.get_values(D, time);  // supposed in degree
     if let Some(ws) = ws {
         let ws = ws.mapv(|_ws| {
             if _ws > -9998.0 {
@@ -222,11 +222,11 @@ pub fn get_input(handler: &dyn InputHandler, time: &DateTime<Utc>, len: usize) -
     }
 
     // Observed precipitation
-    let op = handler.get_values(RAIN_OBS, time);  // supposed in mm
+    let op = handler.get_values(O, time);  // supposed in mm
     maybe_replace(&mut data, &op, |i| &mut i.rain);
 
     // Forecast precipitation
-    let fp = handler.get_values(RAIN, time);  // supposed in mm
+    let fp = handler.get_values(P, time);  // supposed in mm
     maybe_replace(&mut data, &fp, |i| &mut i.rain);
 
     // Forecasted snow cover
