@@ -32,7 +32,7 @@ pub fn store_day_fn(
     // Store the daily info at 15 local time
     if local_time.hour() == TIME_WEATHER {
         state.temp_15 = input.temperature;
-        state.temp_dew_15 = input.temp_dew_point;
+        state.temp_dew_15 = input.temp_dew;
     }
 }
 
