@@ -6,23 +6,25 @@ use strum_macros::{Display, EnumIter, EnumString};
 
 use crate::constants::NODATAVAL;
 
+/// InputElement represents a single input element for the model
+/// If the input unit provided is not the one expected by the model, the model will convert it (helpers.rs)
 #[derive(Debug)]
 pub struct InputElement {
-    /// temperature in celsius
+    /// air temperature [°C]
     pub temperature: f32,
-    /// rain in mm
+    /// rain [mm]
     pub rain: f32,
-    /// wind speed in m/h
+    /// wind speed [m/h]
     pub wind_speed: f32,
-    /// wind direction in radians
+    /// wind direction [rad]
     pub wind_dir: f32,
-    /// relative humidity in %
+    /// relative humidity [%]
     pub humidity: f32,
-    /// snow cover
+    /// snow cover [mm]
     pub snow_cover: f32,
-    /// dew point temperature
-    pub temp_dew_point: f32,
-    // vapor pressure deficit
+    /// dew point temperature [°C]
+    pub temp_dew: f32,
+    // vapor pressure deficit [hPa]
     pub vpd: f32,
 
     // satellite variables
@@ -41,7 +43,7 @@ impl Default for InputElement {
             wind_dir: NODATAVAL,
             humidity: NODATAVAL,
             snow_cover: NODATAVAL,
-            temp_dew_point: NODATAVAL,
+            temp_dew: NODATAVAL,
             vpd: NODATAVAL,
             ndvi: NODATAVAL,
             ndwi: NODATAVAL,
@@ -61,40 +63,44 @@ pub struct Input {
     Debug, PartialEq, Eq, Hash, Copy, Clone, EnumString, EnumIter, Display, Serialize, Deserialize,
 )]
 pub enum InputVariableName {
-    /// Air Humidity
-    H,
-    /// Observed Temperature
-    K,
-    /// Forecasted Temperature
-    T,
-    /// SNOW Cover
-    SNOW,
-    /// Observed Air Humidity
-    F,
-    // Forecasted dew point temperature
-    R,
-    /// Observed Precipitation
-    O,
-    /// Forecasted Precipitation
-    P,
+    /// WEATHER VARIABLES
+    /// Observed relative humidity
+    HUMIDITY_OBS,
+    /// Relative humidity
+    HUMIDITY,
+    /// Observed temperature
+    TEMPERATURE_OBS,
+    /// Forecasted temperature
+    TEMPERATURE,
+    /// Forecasted dew point temperature
+    TEMP_DEW,
+    /// Forecasted specific humidity
+    Q,
+    /// Forecasted pressure at surface level
+    PSFC,
     /// Wind Speed
-    W,
+    WIND_SPEED,
     /// Wind Direction
-    D,
-    /// NDWI Value
-    NDWI,
-    /// NDVI Value
-    NDVI,
-    /// MSI Value
-    M,
+    WIND_DIR,
     /// U component of the wind
     U,
     /// V value of the wind
     V,
-    /// SWI Value
+    /// Observed precipitation
+    RAIN_OBS,
+    /// Forecasted precipitation
+    RAIN,
+    /// Forecasted snow cover
+    SNOW,
+
+    /// SATELLITE VARIABLES
+    /// NDWI value
+    NDWI,
+    /// NDVI value
+    NDVI,
+    /// MSI value
+    M,
+    /// SWI value
     SWI,
-    /// Forecasted Specific Humidity at 2m
-    Q2,
-    /// Forecasted Pressure at surface level
-    PSFC,
+
 }

@@ -42,109 +42,89 @@ pub fn get_input(handler: &dyn InputHandler, time: &DateTime<Utc>, len: usize) -
     let mut data: Array1<InputElement> = Array1::default(len);
 
     // Observed temperature
-    let t = handler.get_values(TEMPERATURE_OBS, time);
-    if let Some(t) = t {
-        let t = t.mapv(|_t| if _t > 200.0 { _t - 273.15 } else { _t });  // convert to Celsius
-        replace(&mut data, &t, |i| &mut i.temperature);
+    let mut temperature_obs = handler.get_values(TEMPERATURE_OBS, time);
+    if let Some(temperature_obs) = temperature_obs {
+        temperature_obs.mapv_inplace(|_t| if _t > 200.0 { _t - 273.15 } else { _t });  // convert to Celsius
+        replace(&mut data, &temperature_obs, |i| &mut i.temperature);
     }
 
     // Forecasted temperature
-    let t = handler.get_values(TEMPERATURE, time);
-    if let Some(t) = t {
-        let t = t.mapv(|_t| if _t > 200.0 { _t - 273.15 } else { _t });  // conversion to Celsius
-        replace(&mut data, &t, |i| &mut i.temperature);
-
-        // Forecasted dew point temperature
-        let r = handler.get_values(TEMP_DEW, time);
-        if let Some(r) = r {
-            // computation of the relative humidity from the forecasted temperature and dew point temperature
-            let mut h: Array1<f32> = Array1::ones(len) * NODATAVAL;
-            azip!((
-                h in &mut h,
-                r in &r,
-                t in &t
-            ){
-                if *r > (NODATAVAL+1.0) && *t > (NODATAVAL+1.0) {
-                    let mut r = *r;
-                    if r > 200.0 {
-                        r -= 273.15;
-                    }
-                    *h = 100.0*(f32::exp((17.67 * r)/(r + 243.5))/f32::exp((17.67 * t)/(t + 243.5)));
-                }
-            });
-            replace(&mut data, &h, |i| &mut i.humidity);
-            // save also the dew point temperature
-            replace(&mut data, &r, |i| &mut i.temp_dew);
-        } else {            
-            // forecasted surface pressure
-            let psfc = handler.get_values(PSFC, time);
-            // forecasted specific humidity
-            let q = handler.get_values(Q, time);
-
-            if let Some(psfc) = psfc {
-                if let Some(q) = q {
-                    // compute the relative humidity from the forecasted temperature, surface pressure and specific humidity
-                    let mut h: Array1<f32> = Array1::ones(len) * NODATAVAL;
-                    azip!((
-                        h in &mut h,
-                        q in &q,
-                        p in &psfc,
-                        t in &t
-                    ){
-                        if *q > (NODATAVAL+1.0) && *t > (NODATAVAL+1.0) && *p > (NODATAVAL+1.0) {
-                            // this implements the following cdo formula
-                            // T_C=temperature in °C; P_hPa=pressure in hPa; denom=0.622+Q2; e=(Q2*P_hPa/denom); es=6.112*exp((17.67*T_C)/(T_C+243.5)); RH=(e/es)*100;
-                            *h = 100.0 * (q * (p/100.0) / (0.622 + q)) / (6.112 * f32::exp((17.67 * t)/(t + 243.5)));
-                        }
-                    });
-                    replace(&mut data, &h, |i| &mut i.humidity);
-
-                    // compute the temperature dew point from the forecasted temperature and relative humidity
-                    let mut r: Array1<f32> = Array1::ones(len) * NODATAVAL;
-                    azip!((
-                        r in &mut r,
-                        h in &h,
-                        t in &t
-                    ){
-                        if *h > (NODATAVAL+1.0) && *t > (NODATAVAL+1.0) {
-                            let mut h = *h;
-                            if h > 100.0 {
-                                h = 100.0;
-                            }
-                            // Magnus formula (https://en.wikipedia.org/wiki/Dew_point)
-                            let gamma = f32::ln(h / 100.0) + ((17.625 * t) / (t + 243.04));
-                            *r = (243.04 * gamma) / (17.625 - gamma);
-                        }
-                    });
-                    replace(&mut data, &r, |i| &mut i.temp_dew_point);
-
-                    // compute the vapour pressure deficit
-                    let mut vpd: Array1<f32> = Array1::ones(len) * NODATAVAL;
-                    azip!((
-                        vpd in &mut vpd,
-                        t in &t,
-                        q in &q2,
-                        p in &psfc
-                    ){
-                        if *q > (NODATAVAL+1.0) && *p > (NODATAVAL+1.0) {
-                            // difference between saturation vapor pressure and vapor pressure
-                            *vpd = (6.112 * f32::exp((17.67 * t)/(t + 243.5))) - (q * (p/100.0) / (0.622 + q));
-                        }
-                    });
-                    replace(&mut data, &vpd, |i| &mut i.vpd);
-                }
-            }
-        }
+    let mut temperature = handler.get_values(TEMPERATURE, time);
+    if let Some(temperature) = temperature {
+        temperature.mapv_inplace(|_t| if _t > 200.0 { _t - 273.15 } else { _t });  // conversion to Celsius
+        replace(&mut data, &temperature, |i| &mut i.temperature);
     }
 
     // Observed relative humidity
-    let h = handler.get_values(HUMIDITY_OBS, time);
-    maybe_replace(&mut data, &h, |i| &mut i.humidity);
-    
+    let humidity_obs = handler.get_values(HUMIDITY_OBS, time);  // supposed in %
+    maybe_replace(&mut data, &humidity_obs, |i| &mut i.humidity);
+            
     // Forecasted relative humidity
-    let h = handler.get_values(HUMIDITY, time);
-    maybe_replace(&mut data, &h, |i| &mut i.humidity);
-    
+    let humidity = handler.get_values(HUMIDITY, time);  // supposed in %
+    maybe_replace(&mut data, &humidity, |i| &mut i.humidity);
+
+    // Forecasted dew point temperature
+    let mut temp_dew = handler.get_values(TEMP_DEW, time);
+    if let Some(temp_dew) = temp_dew {
+        // save temp dew point
+        temp_dew.mapv_inplace(|_t| if _t > 200.0 { _t - 273.15 } else { _t });  // conversion to Celsius
+        replace(&mut data, &temp_dew, |i| &mut i.temp_dew);
+
+        // computation of the relative humidity from the forecasted temperature and dew point temperature
+        let mut h: Array1<f32> = Array1::ones(len) * NODATAVAL;
+        azip!((
+            h in &mut humidity,  // %
+            r in &temp_dew,  // °C
+            t in &temperature  // °C
+        ){
+            if *r > (NODATAVAL+1.0) && *t > (NODATAVAL+1.0) {
+                *h = 100.0*(f32::exp((17.67 * r)/(r + 243.5))/f32::exp((17.67 * t)/(t + 243.5)));
+            }
+        });
+        replace(&mut data, &h, |i| &mut i.humidity);
+    } else {
+        // compute the temperature dew point from the forecasted temperature and relative humidity
+        let mut r: Array1<f32> = Array1::ones(len) * NODATAVAL;
+        azip!((
+            r in &mut r,
+            h in &humidity,  // %
+            t in &temperature  // °C
+        ){
+            if *h > (NODATAVAL+1.0) && *t > (NODATAVAL+1.0) {
+                let mut h = *h;
+                if h > 100.0 {
+                    h = 100.0;
+                }
+                // Magnus formula (https://en.wikipedia.org/wiki/Dew_point)
+                let gamma = f32::ln(h / 100.0) + ((17.625 * t) / (t + 243.04));
+                *r = (243.04 * gamma) / (17.625 - gamma);
+            }
+        });
+        replace(&mut data, &r, |i| &mut i.temp_dew);
+    }
+
+    // forecasted surface pressure
+    let psfc = handler.get_values(PSFC, time);  // supposed in Pa
+    // forecasted specific humidity
+    let q = handler.get_values(Q, time);  // supposed in kg/kg
+    if let (Some(psfc), Some(q)) = (psfc, q) {
+        // compute the relative humidity from the forecasted temperature, surface pressure and specific humidity
+        let mut h: Array1<f32> = Array1::ones(len) * NODATAVAL;
+        azip!((
+            h in &mut h,
+            q in &q, // kg/kg
+            p in &psfc, // Pa
+            t in &temperature // °C
+        ){
+            if *q > (NODATAVAL+1.0) && *t > (NODATAVAL+1.0) && *p > (NODATAVAL+1.0) {
+                // this implements the following cdo formula
+                // T_C=temperature in °C; P_hPa=pressure in hPa; Q2=specific humidity at 2m
+                // e=(Q2*P_hPa/(0.622+Q2)); es=6.112*exp((17.67*T_C)/(T_C+243.5)); RH=(e/es)*100;
+                *h = 100.0 * (q * (p/100.0) / (0.622 + q)) / (6.112 * f32::exp((17.67 * t)/(t + 243.5)));
+            }
+        });
+        replace(&mut data, &h, |i| &mut i.humidity);
+    }
 
     // wind speed and wind direction
     let ws = handler.get_values(WIND_SPEED, time);  // supposed in m/s
@@ -215,6 +195,22 @@ pub fn get_input(handler: &dyn InputHandler, time: &DateTime<Utc>, len: usize) -
     // Forecasted snow cover
     let snow = handler.get_values(SNOW, time);  // supposed in mm
     maybe_replace(&mut data, &snow, |i| &mut i.snow_cover);
+
+    // DERIVED VARIABLES
+    // compute the vapour pressure deficit
+    let mut vpd: Array1<f32> = Array1::ones(len) * NODATAVAL;
+    azip!((
+        vpd in &mut vpd,
+        t in &t,
+        q in &q2,
+        p in &psfc
+    ){
+        if *q > (NODATAVAL+1.0) && *p > (NODATAVAL+1.0) {
+            // difference between saturation vapor pressure and actual vapor pressure
+            *vpd = (6.112 * f32::exp((17.67 * t)/(t + 243.5))) - (q * (p/100.0) / (0.622 + q));
+        }
+    });
+    replace(&mut data, &vpd, |i| &mut i.vpd);
 
     // SATELLITE VARIABLES
 
