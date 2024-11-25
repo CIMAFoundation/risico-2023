@@ -13,29 +13,29 @@ lazy_static! {
     static ref TZ_FINDER: DefaultFinder = DefaultFinder::new();
 }
 
-// Store the daily info
+// Store the daily info -> values at 13:00 local time
 pub fn store_day_fn(
     state: &mut AngstromStateElement,
     input: &InputElement,
     prop: &AngstromPropertiesElement,
     time: &DateTime<Utc>,
 ) {
-    // store the daily info -> values at 1pm local time
+    // check the timezone
     let tz_name = TZ_FINDER.get_tz_name(prop.lon as f64, prop.lat as f64);
     let tz : Tz = tz_name.parse().expect("Invalid timezone name");
     let local_time = time.with_timezone(&tz);
-    // Store the daily info at 1pm local time
+    // store the input
     if local_time.hour() == TIME_WEATHER {
         state.temp_13 = input.temperature;
         state.humidity_13 = input.humidity;
     }
 }
 
+// Compute the Angstrom index
 pub fn angstrom_index(
-    humidity_13: f32,  // humidity [%] at 1pm local time
-    temp_13: f32,  // temperature [°C] at 1pm local time
+    humidity_13: f32,  // humidity [%] at 13:00 local time
+    temp_13: f32,  // temperature [°C] at 13:00 local time
 ) -> f32 {
-    // calculate the Angstrom index
     let angstrom = (humidity_13 / 20.0) + ((27.0 - temp_13) / 10.0);
     angstrom
 }

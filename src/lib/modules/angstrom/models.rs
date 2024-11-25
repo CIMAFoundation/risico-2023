@@ -7,6 +7,9 @@ use super::{
     functions::{store_day_fn, get_output_fn},
 };
 
+/// Angstrom model
+/// Source: https://wikifire.wsl.ch/tiki-index8902.html?page=Angstr%C3%B6m+index&structure=Fire
+
 // CELLS PROPERTIES
 #[derive(Debug)]
 pub struct AngstromPropertiesElement {
@@ -57,11 +60,12 @@ impl AngstromProperties {
 #[derive(Debug)]
 #[allow(non_snake_case)]
 pub struct AngstromStateElement {
-    pub temp_13: f32,
-    pub humidity_13: f32,
+    pub temp_13: f32,  // temperature at 13:00 [°C]
+    pub humidity_13: f32,  // relative humidity at 13:00 [%]
 }
 
 impl AngstromStateElement {
+    // clean the daily values
     pub fn clean_day(&mut self) {
         self.temp_13 = NODATAVAL;
         self.humidity_13 = NODATAVAL;
@@ -78,8 +82,9 @@ pub struct AngstromState {
 
 impl AngstromState {
     #[allow(dead_code, non_snake_case)]
-    /// Create a new state.
+    /// Create a new state
     pub fn new(time: &DateTime<Utc>, n_cells: usize) -> AngstromState {
+        // initialize as nodata values
         let data: Array1<AngstromStateElement> = Array1::from(
             (0..n_cells)
                 .map(|_| AngstromStateElement {
@@ -88,7 +93,6 @@ impl AngstromState {
                 })
                 .collect::<Vec<_>>(),
         );
-
         AngstromState {
             time: *time,
             data,
@@ -104,6 +108,7 @@ impl AngstromState {
         self.len() == 0
     }
 
+    // store the daily values, check if the time is 13:00
     #[allow(non_snake_case)]
     fn store_day(&mut self, input: &Input, props: &AngstromProperties) {
         self.time = input.time;  // reference time of the input
@@ -115,6 +120,7 @@ impl AngstromState {
             });
     }
 
+    // compute the Angstrom index and return the output
     #[allow(non_snake_case)]
     pub fn get_output(&mut self) -> Output {
         let time = &self.time;
