@@ -17,6 +17,7 @@ use super::models::{
     RISICOConfig,
     FWIConfig,
     Mark5Config,
+    KbdiConfig,
     AngstromConfig,
     FosbergConfig,
     NesterovConfig,
@@ -139,6 +140,16 @@ pub struct Mark5ConfigBuilder {
 }
 
 #[derive(Debug, Serialize, Deserialize)]
+pub struct KbdiConfigBuilder {
+    pub model_name: String,
+    pub cells_file_path: String,
+    pub warm_state_path: String,
+    pub warm_state_offset: i64,
+    pub output_types: Vec<OutputTypeConfig>,
+    pub model_version: String,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
 pub struct AngstromConfigBuilder {
     pub model_name: String,
     pub cells_file_path: String,
@@ -205,6 +216,7 @@ pub enum ConfigBuilderType {
     RISICO(RISICOConfigBuilder),
     FWI(FWIConfigBuilder),
     Mark5(Mark5ConfigBuilder),
+    KBDI(KbdiConfigBuilder),
     Angstrom(AngstromConfigBuilder),
     Fosberg(FosbergConfigBuilder),
     Nesterov(NesterovConfigBuilder),
@@ -221,6 +233,7 @@ impl ConfigBuilderType {
             ConfigBuilderType::RISICO(_) => "RISICO",
             ConfigBuilderType::FWI(_) => "FWI",
             ConfigBuilderType::Mark5(_) => "Mark5",
+            ConfigBuilderType::KBDI(_) => "KBDI",
             ConfigBuilderType::Angstrom(_) => "Angstrom",
             ConfigBuilderType::Fosberg(_) => "Fosberg",
             ConfigBuilderType::Nesterov(_) => "Nesterov",
@@ -460,6 +473,16 @@ impl  Mark5ConfigBuilder {
         Mark5Config::new(self, *date, palettes)
     }
     
+}
+
+impl KbdiConfigBuilder {
+    pub fn build(
+        &self,
+        date: &DateTime<Utc>,
+        palettes: &PaletteMap,
+    ) -> Result<KbdiConfig, RISICOError> {
+        KbdiConfig::new(self, *date, palettes)
+    }
 }
 
 impl AngstromConfigBuilder {

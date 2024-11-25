@@ -11,6 +11,7 @@ use common::config::builder::{
     RISICOConfigBuilder,
     FWIConfigBuilder,
     Mark5ConfigBuilder,
+    KbdiConfigBuilder,
     AngstromConfigBuilder,
     FosbergConfigBuilder,
     NesterovConfigBuilder,
@@ -247,6 +248,68 @@ fn run_mark5(
     Ok(())
 }
 
+
+fn run_kbdi(
+    model_config: &KbdiConfigBuilder,
+    date: &DateTime<Utc>,
+    handler: &mut dyn InputHandler,
+    palettes: &PaletteMap,
+) -> Result<(), RISICOError> {
+    let current_time = Utc::now();
+    // build configuration
+    let config = model_config
+        .build(date, palettes)
+        .map_err(|_| "Could not configure model")?;
+    let mut output_writer = config
+        .get_output_writer()
+        .map_err(|_| "Could not configure output writer")?;
+    let props = config.get_properties();  // get properties
+    let mut state = config.new_state();  // get state
+    // set coordinates for the input handlerq
+    let (lats, lons) = config.get_properties().get_coords();
+    let (lats, lons) = (lats.as_slice(), lons.as_slice());
+    handler.set_coordinates(lats, lons).expect("Should set coordinates");
+    trace!(
+        "Loading input configuration took {} seconds",
+        Utc::now() - current_time
+    );
+    let len = state.len();
+    let timeline = handler.get_timeline();
+    for time in timeline {
+        let step_time = Utc::now();
+        info!("Processing {}", time.format("%Y-%m-%d %H:%M"));
+        let input = get_input(handler, &time, len);
+        // store the input of the day
+        state.store(&input);
+        // check if we should write the output
+        let (should_write_warm, warm_state_time) = config.should_write_warm_state(&time);
+        if  should_write_warm{
+            // update the state with the input of the day
+            let c = Utc::now();
+            state.update(&props);
+            trace!("updating state took {} seconds", Utc::now() - c);
+            // compute output
+            let c = Utc::now();
+            let output = state.output();
+            trace!("Generating output took {} seconds", Utc::now() - c);
+            // write the output
+            let c = Utc::now();
+            if let Err(err) = output_writer.write_output(lats, lons, &output) {
+                warn!("Error writing output: {}", err);
+            }
+            trace!("Writing output took {} seconds", Utc::now() - c);
+            // write the warm state
+            info!("Writing warm state");
+            let c = Utc::now();
+            if let Err(err) = config.write_warm_state(&state, warm_state_time) {
+                warn!("Error writing warm state: {}", err);
+            }
+            trace!("Writing warm state took {} seconds", Utc::now() - c);
+        }
+        trace!("Step took {} seconds", Utc::now() - step_time);
+    }
+    Ok(())
+}
 
 /// Run Angstrom index
 fn run_angstrom(
@@ -727,6 +790,12 @@ fn main() -> Result<(), Box<dyn Error>> {
                 &configs.palettes,
             ),
             ConfigBuilderType::Mark5(model_config) => run_mark5(
+                model_config,
+                &date,
+                input_handler.as_mut(),
+                &configs.palettes,
+            ),
+            ConfigBuilderType::KBDI(model_config) => run_kbdi(
                 model_config,
                 &date,
                 input_handler.as_mut(),
