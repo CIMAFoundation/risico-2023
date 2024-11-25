@@ -2,26 +2,27 @@ use crate::models::output::OutputElement;
 use super::models::FosbergStateElement;
 
 
-// Equilibrium Moisture Content
+// Equilibrium Moisture Content [%] -> Simard formulation
+// From https://wikifire.wsl.ch/tiki-indexf2f0.html?page=Equilibrium+moisture+content
 pub fn emc(
-    temperature: f32,  // air temperature [°C]
+    temperature: f32,  // temperature [°C]
     humidity: f32,  // relative humidity [%]
 ) -> f32 {
-    // conversion from °C to °F
-    let temp = temperature * 9.0 / 5.0 + 32.0;
+    // conversion from °C to °F -> needed for the formula
+    let temp_f = temperature * 9.0 / 5.0 + 32.0;
     let emc = if humidity < 10.0 {
-        0.03229 + 0.281073 * humidity - 0.000578 * temp * humidity
+        0.03229 + 0.281073 * humidity - 0.000578 * temp_f * humidity
     } else if humidity < 50.0 {
-        2.22749 + 0.160107 * humidity - 0.014784 * temp
+        2.22749 + 0.160107 * humidity - 0.01478 * temp_f
     } else {
-        21.0606 + 0.005565 * humidity.powi(2) - 0.00035 * temp * humidity - 0.483199 * humidity
+        21.0606 + 0.005565 * humidity.powi(2) - 0.00035 * temp_f * humidity - 0.483199 * humidity
     };
     emc
 }
 
 
 pub fn ffwi(
-    temperature: f32,  // air temperature [°C]
+    temperature: f32,  // temperature [°C]
     humidity: f32, // relative humidity [%]
     wind_speed: f32,  // wind speed [m/h]
 ) -> f32 {
@@ -36,12 +37,12 @@ pub fn get_output_fn(
     state: &FosbergStateElement,
 ) -> OutputElement {
     let ffwi = ffwi(state.temp, state.humidity, state.wind_speed);
-    // return the output element
+    let ws = state.wind_speed / 3600.0;  // convert from m/h to km/h
     OutputElement {
         ffwi,
         temperature: state.temp,
         humidity: state.humidity,
-        wind_speed: state.wind_speed,
+        wind_speed: ws,
         ..OutputElement::default()
     }
 }
