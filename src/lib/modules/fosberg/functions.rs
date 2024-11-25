@@ -37,12 +37,12 @@ pub fn get_output_fn(
     state: &FosbergStateElement,
 ) -> OutputElement {
     let ffwi = ffwi(state.temp, state.humidity, state.wind_speed);
-    let ws = state.wind_speed / 3600.0;  // convert from m/h to km/h
+    let ws = state.wind_speed / 3600.0;  // convert from m/h to m/s
     OutputElement {
-        ffwi,
-        temperature: state.temp,
-        humidity: state.humidity,
-        wind_speed: ws,
+        ffwi,  // [-]
+        temperature: state.temp,  // [°C]
+        humidity: state.humidity,  // [%]
+        wind_speed: ws,  // [m/s]
         ..OutputElement::default()
     }
 }

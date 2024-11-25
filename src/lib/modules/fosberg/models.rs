@@ -7,6 +7,9 @@ use super::{
     functions::get_output_fn,
 };
 
+/// Fosberg  Fire Weather index
+/// Source: https://wikifire.wsl.ch/tiki-indexb1d5.html?page=Fosberg+fire+weather+index&structure=Fire
+
 // CELLS PROPERTIES
 #[derive(Debug)]
 pub struct FosbergPropertiesElement {

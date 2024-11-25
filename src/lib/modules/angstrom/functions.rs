@@ -46,9 +46,9 @@ pub fn get_output_fn(
     let angstrom = angstrom_index(state.humidity_13, state.temp_13);
     // return the output element
     OutputElement {
-        angstrom,
-        temperature: state.temp_13,
-        humidity: state.humidity_13,
+        angstrom,  // [-]
+        temperature: state.temp_13,  // [°C]
+        humidity: state.humidity_13,  // [%]
         ..OutputElement::default()
     }
 }

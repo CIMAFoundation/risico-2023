@@ -7,6 +7,13 @@ use super::{
     functions::{store_day_fn, update_fn, get_output_fn},
 };
 
+
+/// Portuguese fire index
+/// Source: https://wikifire.wsl.ch/tiki-index656a.html?page=Portuguese+index&structure=Fire
+
+
+/// NOTE: problems in the computation of the cumulative index, it should go on overflow!!!
+
 // CELLS PROPERTIES
 #[derive(Debug)]
 pub struct PortuguesePropertiesElement {
@@ -36,7 +43,6 @@ impl PortugueseProperties {
                 lat: props.lats[idx],
             })
             .collect();
-    
         let len = data.len();
         Self {
             data,
@@ -73,18 +79,17 @@ impl Default for PortugueseWarmState {
 #[derive(Debug)]
 #[allow(non_snake_case)]
 pub struct PortugueseStateElement {
-    pub ign: f32,  // ignition index
-    pub sum_ign: f32,  // sum of the ignition indices
-    pub cum_index: f32,  // cumulative index
-    pub fire_index: f32,  // fire index
-    pub temp_12: f32,  // temperature [°C] at 12pm info on the run day
-    pub temp_dew_12: f32,  // dew point temperature [°C] at 12pm info on the run day
-    pub cum_rain: f32,  // cumulated rain [mm] of the run day
+    pub ign: f32,  // ignition index [-]
+    pub sum_ign: f32,  // sum of the ignition indices [-]
+    pub cum_index: f32,  // cumulative index [-]
+    pub fire_index: f32,  // fire index [-]
+    pub temp_12: f32,  // temperature [°C] at 12:00
+    pub temp_dew_12: f32,  // dew point temperature [°C] at 12:00
+    pub cum_rain: f32,  // cumulated daily rain [mm]
 }
 
 
 impl PortugueseStateElement {
-
     pub fn clean_day(
         &mut self
     ) {
@@ -105,7 +110,7 @@ pub struct PortugueseState {
 
 impl PortugueseState {
     #[allow(dead_code, non_snake_case)]
-    /// Create a new state.
+    /// Create a new state
     pub fn new(warm_state: &[PortugueseWarmState], time: &DateTime<Utc>) -> PortugueseState {
         let data = Array1::from_vec(
             warm_state
@@ -121,7 +126,6 @@ impl PortugueseState {
                 })
                 .collect(),
         );
-
         PortugueseState {
             time: *time,
             data,
@@ -167,7 +171,6 @@ impl PortugueseState {
         Output::new(*time, output_data)
     }
 
-    // Update the state of the cells
     pub fn store(&mut self, input: &Input, prop: &PortugueseProperties) {
         self.store_day(input, prop);
     }

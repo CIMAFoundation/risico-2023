@@ -7,6 +7,10 @@ use super::{
     functions::{store_day_fn, update_fn, get_output_fn},
 };
 
+
+/// Nesterov index
+/// Source: https://wikifire.wsl.ch/tiki-indexfa8e.html?page=Nesterov+ignition+index&structure=Fire
+
 // CELLS PROPERTIES
 #[derive(Debug)]
 pub struct NesterovPropertiesElement {
@@ -36,7 +40,6 @@ impl NesterovProperties {
                 lat: props.lats[idx],
             })
             .collect();
-    
         let len = data.len();
         Self {
             data,
@@ -72,9 +75,9 @@ impl Default for NesterovWarmState {
 #[allow(non_snake_case)]
 pub struct NesterovStateElement {
     pub nesterov: f32,  // Nesterov index
-    pub temp_15: f32,  // temperature [°C] at 3pm info on the run day
-    pub temp_dew_15: f32,  // dew point temperature [°C] at 3pm info on the run day
-    pub cum_rain: f32,  // cumulated rain [mm] of the run day
+    pub temp_15: f32,  // temperature [°C] at 15:00
+    pub temp_dew_15: f32,  // dew point temperature [°C] at 15:00
+    pub cum_rain: f32,  // cumulated daily rain [mm]
 }
 
 
@@ -98,7 +101,7 @@ pub struct NesterovState {
 
 impl NesterovState {
     #[allow(dead_code, non_snake_case)]
-    /// Create a new state.
+    /// Create a new state
     pub fn new(warm_state: &[NesterovWarmState], time: &DateTime<Utc>) -> NesterovState {
         let data = Array1::from_vec(
             warm_state
@@ -127,6 +130,7 @@ impl NesterovState {
         self.len() == 0
     }
 
+    // Store the daily info at 15:00 local time
     #[allow(non_snake_case)]
     fn store_day(&mut self, input: &Input, prop: &NesterovProperties) {
         let time = input.time;  // reference time of the input

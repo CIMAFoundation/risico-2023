@@ -31,7 +31,7 @@ pub fn update_fn(
     prop: &OrieuxPropertiesElement,
     time: &DateTime<Utc>,
 ) {
-    // compute potential evapotranspiration
+    // compute potential evapotranspiration - Thornthwaite equation
     // temperature corrected from Pereira & Pruitt (2004)
     // see: https://wikifire.wsl.ch/tiki-index3aa5.html?page=Potential+evapotranspiration&structure=Fire
     let temp_eff = 0.5*0.72*(3.0*state.max_temp - state.min_temp);
@@ -52,8 +52,8 @@ pub fn get_output_fn(
     state: &OrieuxStateElement,
 ) -> OutputElement {
     OutputElement {
-        orieux: state.orieux,
-        pet_t: state.pet,
+        orieux: state.orieux,  // [mm]
+        pet_t: state.pet,  // [mm]
         ..OutputElement::default()
     }
 }

@@ -7,6 +7,11 @@ use super::{
     functions::get_output_fn,
 };
 
+
+/// Sharples fire index
+/// Source: https://wikifire.wsl.ch/tiki-index91e2.html?page=Sharples+fuel+moisture+and+fire+danger+rating+indices&structure=Fire
+
+
 // CELLS PROPERTIES
 #[derive(Debug)]
 pub struct SharplesPropertiesElement {
@@ -72,7 +77,7 @@ pub struct SharplesState {
 
 impl SharplesState {
     #[allow(dead_code, non_snake_case)]
-    /// Create a new state.
+    /// Create a new state
     pub fn new(time: &DateTime<Utc>, n_cells: usize) -> SharplesState {
         let data: Array1<SharplesStateElement> = Array1::from(
             (0..n_cells)
@@ -83,7 +88,6 @@ impl SharplesState {
                 })
                 .collect::<Vec<_>>(),
         );
-
         SharplesState {
             time: *time,
             data,

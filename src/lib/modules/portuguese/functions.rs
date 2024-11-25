@@ -14,7 +14,7 @@ lazy_static! {
     static ref TZ_FINDER: DefaultFinder = DefaultFinder::new();
 }
 
-// Store the daily info
+// Store the daily info at 12:00 local time
 pub fn store_day_fn(
     state: &mut PortugueseStateElement,
     input: &InputElement,
@@ -25,11 +25,10 @@ pub fn store_day_fn(
     if input.rain > 0.0 {
         state.cum_rain += input.rain;
     }
-    // store the other daily info -> values at 3pm local time
+    // store the other daily info at 12:00 local time
     let tz_name = TZ_FINDER.get_tz_name(prop.lon as f64, prop.lat as f64);
     let tz : Tz = tz_name.parse().expect("Invalid timezone name");
     let local_time = time.with_timezone(&tz);
-    // Store the daily info at 15 local time
     if local_time.hour() == TIME_WEATHER {
         state.temp_12 = input.temperature;
         state.temp_dew_12 = input.temp_dew;
@@ -39,8 +38,8 @@ pub fn store_day_fn(
 
 // Ignition Index
 pub fn ignition_index(
-    temp_12: f32,  // temperature at 12pm [°C]
-    temp_dew_12: f32,  // dew temperature at 12pm [°C]
+    temp_12: f32,  // temperature [°C] at 12:00
+    temp_dew_12: f32,  // dew temperature [°C] at 12:00
 ) -> f32 {
     let ign = temp_12 * (temp_12 - temp_dew_12);
     ign

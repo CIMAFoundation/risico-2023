@@ -7,7 +7,7 @@ pub fn hdw(
     vpd: f32,  // vpor pressure deficit [hPa]
     wind_speed: f32,  // wind speed [m/h]
 ) -> f32 {
-    let ws = wind_speed / 3600.0; // wind speed [m/s]
+    let ws = wind_speed / 3600.0; // wind speed [m/s] -> required by the formula
     let hdw = ws*vpd;
     hdw
 }
@@ -20,9 +20,9 @@ pub fn get_output_fn(
     // return the output element
     let ws = state.wind_speed / 3600.0;
     OutputElement {
-        hdw,
-        vpd: state.vpd,
-        wind_speed: ws,
+        hdw,  // [-]
+        vpd: state.vpd,  // [hPa]
+        wind_speed: ws,  // [m/s]
         ..OutputElement::default()
     }
 }

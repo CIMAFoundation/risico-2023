@@ -7,6 +7,12 @@ use super::{
     functions::{store_day_fn, update_fn, get_output_fn},
 };
 
+
+/// Orieux fire index
+/// Source: https://wikifire.wsl.ch/tiki-index182c.html?page=Orieux+index&structure=Fire
+/// Note: the Orieux is suitable only in summer
+
+
 // CELLS PROPERTIES
 #[derive(Debug)]
 pub struct OrieuxPropertiesElement {
@@ -39,7 +45,6 @@ impl OrieuxProperties {
                 heat_index: props.heat_indices[idx],
             })
             .collect();
-    
         let len = data.len();
         Self {
             data,
@@ -60,7 +65,7 @@ impl OrieuxProperties {
 #[allow(non_snake_case)]
 #[derive(Debug, Clone)]
 pub struct OrieuxWarmState {
-    pub orieux: f32,  // Orieux index of the previous day
+    pub orieux: f32,  // Orieux index of the previous day [mm]
 }
 
 impl Default for OrieuxWarmState {
@@ -76,7 +81,7 @@ impl Default for OrieuxWarmState {
 #[derive(Debug)]
 #[allow(non_snake_case)]
 pub struct OrieuxStateElement {
-    pub orieux: f32,  // Orieux index
+    pub orieux: f32,  // Orieux index [mm]
     pub pet: f32,  // potential evapotranspiration [mm]
     pub cum_rain: f32,  // daily cumulative precipitation [mm]
     pub min_temp: f32,  // min daily temperature [°C]
@@ -102,7 +107,7 @@ pub struct OrieuxState {
 
 impl OrieuxState {
     #[allow(dead_code, non_snake_case)]
-    /// Create a new state.
+    /// Create a new state
     pub fn new(warm_state: &[OrieuxWarmState], time: &DateTime<Utc>) -> OrieuxState {
         let data = Array1::from_vec(
             warm_state
@@ -163,7 +168,6 @@ impl OrieuxState {
         Output::new(*time, output_data)
     }
 
-    // Update the state of the cells
     pub fn store(&mut self, input: &Input) {
         self.store_day(input);
     }

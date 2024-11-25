@@ -7,6 +7,9 @@ use super::{
     functions::get_output_fn,
 };
 
+/// Hor-Dry-Wind Fire Weather index
+/// Source: Srock, A.F.; Charney, J.J.; Potter, B.E.; Goodrick, S.L. The Hot-Dry-Windy Index: A New Fire Weather Index. Atmosphere 2018, 9, 279. https://doi.org/10.3390/atmos9070279
+
 // CELLS PROPERTIES
 #[derive(Debug)]
 pub struct HdwPropertiesElement {
@@ -81,7 +84,6 @@ impl HdwState {
                 })
                 .collect::<Vec<_>>(),
         );
-
         HdwState {
             time: *time,
             data,
