@@ -9,96 +9,98 @@ use crate::constants::NODATAVAL;
 #[allow(non_snake_case)]
 pub struct OutputElement {
     // ----------------- INPUTS ---------------//
-    /// Input temperature in celsius
+    /// Input temperature [°C]
     pub temperature: f32,
-    /// Input rain in mm
+    /// Input rain [mm]]
     pub rain: f32,
-    /// Input wind speed in m/s
+    /// Input wind speed [m/s]
     pub wind_speed: f32,
-    /// Input wind direction in radians
+    /// Input wind direction [rad]
     pub wind_dir: f32,
-    /// Input relative humidity in %
+    /// Input relative humidity [%]
     pub humidity: f32,
-    /// Input snow cover
+    /// Input snow cover [mm]
     pub snow_cover: f32,
-    /// Meteorological index
-    pub meteo_index: f32,
-    /// Dew point temperature
+    /// Dew point temperature [°C]
     pub temp_dew_point: f32,
-    /// Vapor pressure deficit in hPa
+    /// Vapor pressure deficit [hPa]
     pub vpd: f32,
 
     // ------------------- RISICO ------------------- //
-    /// Fine fuel moisture content
+    /// Fine fuel moisture content [%]
     pub dffm: f32,
-    /// Wind effect on fire spread
+    /// Wind effect on fire spread [-]
     pub W: f32,
-    /// Rate of spread
+    /// Rate of spread [m/h]
     pub V: f32,
-    /// Intensity
+    /// Intensity [kW/m]
     pub I: f32,
-    /// NDVI effect
+    /// NDVI effect [-]
     pub NDVI: f32,
-    /// NDWI effect
+    /// NDWI effect [-]
     pub NDWI: f32,
-    /// Probability of ignition
+    /// Probability of ignition [-]
     pub PPF: f32,
-    /// Temperature effect on fire spread
+    /// Temperature effect on fire spread [-]
     pub t_effect: f32,
     // pub SWI: f32,
+    /// Meteorological index [-]
+    pub meteo_index: f32,
 
     // ---------------- FWI ----------------- //
-    /// Fine Fuel Moisture Code
+    /// Fine Fuel Moisture Code [-]
     pub ffmc: f32,
-    /// Duff Moisture Code
+    /// Duff Moisture Code [-]
     pub dmc: f32,
-    /// Dought Code
+    /// Dought Code [-]
     pub dc: f32,
-    /// Initial Spread  Index
+    /// Initial Spread  Index [-]
     pub isi: f32,
-    /// Build Up Index
+    /// Build Up Index [-]
     pub bui: f32,
-    /// Fire Weather Index
+    /// Fire Weather Index [-]
     pub fwi: f32,
-    /// IFWI
+    /// IFWI [-]
     pub ifwi: f32,
 
     // ------------- Keetch-Byram Drought Index ----------------- //
-    pub kbdi: f32,
+    pub kbdi: f32, // [mm]
 
     // ------------- Mark 5 ----------------- //
-    /// Drought Factor
+    /// Drought Factor [-]
     pub df: f32,
-    /// Fire Danger Index
+    /// Fire Danger Index [-]
     pub ffdi: f32,
 
     // ------------- Angstrom Index ----------------- //
-    pub angstrom: f32,
+    pub angstrom: f32, // [-]
 
     // ------------- Fosberg Index ----------------- //
-    pub ffwi: f32,
+    pub ffwi: f32, // [-]
 
     // ------------- Nesterov Index ----------------- //
-    pub nesterov: f32,
+    pub nesterov: f32, // [-]
 
     // ------------- Sharples index ----------------- //
-    // fuel moisture index
+    // fuel moisture index [-]
     pub fmi: f32,
-    // fire danger index
+    // fire danger index [-]
     pub f: f32,
 
     // ------------- Orieux Index ----------------- //
-    // Potential evapotranspiration (Thornthwaite Formulation)
+    // Potential evapotranspiration (Thornthwaite Formulation) [mm]
     pub pet_t: f32,
-    // Orieux index
+    // Orieux index [mm]
     pub orieux: f32,
 
     // ------------- Portuguese index ----------------- //
+    // Ingition Index [-]
     pub portuguese_ignition: f32,
+    // Fire Danger Index [-]
     pub portuguese_fdi: f32,
 
     // ------------- Hot-Dry-Wind Index ----------------- //
-    pub hdw: f32,
+    pub hdw: f32,  // [-]
 }
 
 
@@ -332,7 +334,7 @@ pub enum OutputVariableName {
     #[strum(props(long_name = "Potential Evapotranspiration - Thornthwaite formulation", units = "mm"))]
     pet_t,
     // Orieux index
-    #[strum(props(long_name = "Orieux Index", units = "-"))]
+    #[strum(props(long_name = "Orieux Index", units = "mm"))]
     orieux,
 
     // ---------- Portuguese Index ----------------- //
