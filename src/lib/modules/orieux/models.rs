@@ -65,13 +65,13 @@ impl OrieuxProperties {
 #[allow(non_snake_case)]
 #[derive(Debug, Clone)]
 pub struct OrieuxWarmState {
-    pub orieux: f32,  // Orieux index of the previous day [mm]
+    pub orieux_wr: f32,  // Orieux index of the previous day [mm]
 }
 
 impl Default for OrieuxWarmState {
     fn default() -> Self {
         Self {
-            orieux: ORIEUX_INIT
+            orieux_wr: ORIEUX_WR_INIT
         }
     }
 }
@@ -81,19 +81,23 @@ impl Default for OrieuxWarmState {
 #[derive(Debug)]
 #[allow(non_snake_case)]
 pub struct OrieuxStateElement {
-    pub orieux: f32,  // Orieux index [mm]
+    pub orieux_wr: f32,  // Orieux water reserve [mm]
     pub pet: f32,  // potential evapotranspiration [mm]
+    pub orieux_fd: f32,  // Orieux fire danger class [0-3]
     pub cum_rain: f32,  // daily cumulative precipitation [mm]
     pub min_temp: f32,  // min daily temperature [°C]
     pub max_temp: f32,  // max daily temperature [°C]
+    pub max_wind_speed: f32,  // max daily wind speed [m/s]
 }
 
 impl OrieuxStateElement {
     pub fn clean_day(&mut self) {
         self.pet = NODATAVAL;
+        self.orieux_fd = NODATAVAL;
         self.cum_rain = 0.0;
         self.min_temp = NODATAVAL;
         self.max_temp = NODATAVAL;
+        self.max_wind_speed = NODATAVAL;
     }
 }
 
@@ -113,11 +117,13 @@ impl OrieuxState {
             warm_state
                 .iter()
                 .map(|w| OrieuxStateElement {
-                    orieux: w.orieux.clone(),
+                    orieux_wr: w.orieux_wr.clone(),
                     pet: NODATAVAL,
+                    orieux_fd: NODATAVAL,
                     cum_rain: 0.0,
                     min_temp: NODATAVAL,
                     max_temp: NODATAVAL,
+                    max_wind_speed: NODATAVAL,
                 })
                 .collect(),
         );

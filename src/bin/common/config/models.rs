@@ -1962,11 +1962,11 @@ impl OrieuxConfig {
             }
             let line = line.expect("Should unwrap line");
             let components: Vec<&str> = line.split_whitespace().collect();
-            let orieux = components[0]
+            let orieux_wr = components[0]
                 .parse::<f32>()
                 .unwrap_or_else(|_| panic!("Could not parse snow_cover from {}", line));
             warm_state.push(OrieuxWarmState {
-                orieux
+                orieux_wr
             });
         }
         Some((warm_state, current_date))
@@ -1980,10 +1980,10 @@ impl OrieuxConfig {
             .map_err(|error| format!("error creating {}, {}", &warm_state_name, error))?;
         let mut warm_state_writer = BufWriter::new(&mut warm_state_file);
         for state in &state.data {
-            let orieux = state.orieux.clone();
+            let orieux_wr = state.orieux_wr.clone();
             let line = format!(
                 "{}",
-                orieux
+                orieux_wr
 
             );
             writeln!(warm_state_writer, "{}", line)

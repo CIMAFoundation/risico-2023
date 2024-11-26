@@ -90,8 +90,10 @@ pub struct OutputElement {
     // ------------- Orieux Index ----------------- //
     // Potential evapotranspiration (Thornthwaite Formulation) [mm]
     pub pet_t: f32,
-    // Orieux index [mm]
-    pub orieux: f32,
+    // Orieux water reserve [mm]
+    pub orieux_wr: f32,
+    // Orieux fire dnager class [-]
+    pub orieux_fd: f32,
 
     // ------------- Portuguese index ----------------- //
     // Ingition Index [-]
@@ -159,7 +161,8 @@ impl Default for OutputElement {
 
             // Orieux
             pet_t: NODATAVAL,
-            orieux: NODATAVAL,
+            orieux_wr: NODATAVAL,
+            orieux_fd: NODATAVAL,
 
             // Portuguese
             portuguese_ignition: NODATAVAL,
@@ -333,9 +336,13 @@ pub enum OutputVariableName {
     // Potential evapotranspiration
     #[strum(props(long_name = "Potential Evapotranspiration - Thornthwaite formulation", units = "mm"))]
     pet_t,
-    // Orieux index
-    #[strum(props(long_name = "Orieux Index", units = "mm"))]
-    orieux,
+    // Orieux water reserve
+    #[strum(props(long_name = "Orieux Water Reserve", units = "mm"))]
+    orieux_wr,
+    // Orieux fire danger class
+    #[strum(props(long_name = "Orieux Fire Danger Class (0:low, 1:moderate, 2:high, 3:extreme)", units = "-"))]
+    orieux_fd,
+
 
     // ---------- Portuguese Index ----------------- //
     #[strum(props(long_name = "Portuguese Ignition Index", units = "-"))]
@@ -445,7 +452,8 @@ impl Output {
 
             // Orieux
             pet_t => Some(self.get_array(|o| o.pet_t)),
-            orieux => Some(self.get_array(|o| o.orieux)),
+            orieux_wr => Some(self.get_array(|o| o.orieux_wr)),
+            orieux_fd => Some(self.get_array(|o| o.orieux_fd)),
 
             // Portuguese Index
             portuguese_ignition => Some(self.get_array(|o| o.portuguese_ignition)),
