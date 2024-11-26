@@ -4,7 +4,7 @@ use ndarray::{Array1, Zip};
 
 use super::{
     constants::*,
-    functions::{store_day_fn, get_output_fn},
+    functions::get_output_fn,
 };
 
 /// Angstrom index
@@ -60,18 +60,9 @@ impl AngstromProperties {
 #[derive(Debug)]
 #[allow(non_snake_case)]
 pub struct AngstromStateElement {
-    pub temp_13: f32,  // temperature at 13:00 [°C]
-    pub humidity_13: f32,  // relative humidity at 13:00 [%]
+    pub temp: f32,  // temperature [°C]
+    pub humidity: f32,  // relative humidity [%]
 }
-
-impl AngstromStateElement {
-    // clean the daily values
-    pub fn clean_day(&mut self) {
-        self.temp_13 = NODATAVAL;
-        self.humidity_13 = NODATAVAL;
-    }
-}
-
 
 #[derive(Debug)]
 pub struct AngstromState {
@@ -88,8 +79,8 @@ impl AngstromState {
         let data: Array1<AngstromStateElement> = Array1::from(
             (0..n_cells)
                 .map(|_| AngstromStateElement {
-                    temp_13: NODATAVAL,
-                    humidity_13: NODATAVAL,
+                    temp: NODATAVAL,
+                    humidity: NODATAVAL,
                 })
                 .collect::<Vec<_>>(),
         );
@@ -108,15 +99,15 @@ impl AngstromState {
         self.len() == 0
     }
 
-    // store the daily values, check if the time is 13:00
-    #[allow(non_snake_case)]
-    fn store_day(&mut self, input: &Input, props: &AngstromProperties) {
-        self.time = input.time;  // reference time of the input
+
+    // store the weather data
+    pub fn store(&mut self, input: &Input) {
+        self.time = input.time;
         Zip::from(&mut self.data)
             .and(&input.data)
-            .and(&props.data)
-            .par_for_each(|state, input_data, prop_data| {
-                store_day_fn(state, input_data, prop_data, &self.time);
+            .par_for_each(|state, input_data| {
+                state.temp = input_data.temperature;
+                state.humidity = input_data.humidity;
             });
     }
 
@@ -128,14 +119,7 @@ impl AngstromState {
                     .map(|state| {
                         get_output_fn(state)
                     });
-        // clean the daily values
-        self.data.iter_mut().for_each(|state| state.clean_day());
         Output::new(*time, output_data)
-    }
-
-    // Update the state of the cells
-    pub fn store(&mut self, input: &Input, props: &AngstromProperties) {
-        self.store_day(input, props);
     }
 
     pub fn output(&mut self) -> Output {

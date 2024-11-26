@@ -1434,7 +1434,6 @@ impl AngstromConfig {
             let lon = line_parts[0]
                 .parse::<f32>()
                 .unwrap_or_else(|_| panic!("Invalid line in file: {}", line));
-    
             let lat = line_parts[1]
                 .parse::<f32>()
                 .unwrap_or_else(|_| panic!("Invalid line in file: {}", line));
@@ -1466,6 +1465,7 @@ impl AngstromConfig {
 
     // check for writing output condition
     pub fn should_write_output(&self, time: &DateTime<Utc>) -> bool {
+        // the Angstrom index is computed every 24 hours (once a day)
         let time_diff = time.signed_duration_since(self.run_date);
         let hours = time_diff.num_hours();
         hours % self.output_time_resolution as i64 == 0

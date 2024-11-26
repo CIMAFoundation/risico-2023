@@ -17,9 +17,9 @@
                 ]
             },
             "args": [
-                "202005010000",
-                "../test_risico2023/fwi/configuration.yaml",
-                "../test_risico2023/fwi/INPUT/202005010000/input.txt",
+                "198103190000",
+                "/home/nicolo/RISICO/test_risico_chapter/run_debug/configuration_angstrom.yaml",
+                "/home/nicolo/RISICO/test_risico_chapter/chapter/1981/1981031900/",
             ],
             "env": {
                 "RUST_LOG": "debug",

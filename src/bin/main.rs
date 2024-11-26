@@ -326,7 +326,6 @@ fn run_angstrom(
     let mut output_writer = config
         .get_output_writer()
         .map_err(|_| "Could not configure output writer")?;
-    let props = config.get_properties();  // get the properties
     let mut state = config.new_state();  // inizialized the state
     // set coordinates for the input handler
     let (lats, lons) = config.get_properties().get_coords();
@@ -343,10 +342,10 @@ fn run_angstrom(
         let step_time = Utc::now();
         info!("Processing {}", time.format("%Y-%m-%d %H:%M"));
         let input = get_input(handler, &time, len);
-        // store the input of the day
-        state.store(&input, &props);
+        // store the input
+        state.store(&input);
         // check if we should write the output
-        if config.should_write_output(&state.time) {
+        if config.should_write_output( &state.time) {
             let c = Utc::now();
             let output = state.output();
             trace!("Generating output took {} seconds", Utc::now() - c);
