@@ -23,7 +23,7 @@ use super::models::{
     NesterovConfig,
     SharplesConfig,
     OrieuxConfig,
-    PortugueseConfig,
+//    PortugueseConfig,
     HdwConfig,
 };
 
@@ -191,14 +191,14 @@ pub struct OrieuxConfigBuilder {
     pub output_types: Vec<OutputTypeConfig>,
 }
 
-#[derive(Debug, Serialize, Deserialize)]
-pub struct PortugueseConfigBuilder {
-    pub model_name: String,
-    pub cells_file_path: String,
-    pub warm_state_path: String,
-    pub warm_state_offset: i64,
-    pub output_types: Vec<OutputTypeConfig>,
-}
+// #[derive(Debug, Serialize, Deserialize)]
+// pub struct PortugueseConfigBuilder {
+//     pub model_name: String,
+//     pub cells_file_path: String,
+//     pub warm_state_path: String,
+//     pub warm_state_offset: i64,
+//     pub output_types: Vec<OutputTypeConfig>,
+// }
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct HdwConfigBuilder {
@@ -222,7 +222,7 @@ pub enum ConfigBuilderType {
     Nesterov(NesterovConfigBuilder),
     Sharples(SharplesConfigBuilder),
     Orieux(OrieuxConfigBuilder),
-    Portuguese(PortugueseConfigBuilder),
+//     Portuguese(PortugueseConfigBuilder),
     Hdw(HdwConfigBuilder),
 }
 
@@ -239,7 +239,7 @@ impl ConfigBuilderType {
             ConfigBuilderType::Nesterov(_) => "Nesterov",
             ConfigBuilderType::Sharples(_) => "Sharples",
             ConfigBuilderType::Orieux(_) => "Orieux",
-            ConfigBuilderType::Portuguese(_) => "Portuguese",
+//             ConfigBuilderType::Portuguese(_) => "Portuguese",
             ConfigBuilderType::Hdw(_) => "Hdw",
         }
     }
@@ -535,15 +535,15 @@ impl OrieuxConfigBuilder {
     }
 }
 
-impl PortugueseConfigBuilder {
-    pub fn build(
-        &self,
-        date: &DateTime<Utc>,
-        palettes: &PaletteMap,
-    ) -> Result<PortugueseConfig, RISICOError> {
-        PortugueseConfig::new(self, *date, palettes)
-    }
-}
+// impl PortugueseConfigBuilder {
+//     pub fn build(
+//         &self,
+//         date: &DateTime<Utc>,
+//         palettes: &PaletteMap,
+//     ) -> Result<PortugueseConfig, RISICOError> {
+//         PortugueseConfig::new(self, *date, palettes)
+//     }
+// }
 
 impl HdwConfigBuilder {
     pub fn build(

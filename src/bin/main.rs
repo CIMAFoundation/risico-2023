@@ -17,7 +17,7 @@ use common::config::builder::{
     NesterovConfigBuilder,
     SharplesConfigBuilder,
     OrieuxConfigBuilder,
-    PortugueseConfigBuilder,
+//    PortugueseConfigBuilder,
     HdwConfigBuilder
 };
 use common::helpers::{get_input, RISICOError};
@@ -589,68 +589,68 @@ fn run_orieux(
 }
 
 // Run Portuguese index
-fn run_portuguese(
-    model_config: &PortugueseConfigBuilder,
-    date: &DateTime<Utc>,
-    handler: &mut dyn InputHandler,
-    palettes: &PaletteMap,
-) -> Result<(), RISICOError> {
-    let current_time = Utc::now();
-    // configuration of the model
-    let config = model_config
-        .build(date, palettes)
-        .map_err(|_| "Could not configure model")?;
-    let mut output_writer = config
-        .get_output_writer()
-        .map_err(|_| "Could not configure output writer")?;
-    let props = config.get_properties();  // get the properties
-    let mut state = config.new_state();  // initialize the state
-    // set coordinates for the input handler
-    let (lats, lons) = config.get_properties().get_coords();
-    let (lats, lons) = (lats.as_slice(), lons.as_slice());
-    handler.set_coordinates(lats, lons).expect("Should set coordinates");
-    trace!(
-        "Loading input configuration took {} seconds",
-        Utc::now() - current_time
-    );
-    // explore the timeline
-    let len = state.len();
-    let timeline = handler.get_timeline();
-    for time in timeline {
-        let step_time = Utc::now();
-        info!("Processing {}", time.format("%Y-%m-%d %H:%M"));
-        let input = get_input(handler, &time, len);
-        // store the input of the day
-        state.store(&input, &props);
-        // check if we should write the output
-        let (should_write_warm, warm_state_time) = config.should_write_warm_state(&time);
-        if  should_write_warm{
-            // update the state with the input of the day
-            let c = Utc::now();
-            state.update();
-            trace!("Generating update took {} seconds", Utc::now() - c);
-            // compute output
-            let c = Utc::now();
-            let output = state.output();
-            trace!("Generating output took {} seconds", Utc::now() - c);
-            // write the outut
-            let c = Utc::now();
-            if let Err(err) = output_writer.write_output(lats, lons, &output) {
-                warn!("Error writing output: {}", err);
-            }
-            trace!("Writing output took {} seconds", Utc::now() - c);
-            // write the warm state
-            info!("Writing warm state");
-            let c = Utc::now();
-            if let Err(err) = config.write_warm_state(&state, warm_state_time) {
-                warn!("Error writing warm state: {}", err);
-            }
-            trace!("Writing warm state took {} seconds", Utc::now() - c);
-        }
-        trace!("Step took {} seconds", Utc::now() - step_time);
-    }
-    Ok(())
-}
+// fn run_portuguese(
+//     model_config: &PortugueseConfigBuilder,
+//     date: &DateTime<Utc>,
+//     handler: &mut dyn InputHandler,
+//     palettes: &PaletteMap,
+// ) -> Result<(), RISICOError> {
+//     let current_time = Utc::now();
+//     // configuration of the model
+//     let config = model_config
+//         .build(date, palettes)
+//         .map_err(|_| "Could not configure model")?;
+//     let mut output_writer = config
+//         .get_output_writer()
+//         .map_err(|_| "Could not configure output writer")?;
+//     let props = config.get_properties();  // get the properties
+//     let mut state = config.new_state();  // initialize the state
+//     // set coordinates for the input handler
+//     let (lats, lons) = config.get_properties().get_coords();
+//     let (lats, lons) = (lats.as_slice(), lons.as_slice());
+//     handler.set_coordinates(lats, lons).expect("Should set coordinates");
+//     trace!(
+//         "Loading input configuration took {} seconds",
+//         Utc::now() - current_time
+//     );
+//     // explore the timeline
+//     let len = state.len();
+//     let timeline = handler.get_timeline();
+//     for time in timeline {
+//         let step_time = Utc::now();
+//         info!("Processing {}", time.format("%Y-%m-%d %H:%M"));
+//         let input = get_input(handler, &time, len);
+//         // store the input of the day
+//         state.store(&input, &props);
+//         // check if we should write the output
+//         let (should_write_warm, warm_state_time) = config.should_write_warm_state(&time);
+//         if  should_write_warm{
+//             // update the state with the input of the day
+//             let c = Utc::now();
+//             state.update();
+//             trace!("Generating update took {} seconds", Utc::now() - c);
+//             // compute output
+//             let c = Utc::now();
+//             let output = state.output();
+//             trace!("Generating output took {} seconds", Utc::now() - c);
+//             // write the outut
+//             let c = Utc::now();
+//             if let Err(err) = output_writer.write_output(lats, lons, &output) {
+//                 warn!("Error writing output: {}", err);
+//             }
+//             trace!("Writing output took {} seconds", Utc::now() - c);
+//             // write the warm state
+//             info!("Writing warm state");
+//             let c = Utc::now();
+//             if let Err(err) = config.write_warm_state(&state, warm_state_time) {
+//                 warn!("Error writing warm state: {}", err);
+//             }
+//             trace!("Writing warm state took {} seconds", Utc::now() - c);
+//         }
+//         trace!("Step took {} seconds", Utc::now() - step_time);
+//     }
+//     Ok(())
+// }
 
 
 // Run Hot-Dry-Wind index
@@ -828,12 +828,12 @@ fn main() -> Result<(), Box<dyn Error>> {
                 input_handler.as_mut(),
                 &configs.palettes,
             ),
-            ConfigBuilderType::Portuguese(model_config) => run_portuguese(
-                model_config,
-                &date,
-                input_handler.as_mut(),
-                &configs.palettes,
-            ),
+            // ConfigBuilderType::Portuguese(model_config) => run_portuguese(
+            //     model_config,
+            //     &date,
+            //     input_handler.as_mut(),
+            //     &configs.palettes,
+            // ),
             ConfigBuilderType::Hdw(model_config) => run_hdw(
                 model_config,
                 &date,
