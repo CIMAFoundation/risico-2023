@@ -62,6 +62,9 @@ pub fn update_fn(
     state.update(time, state.cum_rain);
     // get the last rains in the time windows -> they are already ordered from oldest to newest
     let (_, daily_rains) = state.get_time_window(time);
+    if state.max_temp == NODATAVAL {
+        return  // no update
+    }
     let new_kbdi = config.update_kbdi(state.kbdi, state.max_temp, &daily_rains, prop.mean_rain);
     // store the new KBDI value
     state.kbdi = new_kbdi;
