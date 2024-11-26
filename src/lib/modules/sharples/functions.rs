@@ -1,5 +1,6 @@
 use crate::models::output::OutputElement;
 use super::models::SharplesStateElement;
+use super::constants::NODATAVAL;
 
 // fuel moisture index [-]
 pub fn index_fmi(
@@ -23,6 +24,9 @@ pub fn index_f(
 pub fn get_output_fn(
     state: &SharplesStateElement,
 ) -> OutputElement {
+    if (state.temp == NODATAVAL) || (state.humidity == NODATAVAL) || (state.wind_speed == NODATAVAL) {
+        return OutputElement::default()
+    }
     let fmi = index_fmi(state.temp, state.humidity);
     let f = index_f(fmi, state.wind_speed);
     // convert the wind speed in m/s

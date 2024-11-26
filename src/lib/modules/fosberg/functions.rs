@@ -1,5 +1,5 @@
 use crate::models::output::OutputElement;
-use super::models::FosbergStateElement;
+use super::{constants::NODATAVAL, models::FosbergStateElement};
 
 
 // Equilibrium Moisture Content [%] -> Simard formulation
@@ -45,6 +45,9 @@ pub fn ffwi(
 pub fn get_output_fn(
     state: &FosbergStateElement,
 ) -> OutputElement {
+    if (state.temp == NODATAVAL) || (state.humidity == NODATAVAL) || (state.wind_speed == NODATAVAL) {
+        return OutputElement::default()
+    }
     let ffwi = ffwi(state.temp, state.humidity, state.wind_speed);
     let ws_out = state.wind_speed / 3600.0;  // convert from m/h to m/s
     OutputElement {

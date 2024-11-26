@@ -1,5 +1,5 @@
 use crate::models::output::OutputElement;
-use super::models::HdwStateElement;
+use super::{constants::NODATAVAL, models::HdwStateElement};
 
 
 // Hot-Dry-Wind index
@@ -16,6 +16,9 @@ pub fn hdw(
 pub fn get_output_fn(
     state: &HdwStateElement,
 ) -> OutputElement {
+    if (state.vpd == NODATAVAL) || (state.wind_speed == NODATAVAL) {
+        return OutputElement::default()
+    }
     let hdw = hdw(state.vpd, state.wind_speed);
     // return the output element
     let ws_out = state.wind_speed / 3600.0;
