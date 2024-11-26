@@ -240,7 +240,7 @@ impl ConfigBuilderType {
             ConfigBuilderType::Sharples(_) => "Sharples",
             ConfigBuilderType::Orieux(_) => "Orieux",
             ConfigBuilderType::Portuguese(_) => "Portuguese",
-            ConfigBuilderType::Hdw(_) => "HDW",
+            ConfigBuilderType::Hdw(_) => "Hdw",
         }
     }
 }

@@ -18,11 +18,11 @@ pub fn get_output_fn(
 ) -> OutputElement {
     let hdw = hdw(state.vpd, state.wind_speed);
     // return the output element
-    let ws = state.wind_speed / 3600.0;
+    let ws_out = state.wind_speed / 3600.0;
     OutputElement {
         hdw,  // [-]
         vpd: state.vpd,  // [hPa]
-        wind_speed: ws,  // [m/s]
+        wind_speed: ws_out,  // [m/s]
         ..OutputElement::default()
     }
 }
