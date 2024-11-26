@@ -102,8 +102,7 @@ impl FosbergState {
         self.len() == 0
     }
 
-    #[allow(non_snake_case)]
-    fn update_fn(&mut self, input: &Input) {
+    pub fn store(&mut self, input: &Input) {
         self.time = input.time;  // reference time of the input
         Zip::from(&mut self.data)
             .and(&input.data)
@@ -122,10 +121,6 @@ impl FosbergState {
                         get_output_fn(state)
                     });
         Output::new(*time, output_data)
-    }
-
-    pub fn update(&mut self, input: &Input) {
-        self.update_fn(input);
     }
 
     pub fn output(&mut self) -> Output {

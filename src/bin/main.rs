@@ -391,8 +391,8 @@ fn run_fosberg(
         let step_time = Utc::now();
         info!("Processing {}", time.format("%Y-%m-%d %H:%M"));
         let input = get_input(handler, &time, len);
-        // update the state with the input of the day
-        state.update(&input);
+        // store the input data
+        state.store(&input);
         // check if we should write the output
         if config.should_write_output(&state.time) {
             let c = Utc::now();
