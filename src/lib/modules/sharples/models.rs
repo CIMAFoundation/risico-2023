@@ -104,18 +104,6 @@ impl SharplesState {
     }
 
     #[allow(non_snake_case)]
-    fn update_fn(&mut self, input: &Input) {
-        self.time = input.time;  // reference time of the input
-        Zip::from(&mut self.data)
-            .and(&input.data)
-            .par_for_each(|state, input_data| {
-                state.temp = input_data.temperature;
-                state.humidity = input_data.humidity;
-                state.wind_speed = input_data.wind_speed;
-            });
-    }
-
-    #[allow(non_snake_case)]
     pub fn get_output(&mut self) -> Output {
         let time = &self.time;
         let output_data = self.data
@@ -125,8 +113,15 @@ impl SharplesState {
         Output::new(*time, output_data)
     }
 
-    pub fn update(&mut self, input: &Input) {
-        self.update_fn(input);
+    pub fn store(&mut self, input: &Input) {
+        self.time = input.time;  // reference time of the input
+        Zip::from(&mut self.data)
+            .and(&input.data)
+            .par_for_each(|state, input_data| {
+                state.temp = input_data.temperature;
+                state.humidity = input_data.humidity;
+                state.wind_speed = input_data.wind_speed;
+            });
     }
 
     pub fn output(&mut self) -> Output {

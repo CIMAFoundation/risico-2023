@@ -504,9 +504,11 @@ fn run_sharples(
     for time in timeline {
         let step_time = Utc::now();
         info!("Processing {}", time.format("%Y-%m-%d %H:%M"));
+        // store the input
         let input = get_input(handler, &time, len);
-        state.update(&input);
+        state.store(&input);
         if config.should_write_output(&state.time) {
+            // compute the output
             let c = Utc::now();
             let output = state.output();
             trace!("Generating output took {} seconds", Utc::now() - c);
