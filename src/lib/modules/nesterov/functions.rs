@@ -61,6 +61,9 @@ pub fn nesterov_update(
 pub fn update_fn(
     state: &mut NesterovStateElement,
 ) {
+    if (state.temp_15 == NODATAVAL) || (state.temp_dew_15 == NODATAVAL) || (state.cum_rain == NODATAVAL) {
+        return  // no update
+    }
     state.nesterov = nesterov_update(state.nesterov, state.temp_15, state.temp_dew_15, state.cum_rain);
 }
 
