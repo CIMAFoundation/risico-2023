@@ -146,6 +146,25 @@ pub fn get_input(handler: &dyn InputHandler, time: &DateTime<Utc>, len: usize) -
             });
             replace(&mut data, &h, |i| &mut i.humidity);
 
+            // compute the dew point temperature wiht the new computed relative humidity
+            let mut td: Array1<f32> = Array1::ones(len) * NODATAVAL;
+            azip!((
+                td in &mut td,
+                h in &h, // %
+                t in &t // °C
+            ){
+                if *h > (NODATAVAL+1.0) && *t > (NODATAVAL+1.0) {
+                    let mut h = *h;
+                    if h > 100.0 {
+                        h = 100.0;
+                    }
+                    // Magnus formula (https://en.wikipedia.org/wiki/Dew_point)
+                    let gamma = f32::ln(h / 100.0) + ((17.625 * t) / (t + 243.04));
+                    *td = (243.04 * gamma) / (17.625 - gamma);
+                }
+            });
+            replace(&mut data, &td, |i| &mut i.temp_dew);
+
             // compute the vapor pressure deficit
             let mut vpd: Array1<f32> = Array1::ones(len) * NODATAVAL;
             azip!((
