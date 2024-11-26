@@ -548,7 +548,7 @@ pub fn get_output_fn(
     };
 
     let wind_speed_out = wind_speed / 3600.0; // convert to m/s
-
+    let wind_dir_out = wind_dir.to_degrees();
     OutputElement {
         V: ros,
         W: wind_effect,
@@ -557,7 +557,7 @@ pub fn get_output_fn(
         temperature,
         humidity,
         wind_speed: wind_speed_out,
-        wind_dir,
+        wind_dir: wind_dir_out,
         rain,
         snow_cover,
         dffm,
