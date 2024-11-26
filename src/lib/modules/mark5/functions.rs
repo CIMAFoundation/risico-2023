@@ -24,7 +24,9 @@ pub fn store_day_fn(
 ) {
     // info for soil moisture deficit calculation
     // cumulated rain per day
-    state.cum_rain += input.rain;
+    if input.rain > 0.0 {
+        state.cum_rain += input.rain;
+    }
     // maximum temperature per day
     if (state.max_temp == NODATAVAL) || (input.temperature > state.max_temp) {
         state.max_temp = input.temperature;
@@ -157,13 +159,17 @@ pub fn get_output_fn(
     let (dates, daily_rains) = state.get_time_window(time);
 
     // update the soil moisture deficit
-    state.smd = config.update_smd(state.smd, state.max_temp, &daily_rains, props.mean_rain);
-
+    if state.max_temp != NODATAVAL {
+        state.smd = config.update_smd(state.smd, state.max_temp, &daily_rains, props.mean_rain);
+    }
     // calculate the drought factor
     let df = drought_factor(time, state.smd, &dates, &daily_rains);
     // calculate the FFDI
-    let ffdi = ffdi(state.temp_15, state.humidity_15, state.wind_speed_15, df);
-
+    let ffdi = if (state.temp_15 == NODATAVAL) || (state.humidity_15 == NODATAVAL) || (state.wind_speed_15 == NODATAVAL) {
+        NODATAVAL
+    } else {
+        ffdi(state.temp_15, state.humidity_15, state.wind_speed_15, df)
+    };
     // return output
     config.get_output(state.smd, df, ffdi, state.temp_15, state.cum_rain, state.wind_speed_15, state.humidity_15)
 }
