@@ -20,7 +20,9 @@ pub fn emc(
     emc
 }
 
-
+// Fosberg Fire Weather Index
+// values range in [0 (no fire danger), 100 (high fire danger)]
+// some info: https://www.spc.noaa.gov/exper/firecomp/INFO/fosbinfo.html
 pub fn ffwi(
     temperature: f32,  // temperature [°C]
     humidity: f32, // relative humidity [%]
@@ -30,19 +32,26 @@ pub fn ffwi(
     let ws_mph = wind_speed / 1609.344;  // convert from m/h to mph
     let emc_eff = 1.0 - 2.0*(emc/30.0) + 1.5*(emc/30.0).powi(2) - 0.5*(emc/30.0).powi(3);
     let ffwi = emc_eff * f32::sqrt(1.0 + ws_mph.powi(2))/0.3002;
-    ffwi
+    // clip in [0, 100]
+    if ffwi < 0.0 {
+        0.0
+    } else if ffwi > 100.0 {
+        100.0
+    } else {
+        ffwi
+    }
 }
 
 pub fn get_output_fn(
     state: &FosbergStateElement,
 ) -> OutputElement {
     let ffwi = ffwi(state.temp, state.humidity, state.wind_speed);
-    let ws = state.wind_speed / 3600.0;  // convert from m/h to m/s
+    let ws_out = state.wind_speed / 3600.0;  // convert from m/h to m/s
     OutputElement {
         ffwi,  // [-]
         temperature: state.temp,  // [°C]
         humidity: state.humidity,  // [%]
-        wind_speed: ws,  // [m/s]
+        wind_speed: ws_out,  // [m/s]
         ..OutputElement::default()
     }
 }
