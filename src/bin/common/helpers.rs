@@ -64,7 +64,7 @@ pub fn get_input(handler: &dyn InputHandler, time: &DateTime<Utc>, len: usize) -
         replace(&mut data, &t, |i| &mut i.temperature);  // save forecasted temperature
     
         // Forecasted dew point temperature
-        let temp_dew = handler.get_values(TD, time);
+        let temp_dew = handler.get_values(R, time);
         if let Some(mut td) = temp_dew { // if the dew point temperature is available
             td.mapv_inplace(|_t| if _t > 200.0 { _t - 273.15 } else { _t });  // conversion to Celsius
             replace(&mut data, &td, |i| &mut i.temp_dew);

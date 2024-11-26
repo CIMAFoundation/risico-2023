@@ -73,7 +73,7 @@ pub enum InputVariableName {
     /// Forecasted temperature
     T,
     /// Forecasted dew point temperature
-    TD,
+    R,
     /// Forecasted specific humidity
     Q,
     /// Forecasted pressure at surface level
