@@ -11,11 +11,11 @@ pub struct OutputElement {
     // ----------------- INPUTS ---------------//
     /// Input temperature [°C]
     pub temperature: f32,
-    /// Input rain [mm]]
+    /// Input rain [mm]
     pub rain: f32,
     /// Input wind speed [m/s]
     pub wind_speed: f32,
-    /// Input wind direction [rad]
+    /// Input wind direction [deg]
     pub wind_dir: f32,
     /// Input relative humidity [%]
     pub humidity: f32,
