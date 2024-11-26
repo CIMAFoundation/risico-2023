@@ -8,6 +8,7 @@ use super::{
 };
 
 // Orieux fire class
+// Source: Zacharakis, I.; Tsihrintzis, V.A. Environmental Forest Fire Danger Rating Systems and Indices around the Globe: A Review. Land 2023, 12, 194. https://doi.org/10.3390/land12010194
 pub fn fire_class(
     orieux_wr: f32,  // oriex water reserve [mm]
     wind_speed: f32  // wind speed [m/s]
