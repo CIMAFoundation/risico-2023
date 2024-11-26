@@ -114,7 +114,6 @@ impl NesterovState {
                 })
                 .collect(),
         );
-
         NesterovState {
             time: *time,
             data,

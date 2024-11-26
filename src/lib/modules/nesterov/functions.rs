@@ -72,7 +72,7 @@ pub fn get_output_fn(
     OutputElement {
         nesterov: state.nesterov,  // [-]
         temperature: state.temp_15,  // [°C] 
-        temp_dew_point: state.temp_dew_15,  // [°C]
+        temp_dew: state.temp_dew_15,  // [°C]
         rain: state.cum_rain,  // [mm]
         ..OutputElement::default()
     }

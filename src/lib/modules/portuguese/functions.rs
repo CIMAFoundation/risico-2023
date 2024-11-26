@@ -83,7 +83,7 @@ pub fn get_output_fn(
         portuguese_ignition: state.ign,
         portuguese_fdi: state.fire_index,
         temperature: state.temp_12,
-        temp_dew_point: state.temp_dew_12,
+        temp_dew: state.temp_dew_12,
         rain: state.cum_rain,
         ..OutputElement::default()
     }
