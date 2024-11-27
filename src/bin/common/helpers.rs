@@ -82,6 +82,20 @@ pub fn get_input(handler: &dyn InputHandler, time: &DateTime<Utc>, len: usize) -
             });
             replace(&mut data, &h, |i| &mut i.humidity);  // replace the humidity values
 
+            // compute the vapor pressure deficit from temperature and relative humidity computed now
+            let mut vpd: Array1<f32> = Array1::ones(len) * NODATAVAL;
+            azip!((
+                vpd in &mut vpd,
+                h in &h,  // %
+                t in &t  // °C
+            ){
+                if *h > (NODATAVAL+1.0) && *t > (NODATAVAL+1.0) {
+                    // difference between saturation vapor pressure and actual vapor pressure [hPa]
+                    *vpd = (6.112 * f32::exp((17.67 * t)/(t + 243.5))) - (h/100.0 * 6.112 * f32::exp((17.67 * t)/(t + 243.5)));
+                }
+            });
+            replace(&mut data, &vpd, |i| &mut i.vpd);
+
         } else { // if the dew point temperature is not available
             // compute the temperature dew point from the forecasted temperature and relative humidity
             if let Some(h) = humidity {  // you need the relative humidity
