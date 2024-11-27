@@ -29,7 +29,7 @@ pub fn store_day_fn(
     let tz_name = TZ_FINDER.get_tz_name(prop.lon as f64, prop.lat as f64);
     let tz : Tz = tz_name.parse().expect("Invalid timezone name");
     let local_time = time.with_timezone(&tz);
-    if local_time.hour() == TIME_WEATHER {
+    if local_time.hour() <= TIME_WEATHER {  // save the last available data
         state.temp_12 = input.temperature;
         state.temp_dew_12 = input.temp_dew;
     }

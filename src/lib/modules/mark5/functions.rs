@@ -36,7 +36,7 @@ pub fn store_day_fn(
     let tz : Tz = tz_name.parse().expect("Invalid timezone name");
     let local_time = time.with_timezone(&tz);
     // Store the daily info at 15 local time
-    if local_time.hour() == TIME_WEATHER {
+    if local_time.hour() <= TIME_WEATHER {  // save the last available data
         state.temp_15 = input.temperature;
         state.humidity_15 = input.humidity;
         state.wind_speed_15 = input.wind_speed;
