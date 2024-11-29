@@ -47,8 +47,15 @@ pub fn kbdi_update_mm(
     // effective rain of the day
     let effective_rain = f32::max(0.0, day_rain - f32::max(0.0, KBDI_RAIN_RUNOFF - last_rain));    
     let dt: f32 = 1.0;  // DAILY COMPUTATION
-    let evapo_transp: f32 =  (((203.2-kbdi) * (0.968*f32::exp(0.0875*max_temp+1.5552)-8.3) * dt) / (1.0+10.88*f32::exp(-0.001736*mean_annual_rain)))*10e-3;
-    kbdi - effective_rain + evapo_transp
+    let qsi = kbdi - effective_rain;
+    let evapo_transp: f32 =  (((203.2-qsi) * (0.968*f32::exp(0.0875*max_temp+1.5552)-8.3) * dt) / (1.0+10.88*f32::exp(-0.001736*mean_annual_rain)))*10e-3;
+    let mut kbdi_new =  qsi + evapo_transp;
+    if kbdi_new < 0.0 {
+        kbdi_new = 0.0;
+    } else if kbdi_new > 200.0 {
+        kbdi_new = 200.0
+    };
+    kbdi_new
 }
 
 
