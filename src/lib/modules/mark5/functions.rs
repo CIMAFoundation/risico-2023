@@ -163,7 +163,10 @@ pub fn get_output_fn(
         state.smd = config.update_smd(state.smd, state.max_temp, &daily_rains, props.mean_rain);
     }
     // calculate the drought factor
-    let df = drought_factor(time, state.smd, &dates, &daily_rains);
+    let mut df = drought_factor(time, state.smd, &dates, &daily_rains);
+    if df < 0.0 {
+        df = 0.0
+    } ;
     // calculate the FFDI
     let ffdi = if (state.temp_15 == NODATAVAL) || (state.humidity_15 == NODATAVAL) || (state.wind_speed_15 == NODATAVAL) {
         NODATAVAL
