@@ -195,6 +195,23 @@ pub fn get_moisture_effect(dffm: f32) -> f32 {
     moist_eff.clamp(0.0, 1.)
 }
 
+
+pub fn get_moisture_effect_v2024(dffm: f32) -> f32 {
+    // normalize in [0, 1]
+    let x: f32 = dffm / 100.;
+    // moisture effect
+    let x0: f32 = 2.0;
+    let f: f32 = 60.0;
+    let a: f32 = 0.2;
+    let b: f32 = 20.0;
+    let d: f32 = 1.0;
+    let moist_eff: f32 = (x0-d)*f32::exp(-f*x) + d / (1.0 + f32::exp(b*(x-a))); 
+    // clip in [0, 2]
+    moist_eff.clamp(0.0, x0)
+}
+
+
+
 #[allow(clippy::too_many_arguments)]
 pub fn get_v(
     v0: f32,
@@ -217,6 +234,36 @@ pub fn get_v(
     }
     // moisture effect
     let moist_coeff: f32 = get_moisture_effect(dffm);
+    // wind-slope contribution
+    let ros = v0 * moist_coeff * w_s_eff * t_effect;
+    (ros, w_s_eff)
+}
+
+#[allow(clippy::too_many_arguments)]
+pub fn get_v_v2024(
+    v0: f32,
+    d0: f32,
+    _d1: f32,
+    snow_cover: f32,
+    dffm: f32,
+    slope: f32,
+    aspect: f32,
+    wind_speed: f32,
+    wind_dir: f32,
+    t_effect: f32,
+) -> (f32, f32) {
+    if wind_speed == NODATAVAL || wind_dir == NODATAVAL {
+        return (0.0, NODATAVAL);
+    }
+    let w_s_eff: f32 = get_wind_slope_effect(slope, aspect, wind_speed, wind_dir);
+    if snow_cover > 0.0 || d0 == NODATAVAL {
+        return (0.0, w_s_eff);
+    }
+    if dffm == NODATAVAL {
+        return (0.0, w_s_eff);
+    }
+    // moisture effect
+    let moist_coeff: f32 = get_moisture_effect_v2024(dffm);
     // wind-slope contribution
     let ros = v0 * moist_coeff * w_s_eff * t_effect;
     (ros, w_s_eff)
