@@ -417,7 +417,7 @@ pub fn get_v_v2023(
 }
 
 ///compute the meteo index v2023
-pub fn get_meteo_index(dffm: f32, w_effect: f32) -> f32 {
+pub fn get_meteo_index_v2023(dffm: f32, w_effect: f32) -> f32 {
     if dffm <= NODATAVAL || w_effect < 1.0 || w_effect == NODATAVAL {
         return NODATAVAL;
     };
@@ -496,6 +496,42 @@ pub fn get_v_v2025(
     // wind-slope contribution
     let ros = v0 * moist_coeff * w_s_eff * t_effect;
     (ros, w_s_eff)
+}
+
+///compute the meteo index v2025
+///values based on analysis for RISICO publication
+pub fn get_meteo_index_v2025(dffm: f32, w_effect: f32) -> f32 {
+    if dffm <= NODATAVAL || w_effect < 1.0 || w_effect == NODATAVAL {
+        return NODATAVAL;
+    };
+    // values set according to RISICO 2023 Italia implementation
+    let col = if (0.0..=3.7).contains(&dffm) {
+        0  // extreme
+    } else if dffm <= 4.7 && dffm > 3.7 {
+        1  // high - medium high
+    } else if dffm <= 6.0 && dffm > 4.7 {
+        2  // medium
+    } else if dffm <= 9.6 && dffm > 6.0 {
+        3  // medium low
+    } else if dffm <= 13.7 && dffm > 9.6 {
+        4  // low
+    } else {
+        5  // very low
+    };
+
+    let row = if (1.0..=1.73).contains(&w_effect) {
+        0  // very low - low
+    } else if w_effect > 1.73 && w_effect <= 2.96 {
+        1  // medium low - medium
+    } else if w_effect > 2.96 && w_effect <= 4.07 {
+        2  // medium high
+    } else if w_effect > 4.07 && w_effect <= 5.21 {
+        3  // high
+    } else {
+        4  // extreme
+    };
+
+    FWI_TABLE[col + row * 6]
 }
 
 //------------------ GENERIC UPDATE FUNCTIONS ------------------//

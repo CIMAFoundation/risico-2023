@@ -1,6 +1,6 @@
 use super::functions::{
     get_v_v2025, get_v_v2023, get_v_legacy, update_dffm_dry, update_dffm_dry_legacy, update_dffm_rain,
-    update_dffm_rain_legacy, get_meteo_index, get_meteo_index_legacy,
+    update_dffm_rain_legacy, get_meteo_index_v2023, get_meteo_index_v2025, get_meteo_index_legacy,
 };
 
 type RosFnType = fn(f32, f32, f32, f32, f32, f32, f32, f32, f32, f32) -> (f32, f32);
@@ -48,13 +48,13 @@ impl RISICOModelConfig {
                 ffmc_no_rain_fn = update_dffm_dry;
                 ffmc_rain_fn = update_dffm_rain;
                 ros_fn = get_v_v2023;
-                meteo_index_fn = get_meteo_index;
+                meteo_index_fn = get_meteo_index_v2023;
             },
             "v2025" => {
                 ffmc_no_rain_fn = update_dffm_dry;
                 ffmc_rain_fn = update_dffm_rain;
                 ros_fn = get_v_v2025;
-                meteo_index_fn = get_meteo_index;
+                meteo_index_fn = get_meteo_index_v2025;
             }
             _ => {
                 ffmc_no_rain_fn = update_dffm_dry_legacy;
