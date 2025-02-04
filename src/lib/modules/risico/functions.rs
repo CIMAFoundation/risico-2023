@@ -307,7 +307,9 @@ pub fn update_dffm_dry(dffm: f32, _sat: f32, T: f32, W: f32, H: f32, T0: f32, dT
 /// * `w_eff_on_dir` - Wind effect in angle direction \[adim\]
 pub fn get_wind_effect_angle(wind_speed: f32, wind_dir: f32, angle: f32) -> f32 {
     // convert from m/h to km/h
-    let ws_kph: f32 = wind_speed * 0.001;
+    let mut ws_kph: f32 = wind_speed * 0.001;
+    // clip the value in [0, 60]
+    ws_kph = ws_kph.clamp(0.0, 60.0);
     // constant for formula
     let a_const: f32 = 1. - ((D1 * (D2 * f32::tanh((0. / D3) - D4))) + (0. / D5));
     // contribution of wind - module
