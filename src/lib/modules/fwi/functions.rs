@@ -21,20 +21,16 @@ pub fn from_moisture_to_ffmc(moisture: f32) -> f32 {
 pub fn moisture_rain_effect(moisture: f32, rain24: f32) -> f32 {
     let rain_eff: f32 = rain24 - 0.5;
     let mut moisture_new: f32 = moisture
-        + 42.5 * (
-            rain_eff
-            * f32::exp(-100.0 / (251.0 - moisture))
-            * (1.0 - f32::exp(-6.93 / rain_eff))
-    );
+        + 42.5
+            * (rain_eff
+                * f32::exp(-100.0 / (251.0 - moisture))
+                * (1.0 - f32::exp(-6.93 / rain_eff)));
     // sovra-saturtion conditions
     if moisture > 150.0 {
-        moisture_new += 0.0015
-                * f32::powf(moisture - 150.0, 2.0)
-                * f32::powf(rain_eff, 0.5);
+        moisture_new += 0.0015 * f32::powf(moisture - 150.0, 2.0) * f32::powf(rain_eff, 0.5);
     }
     // limit moisture to [0, 250]
-    moisture_new = f32::max(0.0, f32::min(250.0, moisture_new));
-    moisture_new
+    moisture_new.clamp(0.0, 250.0)
 }
 
 pub fn update_moisture(moisture: f32, rain24: f32, hum: f32, temp: f32, w_speed: f32) -> f32 {
@@ -67,8 +63,7 @@ pub fn update_moisture(moisture: f32, rain24: f32, hum: f32, temp: f32, w_speed:
         moisture_new = emc_wet - (emc_wet - moisture_new) * f32::powf(10.0, -k_wet);
     }
     // limit moisture to [0, 250]
-    moisture_new = f32::max(0.0, f32::min(250.0, moisture_new));
-    moisture_new
+    moisture_new.clamp(0.0, 250.0)
 }
 
 // DMC MODULE
@@ -219,7 +214,7 @@ pub fn compute_isi(moisture: f32, w_speed: f32) -> f32 {
     let ws: f32 = w_speed / 1000.0;
     let fw: f32 = if w_speed != NODATAVAL {
         f32::exp(0.05039 * ws)
-    }else{
+    } else {
         1.0
     };
     let ff: f32 =
@@ -234,8 +229,7 @@ pub fn compute_bui(dmc: f32, dc: f32) -> f32 {
         if dmc <= (0.4 * dc) {
             0.8 * dmc * dc / (dmc + 0.4 * dc)
         } else {
-            dmc - (1.0 - 0.8 * dc / (dmc + 0.4 * dc))
-                * (0.92 + f32::powf(0.0114 * dmc, 1.7))
+            dmc - (1.0 - 0.8 * dc / (dmc + 0.4 * dc)) * (0.92 + f32::powf(0.0114 * dmc, 1.7))
         }
     } else {
         0.0
@@ -299,22 +293,21 @@ pub fn update_state_fn(
         let last_ffmc = state.ffmc.iter().copied().last().unwrap_or(FFMC_INIT);
         let last_dmc = state.dmc.iter().copied().last().unwrap_or(DMC_INIT);
         let last_dc = state.dc.iter().copied().last().unwrap_or(DC_INIT);
-        let rain_nan = std::f32::NAN;  // add NaN to rain history
-        // update state
+        let rain_nan = f32::NAN; // add NaN to rain history
+                                 // update state
         state.update(time, last_ffmc, last_dmc, last_dc, rain_nan);
         return;
     }
 
     // add last rain in input, get 24 hours of rain and aggregate
-    let (mut dates , _, _, _, mut history_rain) = state.get_time_window(time);
+    let (mut dates, _, _, _, mut history_rain) = state.get_time_window(time);
     dates.push(*time);
     history_rain.push(rain);
-    let rain24 = izip!(
-        dates.iter(),
-        history_rain.iter())
-    .filter(|(t, _)| time.signed_duration_since(**t).num_hours() <= TIME_WINDOW)
-    .filter(|(_, r)| !r.is_nan())
-    .map(|(_, r)| *r).sum();
+    let rain24 = izip!(dates.iter(), history_rain.iter())
+        .filter(|(t, _)| time.signed_duration_since(**t).num_hours() <= TIME_WINDOW)
+        .filter(|(_, r)| !r.is_nan())
+        .map(|(_, r)| *r)
+        .sum();
 
     // get moisture values to start computation - initial moisture values on the time window
     let (ffmc_24h_ago, dmc_24h_ago, dc_24h_ago) = state.get_initial_moisture(time);
@@ -336,7 +329,6 @@ pub fn update_state_fn(
 
     // update history of states
     state.update(time, new_ffmc, new_dmc, new_dc, rain);
-
 }
 
 // COMPUTE OUTPUTS
@@ -349,7 +341,7 @@ pub fn get_output_fn(
     // let rain = input.rain;  // DEPRECATED
     // the rain information to save in output is the total rain in the state time window
     let rain_tot: f32 = state.rain.iter().filter(|&r| !r.is_nan()).sum();
-    
+
     let humidity = input.humidity;
     let temperature = input.temperature;
     let wind_speed = input.wind_speed;

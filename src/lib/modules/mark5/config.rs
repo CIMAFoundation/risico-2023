@@ -1,6 +1,6 @@
 use super::functions::kbdi_output;
-use crate::modules::kbdi::functions::kbdi_update_mm;
 use crate::models::output::OutputElement;
+use crate::modules::kbdi::functions::kbdi_update_mm;
 
 /// configuration structure for model config
 /// can be used to store functions and constants
@@ -8,14 +8,14 @@ use crate::models::output::OutputElement;
 pub struct Mark5ModelConfig {
     pub model_version: String,
     // soil moisture deficit function
-    smd_fn: fn(f32, f32, &Vec<f32>, f32) -> f32,
+    smd_fn: fn(f32, f32, &[f32], f32) -> f32,
     // return output element
     get_output_fn: fn(f32, f32, f32, f32, f32, f32, f32) -> OutputElement,
 }
 
 impl Mark5ModelConfig {
     pub fn new(model_version_str: &str) -> Self {
-        let smd_fn: fn(f32, f32, &Vec<f32>, f32) -> f32;
+        let smd_fn: fn(f32, f32, &[f32], f32) -> f32;
         let get_output_fn: fn(f32, f32, f32, f32, f32, f32, f32) -> OutputElement;
         match model_version_str {
             "legacy" => {
@@ -36,17 +36,19 @@ impl Mark5ModelConfig {
     }
 
     #[allow(non_snake_case, clippy::too_many_arguments)]
-    pub fn update_smd(&self,
-        smd: f32,  // previous SMD value
-        temp: f32,  // temperature [°C]
-        history_rain: &Vec<f32>,  // daily rain of the last days [mm]
-        mean_annual_rain: f32,  // mean annual rain [mm]
+    pub fn update_smd(
+        &self,
+        smd: f32,              // previous SMD value
+        temp: f32,             // temperature [°C]
+        history_rain: &[f32],  // daily rain of the last days [mm]
+        mean_annual_rain: f32, // mean annual rain [mm]
     ) -> f32 {
         (self.smd_fn)(smd, temp, history_rain, mean_annual_rain)
     }
 
     #[allow(non_snake_case, clippy::too_many_arguments)]
-    pub fn get_output(&self,
+    pub fn get_output(
+        &self,
         smd: f32,
         df: f32,
         ffdi: f32,
@@ -57,5 +59,4 @@ impl Mark5ModelConfig {
     ) -> OutputElement {
         (self.get_output_fn)(smd, df, ffdi, temperature, rain, wind_speed, humidity)
     }
-
 }

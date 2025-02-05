@@ -1,11 +1,11 @@
 use crate::models::{input::Input, output::Output};
 use chrono::prelude::*;
-use ndarray::{Array1, Zip};
 use itertools::izip;
+use ndarray::{Array1, Zip};
 
 use super::{
-    constants::*,
     config::FWIModelConfig,
+    constants::*,
     functions::{get_output_fn, update_state_fn},
 };
 
@@ -45,21 +45,18 @@ impl FWIProperties {
         let lons: Vec<f32> = self.data.iter().map(|p| p.lon).collect();
         (lats, lons)
     }
-
 }
 
 // WARM STATE
 #[allow(non_snake_case)]
-#[derive(Debug, Clone)]
-#[derive(Default)]
+#[derive(Debug, Clone, Default)]
 pub struct FWIWarmState {
     pub dates: Vec<DateTime<Utc>>,
     pub ffmc: Vec<f32>,
     pub dmc: Vec<f32>,
     pub dc: Vec<f32>,
-    pub rain: Vec<f32>
+    pub rain: Vec<f32>,
 }
-
 
 // STATE
 #[derive(Debug)]
@@ -69,26 +66,28 @@ pub struct FWIStateElement {
     pub ffmc: Vec<f32>,
     pub dmc: Vec<f32>,
     pub dc: Vec<f32>,
-    pub rain: Vec<f32>
+    pub rain: Vec<f32>,
 }
 
-impl FWIStateElement {
+pub type FWIStateData = (Vec<DateTime<Utc>>, Vec<f32>, Vec<f32>, Vec<f32>, Vec<f32>);
 
-    pub fn get_time_window(&self, time: &DateTime<Utc>) -> (Vec<DateTime<Utc>>, Vec<f32>, Vec<f32>, Vec<f32>, Vec<f32>) {
+impl FWIStateElement {
+    pub fn get_time_window(&self, time: &DateTime<Utc>) -> FWIStateData {
         // zip with dates and take only moistures where history < 24 hours
         let combined = izip!(
             self.dates.iter(),
             self.ffmc.iter(),
             self.dmc.iter(),
             self.dc.iter(),
-            self.rain.iter())
+            self.rain.iter()
+        )
         .filter(|(t, _, _, _, _)| time.signed_duration_since(**t).num_hours() <= TIME_WINDOW)
         .map(|(t, f, d, c, r)| (*t, *f, *d, *c, *r))
         .collect::<Vec<_>>();
         let dates: Vec<DateTime<Utc>> = combined.iter().map(|(t, _, _, _, _)| *t).collect();
-        let ffmc: Vec<f32> =  combined.iter().map(|(_, f, _, _, _)| *f).collect();
+        let ffmc: Vec<f32> = combined.iter().map(|(_, f, _, _, _)| *f).collect();
         let dmc: Vec<f32> = combined.iter().map(|(_, _, d, _, _)| *d).collect();
-        let dc: Vec<f32> =  combined.iter().map(|(_, _, _, c, _)| *c).collect();
+        let dc: Vec<f32> = combined.iter().map(|(_, _, _, c, _)| *c).collect();
         let rain: Vec<f32> = combined.iter().map(|(_, _, _, _, r)| *r).collect();
         (dates, ffmc, dmc, dc, rain)
     }
@@ -118,7 +117,6 @@ impl FWIStateElement {
         self.dc = new_dc;
         self.rain = new_rain;
     }
-
 }
 
 #[derive(Debug)]
@@ -132,7 +130,11 @@ pub struct FWIState {
 impl FWIState {
     #[allow(dead_code, non_snake_case)]
     /// Create a new state.
-    pub fn new(warm_state: &[FWIWarmState], time: &DateTime<Utc>, config: FWIModelConfig) -> FWIState {
+    pub fn new(
+        warm_state: &[FWIWarmState],
+        time: &DateTime<Utc>,
+        config: FWIModelConfig,
+    ) -> FWIState {
         let data = Array1::from_vec(
             warm_state
                 .iter()
@@ -141,7 +143,7 @@ impl FWIState {
                     ffmc: w.ffmc.clone(),
                     dmc: w.dmc.clone(),
                     dc: w.dc.clone(),
-                    rain: w.rain.clone()
+                    rain: w.rain.clone(),
                 })
                 .collect(),
         );
