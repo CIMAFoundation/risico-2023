@@ -30,10 +30,7 @@ fn maybe_replace<'a>(
     src: &Option<Array1<f32>>,
     fun: fn(&'a mut InputElement) -> &'a mut f32,
 ) {
-    match src {
-        Some(src) => replace(dst, src, fun),
-        None => (),
-    }
+    if let Some(src) = src { replace(dst, src, fun) }
 }
 
 

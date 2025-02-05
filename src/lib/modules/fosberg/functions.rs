@@ -10,14 +10,14 @@ pub fn emc(
 ) -> f32 {
     // conversion from °C to °F -> needed for the formula
     let temp_f = temperature * 9.0 / 5.0 + 32.0;
-    let emc = if humidity < 10.0 {
+    
+    if humidity < 10.0 {
         0.03229 + 0.281073 * humidity - 0.000578 * temp_f * humidity
     } else if humidity < 50.0 {
         2.22749 + 0.160107 * humidity - 0.01478 * temp_f
     } else {
         21.0606 + 0.005565 * humidity.powi(2) - 0.00035 * temp_f * humidity - 0.483199 * humidity
-    };
-    emc
+    }
 }
 
 // Fosberg Fire Weather Index

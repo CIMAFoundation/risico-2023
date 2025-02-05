@@ -7,8 +7,8 @@ pub fn index_fmi(
     temperature: f32,  // temperature [°C]
     humidity: f32, // relative humidity [%]
 ) -> f32 {
-    let fmi = 10.0 - 0.25*(temperature - humidity);
-    fmi
+    
+    10.0 - 0.25*(temperature - humidity)
 }
 
 // fire index [-]
@@ -17,8 +17,8 @@ pub fn index_f(
     wind_speed: f32,  // wind speed [m/h]
 ) -> f32 {
     let ws = wind_speed / 1000.0;  // conversion to km/h
-    let f = f32::max(1.0, ws) / fmi;
-    f
+    
+    f32::max(1.0, ws) / fmi
 }
 
 pub fn get_output_fn(

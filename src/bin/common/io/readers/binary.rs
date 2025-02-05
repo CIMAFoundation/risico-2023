@@ -286,15 +286,9 @@ impl BinaryInputHandler {
 impl InputHandler for BinaryInputHandler {
     /// Returns the data for the given date and variable on the selected coordinates
     fn get_values(&self, var: InputVariableName, date: &DateTime<Utc>) -> Option<Array1<f32>> {
-        let data_map = match self.data_map.get(date) {
-            Some(data_map) => data_map,
-            None => return None,
-        };
+        let data_map = self.data_map.get(date)?;
 
-        let file = match data_map.get(&var) {
-            Some(file) => file,
-            None => return None,
-        };
+        let file = data_map.get(&var)?;
 
         let data = read_values_from_file(file.path.as_str())
             .unwrap_or_else(|_| panic!("Error reading file {}", file.path));

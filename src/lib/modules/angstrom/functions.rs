@@ -9,8 +9,8 @@ pub fn angstrom_index(
     temp: f32,  // temperature [°C]
     humidity: f32,  // humidity [%]
 ) -> f32 {
-    let angstrom = (humidity / 20.0) + ((27.0 - temp) / 10.0);
-    angstrom
+    
+    (humidity / 20.0) + ((27.0 - temp) / 10.0)
 }
 
 pub fn get_output_fn(

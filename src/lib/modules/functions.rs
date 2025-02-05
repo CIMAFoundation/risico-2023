@@ -11,8 +11,8 @@ pub fn daylight_hours(
     let declination  = 0.409 * ((2.0 * PI / 365.0) * jday - 1.39).sin();
     let latitude_rad = latitude * PI / 180.0;
     let sunset_angle = (-(latitude_rad).tan() * (declination).tan()).acos();
-    let daylight_hours = sunset_angle * 24.0 / PI;
-    daylight_hours
+    
+    sunset_angle * 24.0 / PI
 }
 
 

@@ -254,7 +254,7 @@ impl RISICOConfig {
             .map_err(|error| format!("error reading {}, {error}", &config_defs.vegetation_file))?;
 
         let warm_state_offset = if config_defs.warm_state_offset > 0 {
-            config_defs.warm_state_offset.clone()
+            config_defs.warm_state_offset
         } else {
             24
         };
@@ -282,7 +282,7 @@ impl RISICOConfig {
             warm_state_path: config_defs.warm_state_path.clone(),
             warm_state,
             warm_state_time,
-            warm_state_offset: warm_state_offset,
+            warm_state_offset,
             properties: props,
             palettes,
             // use_temperature_effect: config_defs.use_temperature_effect,
@@ -530,7 +530,7 @@ impl RISICOConfig {
         for days_before in 1..4 {
             current_date = run_date - Duration::try_days(days_before).expect("Should be valid");
             // add the offset to the current date
-            current_date = current_date + Duration::try_hours(*offset).expect("Should be valid");
+            current_date += Duration::try_hours(*offset).expect("Should be valid");
 
             let filename = format!("{}{}", base_warm_file, current_date.format("%Y%m%d%H%M"));
     
@@ -672,7 +672,7 @@ impl FWIConfig {
         }
 
         let warm_state_offset = if config_defs.warm_state_offset > 0 {
-            config_defs.warm_state_offset.clone()
+            config_defs.warm_state_offset
         } else {
             24
         };
@@ -691,7 +691,7 @@ impl FWIConfig {
             warm_state_path: config_defs.warm_state_path.clone(),
             warm_state,
             warm_state_time,
-            warm_state_offset: warm_state_offset,
+            warm_state_offset,
             properties: props,
             palettes,
             output_time_resolution: config_defs.output_time_resolution,
@@ -803,7 +803,7 @@ impl FWIConfig {
         for days_before in 1..4 {
             current_date = run_date - Duration::try_days(days_before).expect("Should be valid");
             // add the offset to the current date
-            current_date = current_date + Duration::try_hours(*offset).expect("Should be valid");
+            current_date += Duration::try_hours(*offset).expect("Should be valid");
 
             let filename = format!("{}{}", base_warm_file, current_date.format("%Y%m%d%H%M"));
 
@@ -940,7 +940,7 @@ impl Mark5Config {
             panic!("All properties must have the same length");
         }
         let warm_state_offset = if config_defs.warm_state_offset > 0 {
-            config_defs.warm_state_offset.clone()
+            config_defs.warm_state_offset
         } else {
             24
         };
@@ -955,7 +955,7 @@ impl Mark5Config {
             warm_state_path: config_defs.warm_state_path.clone(),
             warm_state,
             warm_state_time,
-            warm_state_offset: warm_state_offset,
+            warm_state_offset,
             properties: props,
             palettes,
             model_version: config_defs.model_version.clone(),
@@ -1052,7 +1052,7 @@ impl Mark5Config {
         for days_before in 1..4 {
             current_date = run_date - Duration::try_days(days_before).expect("Should be valid");
             // add the offset to the current date
-            current_date = current_date + Duration::try_hours(*offset).expect("Should be valid");
+            current_date += Duration::try_hours(*offset).expect("Should be valid");
             let filename = format!("{}{}", base_warm_file, current_date.format("%Y%m%d%H%M"));
             let file_handle = File::open(filename);
             if file_handle.is_err() {
@@ -1121,7 +1121,7 @@ impl Mark5Config {
         for state in &state.data {
             let dates = state.dates.clone();
             let daily_rain = state.daily_rain.clone();
-            let smd = state.smd.clone();
+            let smd = state.smd;
             let line = format!(
                 "{}\t{}\t{}",
                 dates.iter().map(|value| format!("{}", value.format("%Y%m%d%H%M"))).collect::<Vec<String>>().join(","),
@@ -1154,7 +1154,7 @@ impl KbdiConfig {
             panic!("All properties must have the same length");
         }
         let warm_state_offset = if config_defs.warm_state_offset > 0 {
-            config_defs.warm_state_offset.clone()
+            config_defs.warm_state_offset
         } else {
             24
         };
@@ -1170,7 +1170,7 @@ impl KbdiConfig {
             warm_state_path: config_defs.warm_state_path.clone(),
             warm_state,
             warm_state_time,
-            warm_state_offset: warm_state_offset,
+            warm_state_offset,
             properties: props,
             palettes,
             model_version: config_defs.model_version.clone(),
@@ -1268,7 +1268,7 @@ impl KbdiConfig {
         for days_before in 1..4 {
             current_date = run_date - Duration::try_days(days_before).expect("Should be valid");
             // add the offset to the current date
-            current_date = current_date + Duration::try_hours(*offset).expect("Should be valid");
+            current_date += Duration::try_hours(*offset).expect("Should be valid");
             let filename = format!("{}{}", base_warm_file, current_date.format("%Y%m%d%H%M"));
             let file_handle = File::open(filename);
             if file_handle.is_err() {
@@ -1337,7 +1337,7 @@ impl KbdiConfig {
         for state in &state.data {
             let dates = state.dates.clone();
             let daily_rain = state.daily_rain.clone();
-            let kbdi = state.kbdi.clone();
+            let kbdi = state.kbdi;
             let line = format!(
                 "{}\t{}\t{}",
                 dates.iter().map(|value| format!("{}", value.format("%Y%m%d%H%M"))).collect::<Vec<String>>().join(","),
@@ -1545,7 +1545,7 @@ impl NesterovConfig {
             panic!("All properties must have the same length");
         }
         let warm_state_offset = if config_defs.warm_state_offset > 0 {
-            config_defs.warm_state_offset.clone()
+            config_defs.warm_state_offset
         } else {
             24
         };
@@ -1560,7 +1560,7 @@ impl NesterovConfig {
             warm_state_path: config_defs.warm_state_path.clone(),
             warm_state,
             warm_state_time,
-            warm_state_offset: warm_state_offset,
+            warm_state_offset,
             properties: props,
             palettes,
             output_types_defs: config_defs.output_types.clone(),
@@ -1649,7 +1649,7 @@ impl NesterovConfig {
         for days_before in 1..4 {
             current_date = run_date - Duration::try_days(days_before).expect("Should be valid");
             // add the offset to the current date
-            current_date = current_date + Duration::try_hours(*offset).expect("Should be valid");
+            current_date += Duration::try_hours(*offset).expect("Should be valid");
             let filename = format!("{}{}", base_warm_file, current_date.format("%Y%m%d%H%M"));
             let file_handle = File::open(filename);
             if file_handle.is_err() {
@@ -1701,7 +1701,7 @@ impl NesterovConfig {
             .map_err(|error| format!("error creating {}, {}", &warm_state_name, error))?;
         let mut warm_state_writer = BufWriter::new(&mut warm_state_file);
         for state in &state.data {
-            let nesterov = state.nesterov.clone();
+            let nesterov = state.nesterov;
             let line = format!(
                 "{}",
                 nesterov
@@ -1820,7 +1820,7 @@ impl OrieuxConfig {
             panic!("All properties must have the same length");
         }
         let warm_state_offset = if config_defs.warm_state_offset > 0 {
-            config_defs.warm_state_offset.clone()
+            config_defs.warm_state_offset
         } else {
             24
         };
@@ -1835,7 +1835,7 @@ impl OrieuxConfig {
             warm_state_path: config_defs.warm_state_path.clone(),
             warm_state,
             warm_state_time,
-            warm_state_offset: warm_state_offset,
+            warm_state_offset,
             properties: props,
             palettes,
             output_types_defs: config_defs.output_types.clone(),
@@ -1930,7 +1930,7 @@ impl OrieuxConfig {
         for days_before in 1..4 {
             current_date = run_date - Duration::try_days(days_before).expect("Should be valid");
             // add the offset to the current date
-            current_date = current_date + Duration::try_hours(*offset).expect("Should be valid");
+            current_date += Duration::try_hours(*offset).expect("Should be valid");
             let filename = format!("{}{}", base_warm_file, current_date.format("%Y%m%d%H%M"));
             let file_handle = File::open(filename);
             if file_handle.is_err() {
@@ -1980,7 +1980,7 @@ impl OrieuxConfig {
             .map_err(|error| format!("error creating {}, {}", &warm_state_name, error))?;
         let mut warm_state_writer = BufWriter::new(&mut warm_state_file);
         for state in &state.data {
-            let orieux_wr = state.orieux_wr.clone();
+            let orieux_wr = state.orieux_wr;
             let line = format!(
                 "{}",
                 orieux_wr

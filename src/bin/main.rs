@@ -221,13 +221,13 @@ fn run_mark5(
         let input = get_input(handler, &time, len);
 
         // store the input of the day
-        state.store(&input, &props);
+        state.store(&input, props);
 
         let (should_write_warm, warm_state_time) = config.should_write_warm_state(&time);
         if  should_write_warm{
             // update the state with the input of the day and compute output
             let c = Utc::now();
-            let output = state.output(&props);
+            let output = state.output(props);
             trace!("Generating output took {} seconds", Utc::now() - c);
 
             let c = Utc::now();
@@ -286,7 +286,7 @@ fn run_kbdi(
         if  should_write_warm{
             // update the state with the input of the day
             let c = Utc::now();
-            state.update(&props);
+            state.update(props);
             trace!("updating state took {} seconds", Utc::now() - c);
             // compute output
             let c = Utc::now();
@@ -443,7 +443,7 @@ fn run_nesterov(
         info!("Processing {}", time.format("%Y-%m-%d %H:%M"));
         let input = get_input(handler, &time, len);
         // store the input of the day
-        state.store(&input, &props);
+        state.store(&input, props);
         // check if we should write the output
         let (should_write_warm, warm_state_time) = config.should_write_warm_state(&time);
         if  should_write_warm{

@@ -152,7 +152,7 @@ impl Mark5State {
                 .map(|w| Mark5StateElement {
                     dates: w.dates.clone(),
                     daily_rain: w.daily_rain.clone(),
-                    smd: w.smd.clone(),
+                    smd: w.smd,
                     cum_rain: 0.0,  // start with 0 cumulated rain
                     max_temp: NODATAVAL,
                     temp_15: NODATAVAL,
@@ -196,7 +196,7 @@ impl Mark5State {
         let output_data = Zip::from(&mut self.data)
                     .and(&props.data)
                     .par_map_collect(|state, props_data| {
-                        get_output_fn(state, props_data, &self.config, &time)
+                        get_output_fn(state, props_data, &self.config, time)
                     });
         // clean the daily values
         self.data.iter_mut().for_each(|state| state.clean_day());

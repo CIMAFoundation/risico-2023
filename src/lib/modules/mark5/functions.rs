@@ -54,8 +54,8 @@ pub fn ffdi(
     // conversion of wind speed from m/h to km/h
     let ws_kph = wind_speed / 1000.0;
     // calculation of the FFDI
-    let ffdi = 2.0*f32::exp(-0.45+0.987*f32::ln(drought_factor)-0.0345*rh+0.0338*temp+0.0234*ws_kph);
-    ffdi
+    
+    2.0*f32::exp(-0.45+0.987*f32::ln(drought_factor)-0.0345*rh+0.0338*temp+0.0234*ws_kph)
 }
 
 
@@ -97,7 +97,8 @@ pub fn rainfall_effect(
     rainfall_event: f32,  // sum of rainfall within the rain event [mm]
     age_event: i64,  // number of days since the day with the largest daily rainfall amount within the rain event
 ) -> f32 {
-    let x = if rainfall_event < RAIN_TH {
+    
+    if rainfall_event < RAIN_TH {
         1.0
     } else {
         let age_event_eff: f32 = if age_event == 0 {
@@ -106,8 +107,7 @@ pub fn rainfall_effect(
             age_event as f32
         };
         f32::powf(age_event_eff, 1.3) / (f32::powf(age_event_eff, 1.3) + rainfall_event - RAIN_TH)
-    };
-    x
+    }
 }
 
 

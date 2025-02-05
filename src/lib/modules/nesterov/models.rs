@@ -107,7 +107,7 @@ impl NesterovState {
             warm_state
                 .iter()
                 .map(|w| NesterovStateElement {
-                    nesterov: w.nesterov.clone(),
+                    nesterov: w.nesterov,
                     temp_15: NODATAVAL,
                     temp_dew_15: NODATAVAL,
                     cum_rain: 0.0,

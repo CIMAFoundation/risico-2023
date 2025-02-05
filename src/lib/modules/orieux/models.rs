@@ -117,7 +117,7 @@ impl OrieuxState {
             warm_state
                 .iter()
                 .map(|w| OrieuxStateElement {
-                    orieux_wr: w.orieux_wr.clone(),
+                    orieux_wr: w.orieux_wr,
                     pet: NODATAVAL,
                     orieux_fd: NODATAVAL,
                     cum_rain: 0.0,

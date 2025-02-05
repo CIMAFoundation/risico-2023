@@ -8,8 +8,8 @@ pub fn hdw(
     wind_speed: f32,  // wind speed [m/h]
 ) -> f32 {
     let ws = wind_speed / 3600.0; // wind speed [m/s] -> required by the formula
-    let hdw = ws*vpd;
-    hdw
+    
+    ws*vpd
 }
 
 

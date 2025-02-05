@@ -151,7 +151,7 @@ impl KBDIState {
                 .map(|w| KBDIStateElement {
                     dates: w.dates.clone(),
                     daily_rain: w.daily_rain.clone(),
-                    kbdi: w.kbdi.clone(),
+                    kbdi: w.kbdi,
                     cum_rain: 0.0,  // start with 0 mm cumulated rain
                     max_temp: NODATAVAL,
                 })
@@ -188,7 +188,7 @@ impl KBDIState {
         Zip::from(&mut self.data)
             .and(&props.data)
             .par_map_collect(|state, props_data| {
-                update_fn(state, props_data, &self.config, &time)
+                update_fn(state, props_data, &self.config, time)
             });
     }
 

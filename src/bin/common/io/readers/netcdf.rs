@@ -191,7 +191,7 @@ where
             lat_name,
             lon_name,
             time_name,
-            coords_dims: coords_dims,
+            coords_dims,
             time_units: None,
         }
     }
@@ -309,7 +309,7 @@ fn register_nc_file(
             .variable_map
             .iter()
             .find(|(_, entry)| entry.name == nc_var)
-            .map(|(k, entry)| (k.clone(), entry.offset))
+            .map(|(k, entry)| (*k, entry.offset))
     })
     .unzip();
 
@@ -326,7 +326,7 @@ fn register_nc_file(
             .iter()
             .unique()
             .next()
-            .ok_or_else(|| "All variables must have the same offset")?
+            .ok_or("All variables must have the same offset")?
     };
 
     let timeline = extract_time(time_var, &config.time_units, offset)?;
