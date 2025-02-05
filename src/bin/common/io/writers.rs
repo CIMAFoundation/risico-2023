@@ -211,7 +211,7 @@ pub fn write_to_geotiff(
     Ok(())
 }
 
-const COMPRESSION_RATE: i32 = 4;
+const COMPRESSION_RATE: i32 = 7;
 
 pub fn create_nc_file<T>(
     file_name: &str,
@@ -287,7 +287,7 @@ where
         .unwrap_or_else(|_| panic!("Add {} failed", output_name));
 
     variable_var
-        .compression(COMPRESSION_RATE, false)
+        .compression(COMPRESSION_RATE, true)
         .expect("Set compression failed");
 
     variable_var
