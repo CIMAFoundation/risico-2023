@@ -1,6 +1,6 @@
 use super::functions::{
-    get_v, get_v_legacy, update_dffm_dry, update_dffm_dry_legacy, update_dffm_rain,
-    update_dffm_rain_legacy, get_meteo_index, get_meteo_index_legacy,
+    get_v_v2025, get_v_v2023, get_v_legacy, update_dffm_dry, update_dffm_dry_legacy, update_dffm_rain,
+    update_dffm_rain_legacy, get_meteo_index_v2023, get_meteo_index_v2025, get_meteo_index_legacy,
 };
 
 type RosFnType = fn(f32, f32, f32, f32, f32, f32, f32, f32, f32, f32) -> (f32, f32);
@@ -8,9 +8,8 @@ type RosFnType = fn(f32, f32, f32, f32, f32, f32, f32, f32, f32, f32) -> (f32, f
 /// configuration structure for model config
 /// can be used to store functions and constants
 #[derive(Debug)]
-pub struct ModelConfig {
+pub struct RISICOModelConfig {
     pub model_version: String,
-
     pub use_t_effect: bool,
     ffmc_no_rain_fn: fn(f32, f32, f32, f32, f32, f32, f32) -> f32,
     ffmc_rain_fn: fn(f32, f32, f32) -> f32,
@@ -18,7 +17,7 @@ pub struct ModelConfig {
     meteo_index_fn: fn(f32, f32) -> f32,
 }
 
-impl ModelConfig {
+impl RISICOModelConfig {
     pub fn new(model_version_str: &str) -> Self {
         let ffmc_no_rain_fn: fn(f32, f32, f32, f32, f32, f32, f32) -> f32;
         let ffmc_rain_fn: fn(f32, f32, f32) -> f32;
@@ -32,11 +31,30 @@ impl ModelConfig {
                 ros_fn = get_v_legacy;
                 meteo_index_fn = get_meteo_index_legacy;
             }
+            // DEPRECATED
+            // "new_moisture" => {
+            //     ffmc_no_rain_fn = update_dffm_dry;
+            //     ffmc_rain_fn = update_dffm_rain;
+            //     ros_fn = get_v_legacy;
+            //     meteo_index_fn = get_meteo_index_legacy;
+            // }
+            // "new_ros" => {
+            //     ffmc_no_rain_fn = update_dffm_dry_legacy;
+            //     ffmc_rain_fn = update_dffm_rain_legacy;
+            //     ros_fn = get_v_v2023;
+            //     meteo_index_fn = get_meteo_index_legacy;
+            // }
             "v2023" => {
                 ffmc_no_rain_fn = update_dffm_dry;
                 ffmc_rain_fn = update_dffm_rain;
-                ros_fn = get_v;
-                meteo_index_fn = get_meteo_index;
+                ros_fn = get_v_v2023;
+                meteo_index_fn = get_meteo_index_v2023;
+            },
+            "v2025" => {
+                ffmc_no_rain_fn = update_dffm_dry;
+                ffmc_rain_fn = update_dffm_rain;
+                ros_fn = get_v_v2025;
+                meteo_index_fn = get_meteo_index_v2025;
             }
             _ => {
                 ffmc_no_rain_fn = update_dffm_dry_legacy;
@@ -46,7 +64,7 @@ impl ModelConfig {
             }
         }
 
-        ModelConfig {
+        RISICOModelConfig {
             model_version: model_version_str.to_owned(),
             use_t_effect: false,
             ffmc_no_rain_fn,

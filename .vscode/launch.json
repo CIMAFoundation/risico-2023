@@ -13,13 +13,13 @@
                     "build",
                     "--bin",
                     "risico-2023",
-                    "--features=build-binary,static_deps",
+                    // "--features=build-binary,static_deps",
                 ]
             },
             "args": [
-                "202408160000",
-                "/opt/risico/RISICO2023/configuration.txt",
-                "/opt/risico/RISICO2023/INPUT-NC/ALL"
+                "198103190000",
+                "/home/nicolo/RISICO/test_risico_chapter/run_debug/configuration_angstrom.yaml",
+                "/home/nicolo/RISICO/test_risico_chapter/chapter/1981/1981031900/",
             ],
             "env": {
                 "RUST_LOG": "debug",

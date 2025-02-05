@@ -1,5 +1,3 @@
-pub const NODATAVAL: f32 = -9999.0;
-
 pub const MODISSNOWVAL: f32 = 200.0;
 pub const DFFM_DEFAULT: f32 = 20.0;
 

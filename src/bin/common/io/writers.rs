@@ -6,12 +6,12 @@ use gdal::raster::{Buffer, RasterCreationOption};
 use libflate::gzip::{self, Encoder};
 use log::warn;
 use netcdf::extent::Extents;
-use risico::modules::risico::constants::NODATAVAL;
-use risico::modules::risico::models::OutputVariableName;
+use risico::constants::NODATAVAL;
 use risico::version::FULL_VERSION;
 
 use std::io::BufWriter;
 use std::path::Path;
+
 use std::{
     fs::File,
     io::{self, Write},
@@ -211,14 +211,17 @@ pub fn write_to_geotiff(
     Ok(())
 }
 
-const COMPRESSION_RATE: i32 = 4;
+const COMPRESSION_RATE: i32 = 7;
 
-pub fn create_nc_file(
+pub fn create_nc_file<T>(
     file_name: &str,
     grid: &RegularGrid,
     output_name: &str,
-    variable_name: OutputVariableName,
-) -> Result<netcdf::MutableFile, RISICOError> {
+    variable_name: T,
+) -> Result<netcdf::MutableFile, RISICOError>
+where
+    T: EnumProperty + ToString,
+{
     let n_lats = grid.nrows;
     let n_lons = grid.ncols;
 
@@ -284,7 +287,7 @@ pub fn create_nc_file(
         .unwrap_or_else(|_| panic!("Add {} failed", output_name));
 
     variable_var
-        .compression(COMPRESSION_RATE, false)
+        .compression(COMPRESSION_RATE, true)
         .expect("Set compression failed");
 
     variable_var
