@@ -5,21 +5,21 @@ on:
     types: [published]
 
 jobs:
-  build-with-musl:
-    name: release x86_64-unknown-linux-musl
-    runs-on: ubuntu-latest
-    steps:
-      - name: checkout repo
-        uses: actions/checkout@master
+  # build-with-musl:
+  #   name: release x86_64-unknown-linux-musl
+  #   runs-on: ubuntu-latest
+  #   steps:
+  #     - name: checkout repo
+  #       uses: actions/checkout@master
 
-      - name: Compile and release
-        uses: rust-build/rust-build.action@v1.4.5
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          RUSTTARGET: x86_64-unknown-linux-musl
-          EXTRA_FILES: "README.md"
-          FEATURES: "static_deps"
+  #     - name: Compile and release
+  #       uses: rust-build/rust-build.action@v1.4.5
+  #       env:
+  #         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+  #       with:
+  #         RUSTTARGET: x86_64-unknown-linux-musl
+  #         EXTRA_FILES: "README.md"
+  #         FEATURES: "static_deps"
 
   build-with-linux-gnu:
     name: release x86_64-unknown-linux-gnu
@@ -36,6 +36,7 @@ jobs:
         uses: meeDamian/github-release@2.0
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
-          files: risico-2023-linux-gnu:target/x86_64-unknown-linux-gnu/release/risico-2023 risico-2023-config-converter-linux-gnu:target/x86_64-unknown-linux-gnu/release/risico-2023-config-converter
+          files: risico-2023-linux-gnu:target/x86_64-unknown-linux-gnu/release/risico-2023
+          #risico-2023-config-converter-linux-gnu:target/x86_64-unknown-linux-gnu/release/risico-2023-config-converter
           tag: ${{ github.ref_name }}
           allow_override: true
