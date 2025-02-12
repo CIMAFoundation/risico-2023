@@ -657,11 +657,7 @@ impl FWIConfig {
             panic!("All properties must have the same length");
         }
 
-        let warm_state_offset = if config_defs.warm_state_offset > 0 {
-            config_defs.warm_state_offset
-        } else {
-            24
-        };
+        let warm_state_offset = config_defs.warm_state_offset;
 
         let (warm_state, warm_state_time) = FWIConfig::read_warm_state(&config_defs.warm_state_path, date, &warm_state_offset)
             .unwrap_or((
@@ -754,18 +750,8 @@ impl FWIConfig {
         hours % self.output_time_resolution as i64 == 0
     }
 
-    pub fn should_write_warm_state(&self, time: &DateTime<Utc>) -> (bool, DateTime<Utc>) {
-        let time_diff = time.signed_duration_since(self.run_date);
-        let minutes = time_diff.num_minutes();
-        // Approximation to the closest hour
-        let approximate_hours = if minutes % 60 >= 30 {
-            (minutes / 60) + 1
-        } else {
-            minutes / 60
-        };
-        let warm_state_time = self.run_date + Duration::try_hours(approximate_hours).expect("Should be valid");
-        let should_write= (approximate_hours % self.warm_state_offset == 0) && (approximate_hours > 0);
-        (should_write, warm_state_time)
+    pub fn should_write_warm_state(&self, time: &DateTime<Utc>) -> bool {
+        time.hour() as i64 == self.warm_state_offset as i64
     }
 
     #[allow(non_snake_case)]
@@ -925,11 +911,7 @@ impl Mark5Config {
         {
             panic!("All properties must have the same length");
         }
-        let warm_state_offset = if config_defs.warm_state_offset > 0 {
-            config_defs.warm_state_offset
-        } else {
-            24
-        };
+        let warm_state_offset = config_defs.warm_state_offset;
         let (warm_state, warm_state_time) = Mark5Config::read_warm_state(&config_defs.warm_state_path, date, &warm_state_offset)
             .unwrap_or((
                 vec![Mark5WarmState::default(); n_cells],
@@ -1007,18 +989,8 @@ impl Mark5Config {
         ))
     }
 
-    pub fn should_write_warm_state(&self, time: &DateTime<Utc>) -> (bool, DateTime<Utc>) {
-        let time_diff = time.signed_duration_since(self.run_date);
-        let minutes = time_diff.num_minutes();
-        // Approximation to the closest hour
-        let approximate_hours = if minutes % 60 >= 30 {
-            (minutes / 60) + 1
-        } else {
-            minutes / 60
-        };
-        let warm_state_time = self.run_date + Duration::try_hours(approximate_hours).expect("Should be valid");
-        let should_write= (approximate_hours % self.warm_state_offset == 0) && (approximate_hours > 0);
-        (should_write, warm_state_time)
+    pub fn should_write_warm_state(&self, time: &DateTime<Utc>) -> bool {
+        time.hour() as i64 == self.warm_state_offset as i64
     }
 
     #[allow(non_snake_case)]
@@ -1139,11 +1111,7 @@ impl KbdiConfig {
         {
             panic!("All properties must have the same length");
         }
-        let warm_state_offset = if config_defs.warm_state_offset > 0 {
-            config_defs.warm_state_offset
-        } else {
-            24
-        };
+        let warm_state_offset = config_defs.warm_state_offset;
         let (warm_state, warm_state_time) = KbdiConfig::read_warm_state(&config_defs.warm_state_path, date, &warm_state_offset)
             .unwrap_or((
                 vec![KBDIWarmState::default(); n_cells],
@@ -1223,18 +1191,8 @@ impl KbdiConfig {
         ))
     }
 
-    pub fn should_write_warm_state(&self, time: &DateTime<Utc>) -> (bool, DateTime<Utc>) {
-        let time_diff = time.signed_duration_since(self.run_date);
-        let minutes = time_diff.num_minutes();
-        // Approximation to the closest hour
-        let approximate_hours = if minutes % 60 >= 30 {
-            (minutes / 60) + 1
-        } else {
-            minutes / 60
-        };
-        let warm_state_time = self.run_date + Duration::try_hours(approximate_hours).expect("Should be valid");
-        let should_write= (approximate_hours % self.warm_state_offset == 0) && (approximate_hours > 0);
-        (should_write, warm_state_time)
+    pub fn should_write_warm_state(&self, time: &DateTime<Utc>) -> bool {
+        time.hour() as i64 == self.warm_state_offset as i64
     }
 
     #[allow(non_snake_case)]
@@ -1530,11 +1488,7 @@ impl NesterovConfig {
         {
             panic!("All properties must have the same length");
         }
-        let warm_state_offset = if config_defs.warm_state_offset > 0 {
-            config_defs.warm_state_offset
-        } else {
-            24
-        };
+        let warm_state_offset = config_defs.warm_state_offset;
         let (warm_state, warm_state_time) = NesterovConfig::read_warm_state(&config_defs.warm_state_path, date, &warm_state_offset)
             .unwrap_or((
                 vec![NesterovWarmState::default(); n_cells],
@@ -1604,18 +1558,8 @@ impl NesterovConfig {
         ))
     }
 
-    pub fn should_write_warm_state(&self, time: &DateTime<Utc>) -> (bool, DateTime<Utc>) {
-        let time_diff = time.signed_duration_since(self.run_date);
-        let minutes = time_diff.num_minutes();
-        // Approximation to the closest hour
-        let approximate_hours = if minutes % 60 >= 30 {
-            (minutes / 60) + 1
-        } else {
-            minutes / 60
-        };
-        let warm_state_time = self.run_date + Duration::try_hours(approximate_hours).expect("Should be valid");
-        let should_write= (approximate_hours % self.warm_state_offset == 0) && (approximate_hours > 0);
-        (should_write, warm_state_time)
+    pub fn should_write_warm_state(&self, time: &DateTime<Utc>) -> bool {
+        time.hour() as i64 == self.warm_state_offset as i64
     }
 
     #[allow(non_snake_case)]
@@ -1805,11 +1749,7 @@ impl OrieuxConfig {
         {
             panic!("All properties must have the same length");
         }
-        let warm_state_offset = if config_defs.warm_state_offset > 0 {
-            config_defs.warm_state_offset
-        } else {
-            24
-        };
+        let warm_state_offset = config_defs.warm_state_offset;
         let (warm_state, warm_state_time) = OrieuxConfig::read_warm_state(&config_defs.warm_state_path, date, &warm_state_offset)
             .unwrap_or((
                 vec![OrieuxWarmState::default(); n_cells],
@@ -1885,18 +1825,8 @@ impl OrieuxConfig {
         ))
     }
 
-    pub fn should_write_warm_state(&self, time: &DateTime<Utc>) -> (bool, DateTime<Utc>) {
-        let time_diff = time.signed_duration_since(self.run_date);
-        let minutes = time_diff.num_minutes();
-        // Approximation to the closest hour
-        let approximate_hours = if minutes % 60 >= 30 {
-            (minutes / 60) + 1
-        } else {
-            minutes / 60
-        };
-        let warm_state_time = self.run_date + Duration::try_hours(approximate_hours).expect("Should be valid");
-        let should_write= (approximate_hours % self.warm_state_offset == 0) && (approximate_hours > 0);
-        (should_write, warm_state_time)
+    pub fn should_write_warm_state(&self, time: &DateTime<Utc>) -> bool {
+        time.hour() as i64 == self.warm_state_offset as i64
     }
 
     #[allow(non_snake_case)]

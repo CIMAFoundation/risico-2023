@@ -167,11 +167,10 @@ fn run_fwi(
             trace!("Writing output took {} seconds", Utc::now() - c);
         }
 
-        let (should_write_warm, warm_state_time) = config.should_write_warm_state(&time);
-        if  should_write_warm{
+        if config.should_write_warm_state(&state.time){
             info!("Writing warm state");
             let c = Utc::now();
-            if let Err(err) = config.write_warm_state(&state, warm_state_time) {
+            if let Err(err) = config.write_warm_state(&state, state.time) {
                 warn!("Error writing warm state: {}", err);
             }
             trace!("Writing warm state took {} seconds", Utc::now() - c);
@@ -221,8 +220,7 @@ fn run_mark5(
         // store the input of the day
         state.store(&input, props);
 
-        let (should_write_warm, warm_state_time) = config.should_write_warm_state(&time);
-        if  should_write_warm{
+        if config.should_write_warm_state(&state.time){
             // update the state with the input of the day and compute output
             let c = Utc::now();
             let output = state.output(props);
@@ -236,7 +234,7 @@ fn run_mark5(
 
             info!("Writing warm state");
             let c = Utc::now();
-            if let Err(err) = config.write_warm_state(&state, warm_state_time) {
+            if let Err(err) = config.write_warm_state(&state, state.time) {
                 warn!("Error writing warm state: {}", err);
             }
             trace!("Writing warm state took {} seconds", Utc::now() - c);
@@ -280,8 +278,7 @@ fn run_kbdi(
         // store the input of the day
         state.store(&input);
         // check if we should write the output
-        let (should_write_warm, warm_state_time) = config.should_write_warm_state(&time);
-        if  should_write_warm{
+        if config.should_write_warm_state(&state.time){
             // update the state with the input of the day
             let c = Utc::now();
             state.update(props);
@@ -299,7 +296,7 @@ fn run_kbdi(
             // write the warm state
             info!("Writing warm state");
             let c = Utc::now();
-            if let Err(err) = config.write_warm_state(&state, warm_state_time) {
+            if let Err(err) = config.write_warm_state(&state, state.time) {
                 warn!("Error writing warm state: {}", err);
             }
             trace!("Writing warm state took {} seconds", Utc::now() - c);
@@ -443,8 +440,7 @@ fn run_nesterov(
         // store the input of the day
         state.store(&input, props);
         // check if we should write the output
-        let (should_write_warm, warm_state_time) = config.should_write_warm_state(&time);
-        if  should_write_warm{
+        if config.should_write_warm_state(&state.time){
             // update the state with the input of the day
             let c = Utc::now();
             state.update();
@@ -462,7 +458,7 @@ fn run_nesterov(
             // write the warm state
             info!("Writing warm state");
             let c = Utc::now();
-            if let Err(err) = config.write_warm_state(&state, warm_state_time) {
+            if let Err(err) = config.write_warm_state(&state, state.time) {
                 warn!("Error writing warm state: {}", err);
             }
             trace!("Writing warm state took {} seconds", Utc::now() - c);
@@ -557,8 +553,7 @@ fn run_orieux(
         let input = get_input(handler, &time, len);
         // store the input of the day
         state.store(&input);
-        let (should_write_warm, warm_state_time) = config.should_write_warm_state(&time);
-        if  should_write_warm{
+        if config.should_write_warm_state(&state.time){
             // update the state with the input of the day
             let c = Utc::now();
             state.update(props);
@@ -576,7 +571,7 @@ fn run_orieux(
             // write the warm state
             info!("Writing warm state");
             let c = Utc::now();
-            if let Err(err) = config.write_warm_state(&state, warm_state_time) {
+            if let Err(err) = config.write_warm_state(&state, state.time) {
                 warn!("Error writing warm state: {}", err);
             }
             trace!("Writing warm state took {} seconds", Utc::now() - c);
