@@ -253,11 +253,7 @@ impl RISICOConfig {
         let vegetations_dict = RISICOConfig::read_vegetation(&config_defs.vegetation_file)
             .map_err(|error| format!("error reading {}, {error}", &config_defs.vegetation_file))?;
 
-        let warm_state_offset = if config_defs.warm_state_offset > 0 {
-            config_defs.warm_state_offset
-        } else {
-            24
-        };
+        let warm_state_offset = config_defs.warm_state_offset;
 
         let (warm_state, warm_state_time) = RISICOConfig::read_warm_state(&config_defs.warm_state_path, date, &warm_state_offset)
             .unwrap_or((
@@ -495,18 +491,8 @@ impl RISICOConfig {
         hours % self.output_time_resolution as i64 == 0
     }
 
-    pub fn should_write_warm_state(&self, time: &DateTime<Utc>) -> (bool, DateTime<Utc>) {
-        let time_diff = time.signed_duration_since(self.run_date);
-        let minutes = time_diff.num_minutes();
-        // Approximation to the closest hour
-        let approximate_hours = if minutes % 60 >= 30 {
-            (minutes / 60) + 1
-        } else {
-            minutes / 60
-        };
-        let warm_state_time = self.run_date + Duration::try_hours(approximate_hours).expect("Should be valid");
-        let should_write= (approximate_hours % self.warm_state_offset == 0) && (approximate_hours > 0);
-        (should_write, warm_state_time)
+    pub fn should_write_warm_state(&self, time: &DateTime<Utc>) -> bool {
+        time.hour() as i64 == self.warm_state_offset as i64
     }
 
     #[allow(non_snake_case)]
