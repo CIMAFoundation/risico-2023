@@ -60,6 +60,12 @@ use crate::common::io::models::{output::OutputType, palette::Palette};
 pub type PaletteMap = HashMap<String, Box<Palette>>;
 // pub type ConfigMap = HashMap<String, Vec<String>>;
 
+
+pub fn check_write_warm_state(time: &DateTime<Utc>, warm_state_hour: i64) -> bool {
+    time.hour() as i64 == warm_state_hour
+}
+
+
 pub struct RISICOConfig {
     run_date: DateTime<Utc>,
     warm_state_path: String,
@@ -492,7 +498,7 @@ impl RISICOConfig {
     }
 
     pub fn should_write_warm_state(&self, time: &DateTime<Utc>) -> bool {
-        time.hour() as i64 == self.warm_state_hour as i64
+        check_write_warm_state(time, self.warm_state_hour)
     }
 
     #[allow(non_snake_case)]
@@ -751,7 +757,7 @@ impl FWIConfig {
     }
 
     pub fn should_write_warm_state(&self, time: &DateTime<Utc>) -> bool {
-        time.hour() as i64 == self.warm_state_hour as i64
+        check_write_warm_state(time, self.warm_state_hour)
     }
 
     #[allow(non_snake_case)]
@@ -990,7 +996,7 @@ impl Mark5Config {
     }
 
     pub fn should_write_warm_state(&self, time: &DateTime<Utc>) -> bool {
-        time.hour() as i64 == self.warm_state_hour as i64
+        check_write_warm_state(time, self.warm_state_hour)
     }
 
     #[allow(non_snake_case)]
@@ -1192,7 +1198,7 @@ impl KbdiConfig {
     }
 
     pub fn should_write_warm_state(&self, time: &DateTime<Utc>) -> bool {
-        time.hour() as i64 == self.warm_state_hour as i64
+        check_write_warm_state(time, self.warm_state_hour)
     }
 
     #[allow(non_snake_case)]
@@ -1559,7 +1565,7 @@ impl NesterovConfig {
     }
 
     pub fn should_write_warm_state(&self, time: &DateTime<Utc>) -> bool {
-        time.hour() as i64 == self.warm_state_hour as i64
+        check_write_warm_state(time, self.warm_state_hour)
     }
 
     #[allow(non_snake_case)]
@@ -1826,7 +1832,7 @@ impl OrieuxConfig {
     }
 
     pub fn should_write_warm_state(&self, time: &DateTime<Utc>) -> bool {
-        time.hour() as i64 == self.warm_state_hour as i64
+        check_write_warm_state(time, self.warm_state_hour)
     }
 
     #[allow(non_snake_case)]
