@@ -32,7 +32,7 @@ pub type ConfigMap = HashMap<String, Vec<String>>;
 
 const MODEL_NAME_KEY: &str = "MODELNAME";
 const WARM_STATE_PATH_KEY: &str = "STATO0";
-const WARM_STATE_OFFSET_KEY: &str = "STATO0_OFFSET";
+const WARM_STATE_HOUR_KEY: &str = "STATO0_HOUR";
 const CELLS_FILE_KEY: &str = "CELLE";
 const VEGETATION_FILE_KEY: &str = "VEG";
 const PPF_FILE_KEY: &str = "PPF";
@@ -109,7 +109,7 @@ pub struct RISICOConfigBuilder {
     pub cells_file_path: String,
     pub vegetation_file: String,
     pub warm_state_path: String,
-    pub warm_state_offset: i64,
+    pub warm_state_hour: i64,
     pub ppf_file: Option<String>,
     pub output_types: Vec<OutputTypeConfig>,
     pub use_temperature_effect: bool,
@@ -123,7 +123,7 @@ pub struct FWIConfigBuilder {
     pub model_name: String,
     pub cells_file_path: String,
     pub warm_state_path: String,
-    pub warm_state_offset: i64,
+    pub warm_state_hour: i64,
     pub output_types: Vec<OutputTypeConfig>,
     pub output_time_resolution: u32,
     pub model_version: String,
@@ -134,7 +134,7 @@ pub struct Mark5ConfigBuilder {
     pub model_name: String,
     pub cells_file_path: String,
     pub warm_state_path: String,
-    pub warm_state_offset: i64,
+    pub warm_state_hour: i64,
     pub output_types: Vec<OutputTypeConfig>,
     pub model_version: String,
 }
@@ -144,7 +144,7 @@ pub struct KbdiConfigBuilder {
     pub model_name: String,
     pub cells_file_path: String,
     pub warm_state_path: String,
-    pub warm_state_offset: i64,
+    pub warm_state_hour: i64,
     pub output_types: Vec<OutputTypeConfig>,
     pub model_version: String,
 }
@@ -170,7 +170,7 @@ pub struct NesterovConfigBuilder {
     pub model_name: String,
     pub cells_file_path: String,
     pub warm_state_path: String,
-    pub warm_state_offset: i64,
+    pub warm_state_hour: i64,
     pub output_types: Vec<OutputTypeConfig>,
 }
 
@@ -187,7 +187,7 @@ pub struct OrieuxConfigBuilder {
     pub model_name: String,
     pub cells_file_path: String,
     pub warm_state_path: String,
-    pub warm_state_offset: i64,
+    pub warm_state_hour: i64,
     pub output_types: Vec<OutputTypeConfig>,
 }
 
@@ -196,7 +196,7 @@ pub struct OrieuxConfigBuilder {
 //     pub model_name: String,
 //     pub cells_file_path: String,
 //     pub warm_state_path: String,
-//     pub warm_state_offset: i64,
+//     pub warm_state_hour: i64,
 //     pub output_types: Vec<OutputTypeConfig>,
 // }
 
@@ -349,7 +349,7 @@ impl ConfigContainer {
             .ok_or(format!("Error: {WARM_STATE_PATH_KEY} not found in config"))?;
         
         // try to get the warm state offset, otherwise default to 0
-        let warm_state_offset = match config_map.first(WARM_STATE_OFFSET_KEY) {
+        let warm_state_hour = match config_map.first(WARM_STATE_HOUR_KEY) {
             Some(value) => value.parse::<i64>().unwrap_or(0),
             None => 0,
         };
@@ -406,7 +406,7 @@ impl ConfigContainer {
         let config = RISICOConfigBuilder {
             model_name,
             warm_state_path,
-            warm_state_offset,
+            warm_state_hour,
             cells_file_path,
             vegetation_file,
             ppf_file,

@@ -65,7 +65,7 @@ pub struct RISICOConfig {
     warm_state_path: String,
     warm_state: Vec<RISICOWarmState>,
     warm_state_time: DateTime<Utc>,
-    warm_state_offset: i64,
+    warm_state_hour: i64,
     properties: RISICOProperties,
     palettes: PaletteMap,
     // use_temperature_effect: bool,
@@ -80,7 +80,7 @@ pub struct FWIConfig {
     warm_state_path: String,
     warm_state: Vec<FWIWarmState>,
     warm_state_time: DateTime<Utc>,
-    warm_state_offset: i64,
+    warm_state_hour: i64,
     properties: FWIProperties,
     palettes: PaletteMap,
     output_time_resolution: u32,
@@ -93,7 +93,7 @@ pub struct Mark5Config {
     warm_state_path: String,
     warm_state: Vec<Mark5WarmState>,
     warm_state_time: DateTime<Utc>,
-    warm_state_offset: i64,
+    warm_state_hour: i64,
     properties: Mark5Properties,
     palettes: PaletteMap,
     output_types_defs: Vec<OutputTypeConfig>,
@@ -106,7 +106,7 @@ pub struct KbdiConfig {
     warm_state_path: String,
     warm_state: Vec<KBDIWarmState>,
     warm_state_time: DateTime<Utc>,
-    warm_state_offset: i64,
+    warm_state_hour: i64,
     properties: KBDIProperties,
     palettes: PaletteMap,
     output_types_defs: Vec<OutputTypeConfig>,
@@ -135,7 +135,7 @@ pub struct NesterovConfig {
     warm_state_path: String,
     warm_state: Vec<NesterovWarmState>,
     warm_state_time: DateTime<Utc>,
-    warm_state_offset: i64,
+    warm_state_hour: i64,
     properties: NesterovProperties,
     palettes: PaletteMap,
     output_types_defs: Vec<OutputTypeConfig>,
@@ -155,7 +155,7 @@ pub struct OrieuxConfig {
     warm_state_path: String,
     warm_state: Vec<OrieuxWarmState>,
     warm_state_time: DateTime<Utc>,
-    warm_state_offset: i64,
+    warm_state_hour: i64,
     properties: OrieuxProperties,
     palettes: PaletteMap,
     output_types_defs: Vec<OutputTypeConfig>,
@@ -166,7 +166,7 @@ pub struct OrieuxConfig {
 //     warm_state_path: String,
 //     warm_state: Vec<PortugueseWarmState>,
 //     warm_state_time: DateTime<Utc>,
-//     warm_state_offset: i64,
+//     warm_state_hour: i64,
 //     properties: PortugueseProperties,
 //     palettes: PaletteMap,
 //     output_types_defs: Vec<OutputTypeConfig>,
@@ -253,9 +253,9 @@ impl RISICOConfig {
         let vegetations_dict = RISICOConfig::read_vegetation(&config_defs.vegetation_file)
             .map_err(|error| format!("error reading {}, {error}", &config_defs.vegetation_file))?;
 
-        let warm_state_offset = config_defs.warm_state_offset;
+        let warm_state_hour = config_defs.warm_state_hour;
 
-        let (warm_state, warm_state_time) = RISICOConfig::read_warm_state(&config_defs.warm_state_path, date, &warm_state_offset)
+        let (warm_state, warm_state_time) = RISICOConfig::read_warm_state(&config_defs.warm_state_path, date, &warm_state_hour)
             .unwrap_or((
                 vec![RISICOWarmState::default(); n_cells],
                 date - Duration::try_days(1).expect("Should be a valid duration"),
@@ -278,7 +278,7 @@ impl RISICOConfig {
             warm_state_path: config_defs.warm_state_path.clone(),
             warm_state,
             warm_state_time,
-            warm_state_offset,
+            warm_state_hour,
             properties: props,
             palettes,
             // use_temperature_effect: config_defs.use_temperature_effect,
@@ -492,7 +492,7 @@ impl RISICOConfig {
     }
 
     pub fn should_write_warm_state(&self, time: &DateTime<Utc>) -> bool {
-        time.hour() as i64 == self.warm_state_offset as i64
+        time.hour() as i64 == self.warm_state_hour as i64
     }
 
     #[allow(non_snake_case)]
@@ -505,7 +505,7 @@ impl RISICOConfig {
     pub fn read_warm_state(
         base_warm_file: &str,
         run_date: DateTime<Utc>,
-        offset: &i64,
+        hour: &i64,
     ) -> Option<(Vec<RISICOWarmState>, DateTime<Utc>)> {
         // for the last n days before date, try to read the warm state
         // compose the filename as base_warm_file_YYYYmmDDHHMM
@@ -516,7 +516,7 @@ impl RISICOConfig {
         for days_before in 1..4 {
             current_date = run_date - Duration::try_days(days_before).expect("Should be valid");
             // add the offset to the current date
-            current_date += Duration::try_hours(*offset).expect("Should be valid");
+            current_date += Duration::try_hours(*hour).expect("Should be valid");
 
             let filename = format!("{}{}", base_warm_file, current_date.format("%Y%m%d%H%M"));
     
@@ -657,9 +657,9 @@ impl FWIConfig {
             panic!("All properties must have the same length");
         }
 
-        let warm_state_offset = config_defs.warm_state_offset;
+        let warm_state_hour = config_defs.warm_state_hour;
 
-        let (warm_state, warm_state_time) = FWIConfig::read_warm_state(&config_defs.warm_state_path, date, &warm_state_offset)
+        let (warm_state, warm_state_time) = FWIConfig::read_warm_state(&config_defs.warm_state_path, date, &warm_state_hour)
             .unwrap_or((
                 vec![FWIWarmState::default(); n_cells],
                 date - Duration::try_days(1).expect("Should be a valid duration"),
@@ -673,7 +673,7 @@ impl FWIConfig {
             warm_state_path: config_defs.warm_state_path.clone(),
             warm_state,
             warm_state_time,
-            warm_state_offset,
+            warm_state_hour,
             properties: props,
             palettes,
             output_time_resolution: config_defs.output_time_resolution,
@@ -751,7 +751,7 @@ impl FWIConfig {
     }
 
     pub fn should_write_warm_state(&self, time: &DateTime<Utc>) -> bool {
-        time.hour() as i64 == self.warm_state_offset as i64
+        time.hour() as i64 == self.warm_state_hour as i64
     }
 
     #[allow(non_snake_case)]
@@ -764,7 +764,7 @@ impl FWIConfig {
     pub fn read_warm_state(
         base_warm_file: &str,
         run_date: DateTime<Utc>,
-        offset: &i64,
+        hour: &i64,
     ) -> Option<(Vec<FWIWarmState>, DateTime<Utc>)> {
         // for the last n days before date, try to read the warm state
         // compose the filename as base_warm_file_YYYYmmDDHHMM
@@ -775,7 +775,7 @@ impl FWIConfig {
         for days_before in 1..4 {
             current_date = run_date - Duration::try_days(days_before).expect("Should be valid");
             // add the offset to the current date
-            current_date += Duration::try_hours(*offset).expect("Should be valid");
+            current_date += Duration::try_hours(*hour).expect("Should be valid");
 
             let filename = format!("{}{}", base_warm_file, current_date.format("%Y%m%d%H%M"));
 
@@ -911,8 +911,8 @@ impl Mark5Config {
         {
             panic!("All properties must have the same length");
         }
-        let warm_state_offset = config_defs.warm_state_offset;
-        let (warm_state, warm_state_time) = Mark5Config::read_warm_state(&config_defs.warm_state_path, date, &warm_state_offset)
+        let warm_state_hour = config_defs.warm_state_hour;
+        let (warm_state, warm_state_time) = Mark5Config::read_warm_state(&config_defs.warm_state_path, date, &warm_state_hour)
             .unwrap_or((
                 vec![Mark5WarmState::default(); n_cells],
                 date - Duration::try_days(1).expect("Should be a valid duration"),
@@ -923,7 +923,7 @@ impl Mark5Config {
             warm_state_path: config_defs.warm_state_path.clone(),
             warm_state,
             warm_state_time,
-            warm_state_offset,
+            warm_state_hour,
             properties: props,
             palettes,
             model_version: config_defs.model_version.clone(),
@@ -990,7 +990,7 @@ impl Mark5Config {
     }
 
     pub fn should_write_warm_state(&self, time: &DateTime<Utc>) -> bool {
-        time.hour() as i64 == self.warm_state_offset as i64
+        time.hour() as i64 == self.warm_state_hour as i64
     }
 
     #[allow(non_snake_case)]
@@ -1001,7 +1001,7 @@ impl Mark5Config {
     pub fn read_warm_state(
         base_warm_file: &str,
         run_date: DateTime<Utc>,
-        offset: &i64,
+        hour: &i64,
     ) -> Option<(Vec<Mark5WarmState>, DateTime<Utc>)> {
         // for the last n days before date, try to read the warm state
         // compose the filename as base_warm_file_YYYYmmDDHHMM
@@ -1010,7 +1010,7 @@ impl Mark5Config {
         for days_before in 1..4 {
             current_date = run_date - Duration::try_days(days_before).expect("Should be valid");
             // add the offset to the current date
-            current_date += Duration::try_hours(*offset).expect("Should be valid");
+            current_date += Duration::try_hours(*hour).expect("Should be valid");
             let filename = format!("{}{}", base_warm_file, current_date.format("%Y%m%d%H%M"));
             let file_handle = File::open(filename);
             if file_handle.is_err() {
@@ -1111,8 +1111,8 @@ impl KbdiConfig {
         {
             panic!("All properties must have the same length");
         }
-        let warm_state_offset = config_defs.warm_state_offset;
-        let (warm_state, warm_state_time) = KbdiConfig::read_warm_state(&config_defs.warm_state_path, date, &warm_state_offset)
+        let warm_state_hour = config_defs.warm_state_hour;
+        let (warm_state, warm_state_time) = KbdiConfig::read_warm_state(&config_defs.warm_state_path, date, &warm_state_hour)
             .unwrap_or((
                 vec![KBDIWarmState::default(); n_cells],
                 date - Duration::try_days(1).expect("Should be a valid duration"),
@@ -1124,7 +1124,7 @@ impl KbdiConfig {
             warm_state_path: config_defs.warm_state_path.clone(),
             warm_state,
             warm_state_time,
-            warm_state_offset,
+            warm_state_hour,
             properties: props,
             palettes,
             model_version: config_defs.model_version.clone(),
@@ -1192,7 +1192,7 @@ impl KbdiConfig {
     }
 
     pub fn should_write_warm_state(&self, time: &DateTime<Utc>) -> bool {
-        time.hour() as i64 == self.warm_state_offset as i64
+        time.hour() as i64 == self.warm_state_hour as i64
     }
 
     #[allow(non_snake_case)]
@@ -1203,7 +1203,7 @@ impl KbdiConfig {
     pub fn read_warm_state(
         base_warm_file: &str,
         run_date: DateTime<Utc>,
-        offset: &i64,
+        hour: &i64,
     ) -> Option<(Vec<KBDIWarmState>, DateTime<Utc>)> {
         // for the last n days before date, try to read the warm state
         // compose the filename as base_warm_file_YYYYmmDDHHMM
@@ -1212,7 +1212,7 @@ impl KbdiConfig {
         for days_before in 1..4 {
             current_date = run_date - Duration::try_days(days_before).expect("Should be valid");
             // add the offset to the current date
-            current_date += Duration::try_hours(*offset).expect("Should be valid");
+            current_date += Duration::try_hours(*hour).expect("Should be valid");
             let filename = format!("{}{}", base_warm_file, current_date.format("%Y%m%d%H%M"));
             let file_handle = File::open(filename);
             if file_handle.is_err() {
@@ -1488,8 +1488,8 @@ impl NesterovConfig {
         {
             panic!("All properties must have the same length");
         }
-        let warm_state_offset = config_defs.warm_state_offset;
-        let (warm_state, warm_state_time) = NesterovConfig::read_warm_state(&config_defs.warm_state_path, date, &warm_state_offset)
+        let warm_state_hour = config_defs.warm_state_hour;
+        let (warm_state, warm_state_time) = NesterovConfig::read_warm_state(&config_defs.warm_state_path, date, &warm_state_hour)
             .unwrap_or((
                 vec![NesterovWarmState::default(); n_cells],
                 date - Duration::try_days(1).expect("Should be a valid duration"),
@@ -1500,7 +1500,7 @@ impl NesterovConfig {
             warm_state_path: config_defs.warm_state_path.clone(),
             warm_state,
             warm_state_time,
-            warm_state_offset,
+            warm_state_hour,
             properties: props,
             palettes,
             output_types_defs: config_defs.output_types.clone(),
@@ -1559,7 +1559,7 @@ impl NesterovConfig {
     }
 
     pub fn should_write_warm_state(&self, time: &DateTime<Utc>) -> bool {
-        time.hour() as i64 == self.warm_state_offset as i64
+        time.hour() as i64 == self.warm_state_hour as i64
     }
 
     #[allow(non_snake_case)]
@@ -1570,7 +1570,7 @@ impl NesterovConfig {
     pub fn read_warm_state(
         base_warm_file: &str,
         run_date: DateTime<Utc>,
-        offset: &i64,
+        hour: &i64,
     ) -> Option<(Vec<NesterovWarmState>, DateTime<Utc>)> {
         // for the last n days before date, try to read the warm state
         // compose the filename as base_warm_file_YYYYmmDDHHMM
@@ -1579,7 +1579,7 @@ impl NesterovConfig {
         for days_before in 1..4 {
             current_date = run_date - Duration::try_days(days_before).expect("Should be valid");
             // add the offset to the current date
-            current_date += Duration::try_hours(*offset).expect("Should be valid");
+            current_date += Duration::try_hours(*hour).expect("Should be valid");
             let filename = format!("{}{}", base_warm_file, current_date.format("%Y%m%d%H%M"));
             let file_handle = File::open(filename);
             if file_handle.is_err() {
@@ -1749,8 +1749,8 @@ impl OrieuxConfig {
         {
             panic!("All properties must have the same length");
         }
-        let warm_state_offset = config_defs.warm_state_offset;
-        let (warm_state, warm_state_time) = OrieuxConfig::read_warm_state(&config_defs.warm_state_path, date, &warm_state_offset)
+        let warm_state_hour = config_defs.warm_state_hour;
+        let (warm_state, warm_state_time) = OrieuxConfig::read_warm_state(&config_defs.warm_state_path, date, &warm_state_hour)
             .unwrap_or((
                 vec![OrieuxWarmState::default(); n_cells],
                 date - Duration::try_days(1).expect("Should be a valid duration"),
@@ -1761,7 +1761,7 @@ impl OrieuxConfig {
             warm_state_path: config_defs.warm_state_path.clone(),
             warm_state,
             warm_state_time,
-            warm_state_offset,
+            warm_state_hour,
             properties: props,
             palettes,
             output_types_defs: config_defs.output_types.clone(),
@@ -1826,7 +1826,7 @@ impl OrieuxConfig {
     }
 
     pub fn should_write_warm_state(&self, time: &DateTime<Utc>) -> bool {
-        time.hour() as i64 == self.warm_state_offset as i64
+        time.hour() as i64 == self.warm_state_hour as i64
     }
 
     #[allow(non_snake_case)]
@@ -1837,7 +1837,7 @@ impl OrieuxConfig {
     pub fn read_warm_state(
         base_warm_file: &str,
         run_date: DateTime<Utc>,
-        offset: &i64,
+        hour: &i64,
     ) -> Option<(Vec<OrieuxWarmState>, DateTime<Utc>)> {
         // for the last n days before date, try to read the warm state
         // compose the filename as base_warm_file_YYYYmmDDHHMM
@@ -1846,7 +1846,7 @@ impl OrieuxConfig {
         for days_before in 1..4 {
             current_date = run_date - Duration::try_days(days_before).expect("Should be valid");
             // add the offset to the current date
-            current_date += Duration::try_hours(*offset).expect("Should be valid");
+            current_date += Duration::try_hours(*hour).expect("Should be valid");
             let filename = format!("{}{}", base_warm_file, current_date.format("%Y%m%d%H%M"));
             let file_handle = File::open(filename);
             if file_handle.is_err() {
@@ -1927,12 +1927,12 @@ impl OrieuxConfig {
 //        {
 //            panic!("All properties must have the same length");
 //        }
-//        let warm_state_offset = if config_defs.warm_state_offset > 0 {
-//            config_defs.warm_state_offset.clone()
+//        let warm_state_hour = if config_defs.warm_state_hour > 0 {
+//            config_defs.warm_state_hour.clone()
 //        } else {
 //            24
 //        };
-//        let (warm_state, warm_state_time) = PortugueseConfig::read_warm_state(&config_defs.warm_state_path, date, &warm_state_offset)
+//        let (warm_state, warm_state_time) = PortugueseConfig::read_warm_state(&config_defs.warm_state_path, date, &warm_state_hour)
 //            .unwrap_or((
 //                vec![PortugueseWarmState::default(); n_cells],
 //                date - Duration::try_days(1).expect("Should be a valid duration"),
@@ -1943,7 +1943,7 @@ impl OrieuxConfig {
 //            warm_state_path: config_defs.warm_state_path.clone(),
 //            warm_state,
 //            warm_state_time,
-//            warm_state_offset: warm_state_offset,
+//            warm_state_hour: warm_state_hour,
 //            properties: props,
 //            palettes,
 //            output_types_defs: config_defs.output_types.clone(),
@@ -2010,7 +2010,7 @@ impl OrieuxConfig {
 //            minutes / 60
 //        };
 //        let warm_state_time = self.run_date + Duration::try_hours(approximate_hours).expect("Should be valid");
-//        let should_write= (approximate_hours % self.warm_state_offset == 0) && (approximate_hours > 0);
+//        let should_write= (approximate_hours % self.warm_state_hour == 0) && (approximate_hours > 0);
 //        (should_write, warm_state_time)
 //    }
 //
