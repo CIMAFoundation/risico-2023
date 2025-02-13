@@ -65,6 +65,26 @@ pub fn check_write_warm_state(time: &DateTime<Utc>, warm_state_hour: i64) -> boo
     time.hour() as i64 == warm_state_hour
 }
 
+pub fn find_warm_state(base_warm_file: &str, run_date:DateTime<Utc>, hour: i64) -> (Option<File>, DateTime<Utc>) {
+    // for the last n days before date, try to read the warm state
+    // compose the filename as base_warm_file_YYYYmmDDHHMM
+    let mut current_date = run_date;
+    let mut file: Option<File> = None;
+    for days_before in 1..4 {
+        current_date = run_date - Duration::try_days(days_before).expect("Should be valid");
+        // add the time to the warm state time
+        current_date += Duration::try_hours(hour).expect("Should be valid");
+        let filename = format!("{}{}", base_warm_file, current_date.format("%Y%m%d%H%M"));
+        let file_handle = File::open(filename);
+        if file_handle.is_err() {
+            continue;
+        }
+        file = Some(file_handle.expect("Should unwrap"));
+        break;
+    }
+    (file, current_date)
+}
+
 
 pub struct RISICOConfig {
     run_date: DateTime<Utc>,
@@ -513,26 +533,7 @@ impl RISICOConfig {
         run_date: DateTime<Utc>,
         hour: &i64,
     ) -> Option<(Vec<RISICOWarmState>, DateTime<Utc>)> {
-        // for the last n days before date, try to read the warm state
-        // compose the filename as base_warm_file_YYYYmmDDHHMM
-        let mut file: Option<File> = None;
-    
-        let mut current_date = run_date;
-    
-        for days_before in 1..4 {
-            current_date = run_date - Duration::try_days(days_before).expect("Should be valid");
-            // add the offset to the current date
-            current_date += Duration::try_hours(*hour).expect("Should be valid");
-
-            let filename = format!("{}{}", base_warm_file, current_date.format("%Y%m%d%H%M"));
-    
-            let file_handle = File::open(filename);
-            if file_handle.is_err() {
-                continue;
-            }
-            file = Some(file_handle.expect("Should unwrap"));
-            break;
-        }
+        let (file, current_date) = find_warm_state(base_warm_file, run_date, *hour);
         let file = match file {
             Some(file) => file,
             None => {
@@ -543,11 +544,11 @@ impl RISICOConfig {
                 return None;
             }
         };
-    
         info!(
             "Loading warm state from {}",
             current_date.format("%Y-%m-%d %H:%M")
         );
+
         let mut warm_state: Vec<RISICOWarmState> = Vec::new();
     
         let reader = io::BufReader::new(file);
@@ -772,26 +773,7 @@ impl FWIConfig {
         run_date: DateTime<Utc>,
         hour: &i64,
     ) -> Option<(Vec<FWIWarmState>, DateTime<Utc>)> {
-        // for the last n days before date, try to read the warm state
-        // compose the filename as base_warm_file_YYYYmmDDHHMM
-        let mut file: Option<File> = None;
-
-        let mut current_date = run_date;
-
-        for days_before in 1..4 {
-            current_date = run_date - Duration::try_days(days_before).expect("Should be valid");
-            // add the offset to the current date
-            current_date += Duration::try_hours(*hour).expect("Should be valid");
-
-            let filename = format!("{}{}", base_warm_file, current_date.format("%Y%m%d%H%M"));
-
-            let file_handle = File::open(filename);
-            if file_handle.is_err() {
-                continue;
-            }
-            file = Some(file_handle.expect("Should unwrap"));
-            break;
-        }
+        let (file, current_date) = find_warm_state(base_warm_file, run_date, *hour);
         let file = match file {
             Some(file) => file,
             None => {
@@ -802,7 +784,6 @@ impl FWIConfig {
                 return None;
             }
         };
-
         info!(
             "Loading warm state from {}",
             current_date.format("%Y-%m-%d %H:%M")
@@ -1009,22 +990,7 @@ impl Mark5Config {
         run_date: DateTime<Utc>,
         hour: &i64,
     ) -> Option<(Vec<Mark5WarmState>, DateTime<Utc>)> {
-        // for the last n days before date, try to read the warm state
-        // compose the filename as base_warm_file_YYYYmmDDHHMM
-        let mut file: Option<File> = None;
-        let mut current_date = run_date;
-        for days_before in 1..4 {
-            current_date = run_date - Duration::try_days(days_before).expect("Should be valid");
-            // add the offset to the current date
-            current_date += Duration::try_hours(*hour).expect("Should be valid");
-            let filename = format!("{}{}", base_warm_file, current_date.format("%Y%m%d%H%M"));
-            let file_handle = File::open(filename);
-            if file_handle.is_err() {
-                continue;
-            }
-            file = Some(file_handle.expect("Should unwrap"));
-            break;
-        }
+        let (file, current_date) = find_warm_state(base_warm_file, run_date, *hour);
         let file = match file {
             Some(file) => file,
             None => {
@@ -1211,22 +1177,7 @@ impl KbdiConfig {
         run_date: DateTime<Utc>,
         hour: &i64,
     ) -> Option<(Vec<KBDIWarmState>, DateTime<Utc>)> {
-        // for the last n days before date, try to read the warm state
-        // compose the filename as base_warm_file_YYYYmmDDHHMM
-        let mut file: Option<File> = None;
-        let mut current_date = run_date;
-        for days_before in 1..4 {
-            current_date = run_date - Duration::try_days(days_before).expect("Should be valid");
-            // add the offset to the current date
-            current_date += Duration::try_hours(*hour).expect("Should be valid");
-            let filename = format!("{}{}", base_warm_file, current_date.format("%Y%m%d%H%M"));
-            let file_handle = File::open(filename);
-            if file_handle.is_err() {
-                continue;
-            }
-            file = Some(file_handle.expect("Should unwrap"));
-            break;
-        }
+        let (file, current_date) = find_warm_state(base_warm_file, run_date, *hour);
         let file = match file {
             Some(file) => file,
             None => {
@@ -1578,22 +1529,7 @@ impl NesterovConfig {
         run_date: DateTime<Utc>,
         hour: &i64,
     ) -> Option<(Vec<NesterovWarmState>, DateTime<Utc>)> {
-        // for the last n days before date, try to read the warm state
-        // compose the filename as base_warm_file_YYYYmmDDHHMM
-        let mut file: Option<File> = None;
-        let mut current_date = run_date;
-        for days_before in 1..4 {
-            current_date = run_date - Duration::try_days(days_before).expect("Should be valid");
-            // add the offset to the current date
-            current_date += Duration::try_hours(*hour).expect("Should be valid");
-            let filename = format!("{}{}", base_warm_file, current_date.format("%Y%m%d%H%M"));
-            let file_handle = File::open(filename);
-            if file_handle.is_err() {
-                continue;
-            }
-            file = Some(file_handle.expect("Should unwrap"));
-            break;
-        }
+        let (file, current_date) = find_warm_state(base_warm_file, run_date, *hour);
         let file = match file {
             Some(file) => file,
             None => {
@@ -1604,7 +1540,6 @@ impl NesterovConfig {
                 return None;
             }
         };
-
         info!(
             "Loading warm state from {}",
             current_date.format("%Y-%m-%d %H:%M")
@@ -1845,22 +1780,7 @@ impl OrieuxConfig {
         run_date: DateTime<Utc>,
         hour: &i64,
     ) -> Option<(Vec<OrieuxWarmState>, DateTime<Utc>)> {
-        // for the last n days before date, try to read the warm state
-        // compose the filename as base_warm_file_YYYYmmDDHHMM
-        let mut file: Option<File> = None;
-        let mut current_date = run_date;
-        for days_before in 1..4 {
-            current_date = run_date - Duration::try_days(days_before).expect("Should be valid");
-            // add the offset to the current date
-            current_date += Duration::try_hours(*hour).expect("Should be valid");
-            let filename = format!("{}{}", base_warm_file, current_date.format("%Y%m%d%H%M"));
-            let file_handle = File::open(filename);
-            if file_handle.is_err() {
-                continue;
-            }
-            file = Some(file_handle.expect("Should unwrap"));
-            break;
-        }
+        let (file, current_date) = find_warm_state(base_warm_file, run_date, *hour);
         let file = match file {
             Some(file) => file,
             None => {
