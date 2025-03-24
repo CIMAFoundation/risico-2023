@@ -15,43 +15,55 @@ use rayon::prelude::*;
 use risico::{
     constants::NODATAVAL,
     models::output::Output,
-    modules::risico::{
-        config::RISICOModelConfig,
-        models::{RISICOCellPropertiesContainer, RISICOProperties, RISICOVegetation, RISICOState, RISICOWarmState},
+    modules::angstrom::models::{
+        AngstromCellPropertiesContainer, AngstromProperties, AngstromState,
     },
+    modules::fosberg::models::{FosbergCellPropertiesContainer, FosbergProperties, FosbergState},
     modules::fwi::{
         config::FWIModelConfig,
         models::{FWICellPropertiesContainer, FWIProperties, FWIState, FWIWarmState},
+    },
+    //    modules::portuguese::models::{PortugueseCellPropertiesContainer, PortugueseProperties, PortugueseState, PortugueseWarmState},
+    modules::hdw::models::{HdwCellPropertiesContainer, HdwProperties, HdwState},
+    modules::kbdi::{
+        config::KBDIModelConfig,
+        models::{KBDICellPropertiesContainer, KBDIProperties, KBDIState, KBDIWarmState},
     },
     modules::mark5::{
         config::Mark5ModelConfig,
         models::{Mark5CellPropertiesContainer, Mark5Properties, Mark5State, Mark5WarmState},
     },
-    modules::kbdi::{
-        config::KBDIModelConfig,
-        models::{KBDICellPropertiesContainer, KBDIProperties, KBDIState, KBDIWarmState},
+    modules::nesterov::models::{
+        NesterovCellPropertiesContainer, NesterovProperties, NesterovState, NesterovWarmState,
     },
-    modules::angstrom::models::{AngstromCellPropertiesContainer, AngstromProperties, AngstromState},
-    modules::fosberg::models::{FosbergCellPropertiesContainer, FosbergProperties, FosbergState},
-    modules::nesterov::models::{NesterovCellPropertiesContainer, NesterovProperties, NesterovState, NesterovWarmState},
-    modules::sharples::models::{SharplesCellPropertiesContainer, SharplesProperties, SharplesState},
-    modules::orieux::models::{OrieuxCellPropertiesContainer, OrieuxProperties, OrieuxState, OrieuxWarmState},
-//    modules::portuguese::models::{PortugueseCellPropertiesContainer, PortugueseProperties, PortugueseState, PortugueseWarmState},
-    modules::hdw::models::{HdwCellPropertiesContainer, HdwProperties, HdwState},
+    modules::orieux::models::{
+        OrieuxCellPropertiesContainer, OrieuxProperties, OrieuxState, OrieuxWarmState,
+    },
+    modules::risico::{
+        config::RISICOModelConfig,
+        models::{
+            RISICOCellPropertiesContainer, RISICOProperties, RISICOState, RISICOVegetation,
+            RISICOWarmState,
+        },
+    },
+    modules::sharples::models::{
+        SharplesCellPropertiesContainer, SharplesProperties, SharplesState,
+    },
 };
 
-use super::builder::{OutputTypeConfig,
-    RISICOConfigBuilder,
-    FWIConfigBuilder,
-    Mark5ConfigBuilder,
-    KbdiConfigBuilder,
+use super::builder::{
     AngstromConfigBuilder,
+    FWIConfigBuilder,
     FosbergConfigBuilder,
-    NesterovConfigBuilder,
-    SharplesConfigBuilder,
-    OrieuxConfigBuilder,
-//    PortugueseConfigBuilder,
+    //    PortugueseConfigBuilder,
     HdwConfigBuilder,
+    KbdiConfigBuilder,
+    Mark5ConfigBuilder,
+    NesterovConfigBuilder,
+    OrieuxConfigBuilder,
+    OutputTypeConfig,
+    RISICOConfigBuilder,
+    SharplesConfigBuilder,
 };
 
 use crate::common::helpers::RISICOError;
@@ -60,12 +72,15 @@ use crate::common::io::models::{output::OutputType, palette::Palette};
 pub type PaletteMap = HashMap<String, Box<Palette>>;
 // pub type ConfigMap = HashMap<String, Vec<String>>;
 
-
 pub fn check_write_warm_state(time: &DateTime<Utc>, warm_state_hour: i64) -> bool {
     time.hour() as i64 == warm_state_hour
 }
 
-pub fn find_warm_state(base_warm_file: &str, run_date:DateTime<Utc>, hour: i64) -> (Option<File>, DateTime<Utc>) {
+pub fn find_warm_state(
+    base_warm_file: &str,
+    run_date: DateTime<Utc>,
+    hour: i64,
+) -> (Option<File>, DateTime<Utc>) {
     // for the last n days before date, try to read the warm state
     // compose the filename as base_warm_file_YYYYmmDDHHMM
     let mut current_date = run_date;
@@ -84,7 +99,6 @@ pub fn find_warm_state(base_warm_file: &str, run_date:DateTime<Utc>, hour: i64) 
     }
     (file, current_date)
 }
-
 
 pub struct RISICOConfig {
     run_date: DateTime<Utc>,
@@ -126,7 +140,6 @@ pub struct Mark5Config {
     model_version: String,
 }
 
-
 pub struct KbdiConfig {
     run_date: DateTime<Utc>,
     warm_state_path: String,
@@ -146,7 +159,6 @@ pub struct AngstromConfig {
     output_time_resolution: u32,
     output_types_defs: Vec<OutputTypeConfig>,
 }
-
 
 pub struct FosbergConfig {
     run_date: DateTime<Utc>,
@@ -174,7 +186,6 @@ pub struct SharplesConfig {
     output_time_resolution: u32,
     output_types_defs: Vec<OutputTypeConfig>,
 }
-
 
 pub struct OrieuxConfig {
     run_date: DateTime<Utc>,
@@ -240,7 +251,6 @@ impl OutputWriter {
     }
 }
 
-
 pub fn load_palettes(palettes_defs: &HashMap<String, String>) -> HashMap<String, Box<Palette>> {
     let mut palettes: HashMap<String, Box<Palette>> = HashMap::new();
 
@@ -252,9 +262,7 @@ pub fn load_palettes(palettes_defs: &HashMap<String, String>) -> HashMap<String,
     palettes
 }
 
-
 impl RISICOConfig {
-
     pub fn new(
         config_defs: &RISICOConfigBuilder,
         date: DateTime<Utc>,
@@ -281,11 +289,12 @@ impl RISICOConfig {
 
         let warm_state_hour = config_defs.warm_state_hour;
 
-        let (warm_state, warm_state_time) = RISICOConfig::read_warm_state(&config_defs.warm_state_path, date, &warm_state_hour)
-            .unwrap_or((
-                vec![RISICOWarmState::default(); n_cells],
-                date - Duration::try_days(1).expect("Should be a valid duration"),
-            ));
+        let (warm_state, warm_state_time) =
+            RISICOConfig::read_warm_state(&config_defs.warm_state_path, date, &warm_state_hour)
+                .unwrap_or((
+                    vec![RISICOWarmState::default(); n_cells],
+                    date - Duration::try_days(1).expect("Should be a valid duration"),
+                ));
 
         let ppf_file = &config_defs.ppf_file;
         let ppf = match ppf_file {
@@ -296,7 +305,8 @@ impl RISICOConfig {
         let ppf_summer = ppf.iter().map(|(s, _)| *s).collect();
         let ppf_winter = ppf.iter().map(|(_, w)| *w).collect();
 
-        let props = RISICOProperties::new(props_container, vegetations_dict, ppf_summer, ppf_winter);
+        let props =
+            RISICOProperties::new(props_container, vegetations_dict, ppf_summer, ppf_winter);
 
         let config = RISICOConfig {
             run_date: date,
@@ -320,59 +330,66 @@ impl RISICOConfig {
     /// Read the cells from a file.
     /// :param file_path: The path to the file.
     /// :return: A list of cells.
-    pub fn properties_from_file(file_path: &str) -> Result<RISICOCellPropertiesContainer, RISICOError> {
+    pub fn properties_from_file(
+        file_path: &str,
+    ) -> Result<RISICOCellPropertiesContainer, RISICOError> {
         let file = fs::File::open(file_path).map_err(|err| format!("can't open file: {err}."))?;
-    
+
         let mut lons: Vec<f32> = Vec::new();
         let mut lats: Vec<f32> = Vec::new();
         let mut slopes: Vec<f32> = Vec::new();
         let mut aspects: Vec<f32> = Vec::new();
         let mut vegetations: Vec<String> = Vec::new();
-    
+
         let reader = BufReader::new(file);
-    
-        for line in reader.lines() {
+
+        for (index, line) in reader.lines().enumerate() {
             let line = line.map_err(|err| format!("can't read from file: {err}."))?;
             if line.starts_with("#") {
                 // skip header
                 continue;
             }
-    
-            let line_parts: Vec<&str> = line.trim().split(' ').collect();
-    
+
+            let line_parts: Vec<&str> = line.trim().split(char::is_whitespace).collect();
+
             if line_parts.len() < 5 {
-                let error_message = format!("Invalid line in file: {}", line);
+                let error_message = format!(
+                    "Invalid line in file {file_path}: 
+                expected 5 elements, found {} in line #{index}:
+                {line}",
+                    line_parts.len()
+                );
                 return Err(error_message.into());
             }
-    
+
             //  [TODO] refactor this for using error handling
-            let lon = line_parts[0]
-                .parse::<f32>()
-                .unwrap_or_else(|_| panic!("Invalid line in file: {}", line));
-    
-            let lat = line_parts[1]
-                .parse::<f32>()
-                .unwrap_or_else(|_| panic!("Invalid line in file: {}", line));
-    
-            let slope = line_parts[2]
-                .parse::<f32>()
-                .unwrap_or_else(|_| panic!("Invalid line in file: {}", line));
-            let aspect = line_parts[3]
-                .parse::<f32>()
-                .unwrap_or_else(|_| panic!("Invalid line in file: {}", line));
-    
+            let lon = line_parts[0].parse::<f32>().map_err(|_| {
+                format!("Invalid `lon` value in file {file_path} at line #{index}: '{line}'")
+            })?;
+
+            let lat = line_parts[1].parse::<f32>().map_err(|_| {
+                format!("Invalid `lat` value in file {file_path} at line #{index}: '{line}'")
+            })?;
+
+            let slope = line_parts[2].parse::<f32>().map_err(|_| {
+                format!("Invalid `slope` value in file {file_path} at line #{index}: '{line}'")
+            })?;
+            let aspect = line_parts[3].parse::<f32>().map_err(|_| {
+                format!("Invalid `aspect` value in file {file_path} at line #{index}: '{line}'")
+            })?;
+
             let vegetation = line_parts[4].to_string();
-    
+
             let slope = slope * PI / 180.0;
             let aspect = aspect * PI / 180.0;
-    
+
             lons.push(lon);
             lats.push(lat);
             slopes.push(slope);
             aspects.push(aspect);
             vegetations.push(vegetation);
         }
-    
+
         let props = RISICOCellPropertiesContainer {
             lats,
             lons,
@@ -388,15 +405,16 @@ impl RISICOConfig {
     /// :return: A list of cells.
     pub fn read_vegetation(
         file_path: &str,
-    ) -> Result<HashMap<String, Arc<RISICOVegetation>>, std::io::Error> {
-        let file = fs::File::open(file_path)?;
+    ) -> Result<HashMap<String, Arc<RISICOVegetation>>, RISICOError> {
+        let file = fs::File::open(file_path).map_err(|err| format!("Can't open file: {err}."))?;
         let mut vegetations: HashMap<String, Arc<RISICOVegetation>> = HashMap::new();
 
         let reader = BufReader::new(file);
 
-        for (i, line) in reader.lines().enumerate() {
-            let line = line?;
-            if i == 0 && line.starts_with("#") || line.is_empty() {
+        for (index, line) in reader.lines().enumerate() {
+            let line =
+                line.map_err(|err| format!("Error reading {file_path} at line #{index}: {err}"))?;
+            if index == 0 && line.starts_with("#") || line.is_empty() {
                 // skip header and empty lines
                 continue;
             }
@@ -404,40 +422,38 @@ impl RISICOConfig {
 
             let n_elements = line_elements.len();
             if n_elements < 9 {
-                let error_message = format!("Invalid line in file: {}", line);
-                let error = std::io::Error::new(std::io::ErrorKind::InvalidData, error_message);
-                return Err(error);
+                return Err(format!("Invalid line in file {file_path}: {line}").into());
             }
 
             //  [TODO] refactor this for using error handling
             let id = line_elements[0].to_string();
-            let d0 = line_elements[1]
-                .parse::<f32>()
-                .unwrap_or_else(|_| panic!("Invalid line in file: {}", line));
-            let d1 = line_elements[2]
-                .parse::<f32>()
-                .unwrap_or_else(|_| panic!("Invalid line in file: {}", line));
-            let hhv = line_elements[3]
-                .parse::<f32>()
-                .unwrap_or_else(|_| panic!("Invalid line in file: {}", line));
-            let umid = line_elements[4]
-                .parse::<f32>()
-                .unwrap_or_else(|_| panic!("Invalid line in file: {}", line));
-            let v0 = line_elements[5]
-                .parse::<f32>()
-                .unwrap_or_else(|_| panic!("Invalid line in file: {}", line));
+            let d0 = line_elements[1].parse::<f32>().map_err(|_| {
+                format!("Invalid `d0` value in file {file_path} at line #{index}: '{line}'")
+            })?;
+            let d1 = line_elements[2].parse::<f32>().map_err(|_| {
+                format!("Invalid `d1` value in file {file_path} at line #{index}: '{line}'")
+            })?;
+            let hhv = line_elements[3].parse::<f32>().map_err(|_| {
+                format!("Invalid `hhv` value in file {file_path} at line #{index}: '{line}'")
+            })?;
+            let umid = line_elements[4].parse::<f32>().map_err(|_| {
+                format!("Invalid `umid` value in file {file_path} at line #{index}: '{line}'")
+            })?;
+            let v0 = line_elements[5].parse::<f32>().map_err(|_| {
+                format!("Invalid `v0` value in file {file_path} at line #{index}: '{line}'")
+            })?;
             #[allow(non_snake_case)]
-            let T0 = line_elements[6]
-                .parse::<f32>()
-                .unwrap_or_else(|_| panic!("Invalid line in file: {}", line));
-            let sat = line_elements[7]
-                .parse::<f32>()
-                .unwrap_or_else(|_| panic!("Invalid line in file: {}", line));
+            let T0 = line_elements[6].parse::<f32>().map_err(|_| {
+                format!("Invalid `T0` value in file {file_path} at line #{index}: '{line}'")
+            })?;
+            let sat = line_elements[7].parse::<f32>().map_err(|_| {
+                format!("Invalid `sat` value in file {file_path} at line #{index}: '{line}'")
+            })?;
 
             let use_ndvi = match n_elements {
-                10.. => line_elements[8]
-                    .parse::<bool>()
-                    .unwrap_or_else(|_| panic!("Invalid line in file: {}", line)),
+                10.. => line_elements[8].parse::<bool>().map_err(|_| {
+                    format!("Invalid `lon` value in file {file_path} at line #{index}: '{line}'")
+                })?,
                 _ => false,
             };
             let name = line_elements[n_elements - 1].to_string();
@@ -481,13 +497,13 @@ impl RISICOConfig {
                 }
             };
             let components: Vec<&str> = line.split_whitespace().collect();
-            let ppf_summer = components[0]
-                .parse::<f32>()
-                .map_err(|err| format!("Could not parse value from PPF file {}: {}", ppf_file, err))?;
+            let ppf_summer = components[0].parse::<f32>().map_err(|err| {
+                format!("Could not parse value from PPF file {}: {}", ppf_file, err)
+            })?;
 
-            let ppf_winter = components[1]
-                .parse::<f32>()
-                .map_err(|err| format!("Could not parse value from PPF file {}: {}", ppf_file, err))?;
+            let ppf_winter = components[1].parse::<f32>().map_err(|err| {
+                format!("Could not parse value from PPF file {}: {}", ppf_file, err)
+            })?;
             ppf.push((ppf_summer, ppf_winter));
         }
         Ok(ppf)
@@ -550,16 +566,16 @@ impl RISICOConfig {
         );
 
         let mut warm_state: Vec<RISICOWarmState> = Vec::new();
-    
+
         let reader = io::BufReader::new(file);
-    
+
         for line in reader.lines() {
             if let Err(line) = line {
                 warn!("Error reading warm state file: {}", line);
                 return None;
             }
             let line = line.expect("Should unwrap line");
-    
+
             let components: Vec<&str> = line.split_whitespace().collect();
             let dffm = components[0]
                 .parse::<f32>()
@@ -582,10 +598,10 @@ impl RISICOConfig {
             let NDVI_TIME = components[6]
                 .parse::<f32>()
                 .unwrap_or_else(|_| panic!("Could not parse NDVI_TIME from {}", line));
-    
+
             let mut NDWI = NODATAVAL;
             let mut NDWI_TIME = 0.0;
-    
+
             if components.len() > 7 {
                 NDWI = components[7]
                     .parse::<f32>()
@@ -594,7 +610,7 @@ impl RISICOConfig {
                     .parse::<f32>()
                     .unwrap_or_else(|_| panic!("Could not parse NDWI_TIME from {}", line));
             }
-    
+
             warm_state.push(RISICOWarmState {
                 dffm,
                 snow_cover,
@@ -607,12 +623,16 @@ impl RISICOConfig {
                 NDWI_TIME,
             });
         }
-    
+
         Some((warm_state, current_date))
     }
 
     #[allow(non_snake_case)]
-    pub fn write_warm_state(&self, state: &RISICOState, warm_state_time: DateTime<Utc>) -> Result<(), RISICOError> {
+    pub fn write_warm_state(
+        &self,
+        state: &RISICOState,
+        warm_state_time: DateTime<Utc>,
+    ) -> Result<(), RISICOError> {
         let date_string = warm_state_time.format("%Y%m%d%H%M").to_string();
         let warm_state_name = format!("{}{}", self.warm_state_path, date_string);
         let mut warm_state_file = File::create(&warm_state_name)
@@ -643,9 +663,7 @@ impl RISICOConfig {
     }
 }
 
-
 impl FWIConfig {
-
     pub fn new(
         config_defs: &FWIConfigBuilder,
         date: DateTime<Utc>,
@@ -659,18 +677,18 @@ impl FWIConfig {
             .map_err(|error| format!("error reading {}, {error}", cells_file))?;
 
         let n_cells = props_container.lons.len();
-        if n_cells != props_container.lats.len()
-        {
+        if n_cells != props_container.lats.len() {
             panic!("All properties must have the same length");
         }
 
         let warm_state_hour = config_defs.warm_state_hour;
 
-        let (warm_state, warm_state_time) = FWIConfig::read_warm_state(&config_defs.warm_state_path, date, &warm_state_hour)
-            .unwrap_or((
-                vec![FWIWarmState::default(); n_cells],
-                date - Duration::try_days(1).expect("Should be a valid duration"),
-            ));
+        let (warm_state, warm_state_time) =
+            FWIConfig::read_warm_state(&config_defs.warm_state_path, date, &warm_state_hour)
+                .unwrap_or((
+                    vec![FWIWarmState::default(); n_cells],
+                    date - Duration::try_days(1).expect("Should be a valid duration"),
+                ));
 
         let props = FWIProperties::new(props_container);
 
@@ -691,45 +709,44 @@ impl FWIConfig {
         Ok(config)
     }
 
-    pub fn properties_from_file(file_path: &str) -> Result<FWICellPropertiesContainer, RISICOError> {
+    pub fn properties_from_file(
+        file_path: &str,
+    ) -> Result<FWICellPropertiesContainer, RISICOError> {
         let file = fs::File::open(file_path).map_err(|err| format!("can't open file: {err}."))?;
-    
+
         let mut lons: Vec<f32> = Vec::new();
         let mut lats: Vec<f32> = Vec::new();
-    
+
         let reader = BufReader::new(file);
-    
-        for line in reader.lines() {
+
+        for (index, line) in reader.lines().enumerate() {
             let line = line.map_err(|err| format!("can't read from file: {err}."))?;
             if line.starts_with("#") {
                 // skip header
                 continue;
             }
-    
-            let line_parts: Vec<&str> = line.trim().split(' ').collect();
-    
+
+            let line_parts: Vec<&str> = line.trim().split(char::is_whitespace).collect();
+
             if line_parts.len() < 2 {
                 let error_message = format!("Invalid line in file: {}", line);
                 return Err(error_message.into());
             }
-    
+
             //  [TODO] refactor this for using error handling
-            let lon = line_parts[0]
-                .parse::<f32>()
-                .unwrap_or_else(|_| panic!("Invalid line in file: {}", line));
-    
-            let lat = line_parts[1]
-                .parse::<f32>()
-                .unwrap_or_else(|_| panic!("Invalid line in file: {}", line));
-    
+            let lon = line_parts[0].parse::<f32>().map_err(|_| {
+                format!("Invalid `lon` value in file {file_path} at line #{index}: '{line}'")
+            })?;
+
+            let lat = line_parts[1].parse::<f32>().map_err(|_| {
+                format!("Invalid `lat` value in file {file_path} at line #{index}: '{line}'")
+            })?;
+
             lons.push(lon);
             lats.push(lat);
         }
-    
-        let props = FWICellPropertiesContainer {
-            lats,
-            lons,
-        };
+
+        let props = FWICellPropertiesContainer { lats, lons };
         Ok(props)
     }
 
@@ -804,7 +821,7 @@ impl FWIConfig {
                 .split(",")
                 .map(|date| {
                     NaiveDateTime::parse_from_str(date, "%Y%m%d%H%M")
-                    .map(|naive| DateTime::from_naive_utc_and_offset(naive, Utc))
+                        .map(|naive| DateTime::from_naive_utc_and_offset(naive, Utc))
                         .unwrap_or_else(|_| panic!("Could not parse date from {}", date))
                 })
                 .collect();
@@ -821,7 +838,7 @@ impl FWIConfig {
                     dmc.parse::<f32>()
                         .unwrap_or_else(|_| panic!("Could not parse DMC value from {}", dmc))
                 })
-            .collect();
+                .collect();
             let dc = components[3]
                 .split(",")
                 .map(|dc| {
@@ -842,7 +859,7 @@ impl FWIConfig {
                 ffmc,
                 dmc,
                 dc,
-                rain
+                rain,
             });
         }
 
@@ -850,7 +867,11 @@ impl FWIConfig {
     }
 
     #[allow(non_snake_case)]
-    pub fn write_warm_state(&self, state: &FWIState, warm_state_time: DateTime<Utc>) -> Result<(), RISICOError> {
+    pub fn write_warm_state(
+        &self,
+        state: &FWIState,
+        warm_state_time: DateTime<Utc>,
+    ) -> Result<(), RISICOError> {
         let date_string = warm_state_time.format("%Y%m%d%H%M").to_string();
         let warm_state_name = format!("{}{}", self.warm_state_path, date_string);
         let mut warm_state_file = File::create(&warm_state_name)
@@ -867,11 +888,27 @@ impl FWIConfig {
 
             let line = format!(
                 "{}\t{}\t{}\t{}\t{}",
-                dates.iter().map(|value| format!("{}", value.format("%Y%m%d%H%M"))).collect::<Vec<String>>().join(","),
-                ffmc.iter().map(|value| format!("{}", value)).collect::<Vec<String>>().join(","),
-                dmc.iter().map(|value| format!("{}", value)).collect::<Vec<String>>().join(","),
-                dc.iter().map(|value| format!("{}", value)).collect::<Vec<String>>().join(","),
-                rain.iter().map(|value| format!("{}", value)).collect::<Vec<String>>().join(",")
+                dates
+                    .iter()
+                    .map(|value| format!("{}", value.format("%Y%m%d%H%M")))
+                    .collect::<Vec<String>>()
+                    .join(","),
+                ffmc.iter()
+                    .map(|value| format!("{}", value))
+                    .collect::<Vec<String>>()
+                    .join(","),
+                dmc.iter()
+                    .map(|value| format!("{}", value))
+                    .collect::<Vec<String>>()
+                    .join(","),
+                dc.iter()
+                    .map(|value| format!("{}", value))
+                    .collect::<Vec<String>>()
+                    .join(","),
+                rain.iter()
+                    .map(|value| format!("{}", value))
+                    .collect::<Vec<String>>()
+                    .join(",")
             );
             writeln!(warm_state_writer, "{}", line)
                 .map_err(|error| format!("error writing to {}, {}", &warm_state_name, error))?;
@@ -880,9 +917,7 @@ impl FWIConfig {
     }
 }
 
-
 impl Mark5Config {
-
     // New Mark5 configuration
     pub fn new(
         config_defs: &Mark5ConfigBuilder,
@@ -894,16 +929,16 @@ impl Mark5Config {
         let props_container = Mark5Config::properties_from_file(cells_file)
             .map_err(|error| format!("error reading {}, {error}", cells_file))?;
         let n_cells = props_container.lons.len();
-        if n_cells != props_container.lats.len()
-        {
-            panic!("All properties must have the same length");
+        if n_cells != props_container.lats.len() {
+            return Err(format!("All properties must have the same length").into());
         }
         let warm_state_hour = config_defs.warm_state_hour;
-        let (warm_state, warm_state_time) = Mark5Config::read_warm_state(&config_defs.warm_state_path, date, &warm_state_hour)
-            .unwrap_or((
-                vec![Mark5WarmState::default(); n_cells],
-                date - Duration::try_days(1).expect("Should be a valid duration"),
-            ));
+        let (warm_state, warm_state_time) =
+            Mark5Config::read_warm_state(&config_defs.warm_state_path, date, &warm_state_hour)
+                .unwrap_or((
+                    vec![Mark5WarmState::default(); n_cells],
+                    date - Duration::try_days(1).expect("Should be a valid duration"),
+                ));
         let props = Mark5Properties::new(props_container);
         let config = Mark5Config {
             run_date: date,
@@ -920,32 +955,40 @@ impl Mark5Config {
     }
 
     // Read the cells from a file
-    pub fn properties_from_file(file_path: &str) -> Result<Mark5CellPropertiesContainer, RISICOError> {
-        let file = fs::File::open(file_path).map_err(|err| format!("can't open file: {err}."))?;
+    pub fn properties_from_file(
+        file_path: &str,
+    ) -> Result<Mark5CellPropertiesContainer, RISICOError> {
+        let file = fs::File::open(file_path).map_err(|err| format!("Can't open file: {err}."))?;
         let mut lons: Vec<f32> = Vec::new();
         let mut lats: Vec<f32> = Vec::new();
         let mut mean_rains: Vec<f32> = Vec::new();
         let reader = BufReader::new(file);
-        for line in reader.lines() {
-            let line = line.map_err(|err| format!("can't read from file: {err}."))?;
+        for (index, line) in reader.lines().enumerate() {
+            let line = line.map_err(|err| format!("Can't read from file: {err}."))?;
             if line.starts_with("#") {
                 // skip header
                 continue;
             }
-            let line_parts: Vec<&str> = line.trim().split(' ').collect();
+            let line_parts: Vec<&str> = line.trim().split(char::is_whitespace).collect();
             if line_parts.len() < 3 {
-                let error_message = format!("Invalid line in file: {}", line);
+                let error_message = format!(
+                    "
+                    Invalid line in file {file_path} at #{index}:
+                    Expected 3 elements, found {} in line: 
+                {line}",
+                    line_parts.len()
+                );
                 return Err(error_message.into());
             }
-            let lon = line_parts[0]
-                .parse::<f32>()
-                .unwrap_or_else(|_| panic!("Invalid line in file: {}", line));
-            let lat = line_parts[1]
-                .parse::<f32>()
-                .unwrap_or_else(|_| panic!("Invalid line in file: {}", line));
-            let mean_rain = line_parts[2]
-                .parse::<f32>()
-                .unwrap_or_else(|_| panic!("Invalid line in file: {}", line));
+            let lon = line_parts[0].parse::<f32>().map_err(|_| {
+                format!("Invalid `lon` value in file {file_path} at line #{index}: '{line}'")
+            })?;
+            let lat = line_parts[1].parse::<f32>().map_err(|_| {
+                format!("Invalid `lat` value in file {file_path} at line #{index}: '{line}'")
+            })?;
+            let mean_rain = line_parts[2].parse::<f32>().map_err(|_| {
+                format!("Invalid `mean_rain` value in file {file_path} at line #{index}: '{line}'")
+            })?;
             lons.push(lon);
             lats.push(lat);
             mean_rains.push(mean_rain);
@@ -1018,7 +1061,7 @@ impl Mark5Config {
                 .split(",")
                 .map(|date| {
                     NaiveDateTime::parse_from_str(date, "%Y%m%d%H%M")
-                    .map(|naive| DateTime::from_naive_utc_and_offset(naive, Utc))
+                        .map(|naive| DateTime::from_naive_utc_and_offset(naive, Utc))
                         .unwrap_or_else(|_| panic!("Could not parse date from {}", date))
                 })
                 .collect();
@@ -1035,14 +1078,18 @@ impl Mark5Config {
             warm_state.push(Mark5WarmState {
                 dates,
                 daily_rain,
-                smd
+                smd,
             });
         }
         Some((warm_state, current_date))
     }
 
     #[allow(non_snake_case)]
-    pub fn write_warm_state(&self, state: &Mark5State, warm_state_time: DateTime<Utc>) -> Result<(), RISICOError> {
+    pub fn write_warm_state(
+        &self,
+        state: &Mark5State,
+        warm_state_time: DateTime<Utc>,
+    ) -> Result<(), RISICOError> {
         let date_string = warm_state_time.format("%Y%m%d%H%M").to_string();
         let warm_state_name = format!("{}{}", self.warm_state_path, date_string);
         let mut warm_state_file = File::create(&warm_state_name)
@@ -1054,8 +1101,16 @@ impl Mark5Config {
             let smd = state.smd;
             let line = format!(
                 "{}\t{}\t{}",
-                dates.iter().map(|value| format!("{}", value.format("%Y%m%d%H%M"))).collect::<Vec<String>>().join(","),
-                daily_rain.iter().map(|value| format!("{}", value)).collect::<Vec<String>>().join(","),
+                dates
+                    .iter()
+                    .map(|value| format!("{}", value.format("%Y%m%d%H%M")))
+                    .collect::<Vec<String>>()
+                    .join(","),
+                daily_rain
+                    .iter()
+                    .map(|value| format!("{}", value))
+                    .collect::<Vec<String>>()
+                    .join(","),
                 smd
             );
             writeln!(warm_state_writer, "{}", line)
@@ -1065,9 +1120,7 @@ impl Mark5Config {
     }
 }
 
-
 impl KbdiConfig {
-
     // Keetch-Byram Drought Index configuration
     pub fn new(
         config_defs: &KbdiConfigBuilder,
@@ -1079,16 +1132,16 @@ impl KbdiConfig {
         let props_container = KbdiConfig::properties_from_file(cells_file)
             .map_err(|error| format!("error reading {}, {error}", cells_file))?;
         let n_cells = props_container.lons.len();
-        if n_cells != props_container.lats.len()
-        {
-            panic!("All properties must have the same length");
+        if n_cells != props_container.lats.len() {
+            return Err(format!("All properties must have the same length").into());
         }
         let warm_state_hour = config_defs.warm_state_hour;
-        let (warm_state, warm_state_time) = KbdiConfig::read_warm_state(&config_defs.warm_state_path, date, &warm_state_hour)
-            .unwrap_or((
-                vec![KBDIWarmState::default(); n_cells],
-                date - Duration::try_days(1).expect("Should be a valid duration"),
-            ));
+        let (warm_state, warm_state_time) =
+            KbdiConfig::read_warm_state(&config_defs.warm_state_path, date, &warm_state_hour)
+                .unwrap_or((
+                    vec![KBDIWarmState::default(); n_cells],
+                    date - Duration::try_days(1).expect("Should be a valid duration"),
+                ));
         let props = KBDIProperties::new(props_container);
         let config = KbdiConfig {
             run_date: date,
@@ -1106,37 +1159,39 @@ impl KbdiConfig {
     }
 
     // Reads the properties from a file
-    pub fn properties_from_file(file_path: &str) -> Result<KBDICellPropertiesContainer, RISICOError> {
+    pub fn properties_from_file(
+        file_path: &str,
+    ) -> Result<KBDICellPropertiesContainer, RISICOError> {
         let file = fs::File::open(file_path).map_err(|err| format!("can't open file: {err}."))?;
         let mut lons: Vec<f32> = Vec::new();
         let mut lats: Vec<f32> = Vec::new();
         let mut mean_rains: Vec<f32> = Vec::new();
         let reader = BufReader::new(file);
-        for line in reader.lines() {
+        for (index, line) in reader.lines().enumerate() {
             let line = line.map_err(|err| format!("can't read from file: {err}."))?;
             if line.starts_with("#") {
                 // skip header
                 continue;
             }
-            let line_parts: Vec<&str> = line.trim().split(' ').collect();
+            let line_parts: Vec<&str> = line.trim().split(char::is_whitespace).collect();
             if line_parts.len() < 3 {
                 let error_message = format!("Invalid line in file: {}", line);
                 return Err(error_message.into());
             }
-            let lon = line_parts[0]
-                .parse::<f32>()
-                .unwrap_or_else(|_| panic!("Invalid line in file: {}", line));
-            let lat = line_parts[1]
-                .parse::<f32>()
-                .unwrap_or_else(|_| panic!("Invalid line in file: {}", line));
-            let mean_rain = line_parts[2]
-                .parse::<f32>()
-                .unwrap_or_else(|_| panic!("Invalid line in file: {}", line));
+            let lon = line_parts[0].parse::<f32>().map_err(|_| {
+                format!("Invalid `lon` value in file {file_path} at line #{index}: '{line}'")
+            })?;
+            let lat = line_parts[1].parse::<f32>().map_err(|_| {
+                format!("Invalid `lat` value in file {file_path} at line #{index}: '{line}'")
+            })?;
+            let mean_rain = line_parts[2].parse::<f32>().map_err(|_| {
+                format!("Invalid `mean_rain` value in file {file_path} at line #{index}: '{line}'")
+            })?;
             lons.push(lon);
             lats.push(lat);
             mean_rains.push(mean_rain);
         }
-    
+
         let props = KBDICellPropertiesContainer {
             lats,
             lons,
@@ -1205,7 +1260,7 @@ impl KbdiConfig {
                 .split(",")
                 .map(|date| {
                     NaiveDateTime::parse_from_str(date, "%Y%m%d%H%M")
-                    .map(|naive| DateTime::from_naive_utc_and_offset(naive, Utc))
+                        .map(|naive| DateTime::from_naive_utc_and_offset(naive, Utc))
                         .unwrap_or_else(|_| panic!("Could not parse date from {}", date))
                 })
                 .collect();
@@ -1222,14 +1277,18 @@ impl KbdiConfig {
             warm_state.push(KBDIWarmState {
                 dates,
                 daily_rain,
-                kbdi
+                kbdi,
             });
         }
         Some((warm_state, current_date))
     }
 
     #[allow(non_snake_case)]
-    pub fn write_warm_state(&self, state: &KBDIState, warm_state_time: DateTime<Utc>) -> Result<(), RISICOError> {
+    pub fn write_warm_state(
+        &self,
+        state: &KBDIState,
+        warm_state_time: DateTime<Utc>,
+    ) -> Result<(), RISICOError> {
         let date_string = warm_state_time.format("%Y%m%d%H%M").to_string();
         let warm_state_name = format!("{}{}", self.warm_state_path, date_string);
         let mut warm_state_file = File::create(&warm_state_name)
@@ -1241,10 +1300,17 @@ impl KbdiConfig {
             let kbdi = state.kbdi;
             let line = format!(
                 "{}\t{}\t{}",
-                dates.iter().map(|value| format!("{}", value.format("%Y%m%d%H%M"))).collect::<Vec<String>>().join(","),
-                daily_rain.iter().map(|value| format!("{}", value)).collect::<Vec<String>>().join(","),
+                dates
+                    .iter()
+                    .map(|value| format!("{}", value.format("%Y%m%d%H%M")))
+                    .collect::<Vec<String>>()
+                    .join(","),
+                daily_rain
+                    .iter()
+                    .map(|value| format!("{}", value))
+                    .collect::<Vec<String>>()
+                    .join(","),
                 kbdi
-
             );
             writeln!(warm_state_writer, "{}", line)
                 .map_err(|error| format!("error writing to {}, {}", &warm_state_name, error))?;
@@ -1253,9 +1319,7 @@ impl KbdiConfig {
     }
 }
 
-
 impl AngstromConfig {
-
     // New Angstrom index configuration
     pub fn new(
         config_defs: &AngstromConfigBuilder,
@@ -1267,8 +1331,7 @@ impl AngstromConfig {
         let props_container = AngstromConfig::properties_from_file(cells_file)
             .map_err(|error| format!("error reading {}, {error}", cells_file))?;
         let n_cells = props_container.lons.len();
-        if n_cells != props_container.lats.len()
-        {
+        if n_cells != props_container.lats.len() {
             panic!("All properties must have the same length");
         }
         let props = AngstromProperties::new(props_container);
@@ -1283,35 +1346,34 @@ impl AngstromConfig {
     }
 
     // Read properties from file
-    pub fn properties_from_file(file_path: &str) -> Result<AngstromCellPropertiesContainer, RISICOError> {
+    pub fn properties_from_file(
+        file_path: &str,
+    ) -> Result<AngstromCellPropertiesContainer, RISICOError> {
         let file = fs::File::open(file_path).map_err(|err| format!("can't open file: {err}."))?;
         let mut lons: Vec<f32> = Vec::new();
         let mut lats: Vec<f32> = Vec::new();
         let reader = BufReader::new(file);
-        for line in reader.lines() {
+        for (index, line) in reader.lines().enumerate() {
             let line = line.map_err(|err| format!("can't read from file: {err}."))?;
             if line.starts_with("#") {
                 // skip header
                 continue;
             }
-            let line_parts: Vec<&str> = line.trim().split(' ').collect();
+            let line_parts: Vec<&str> = line.trim().split(char::is_whitespace).collect();
             if line_parts.len() < 2 {
                 let error_message = format!("Invalid line in file: {}", line);
                 return Err(error_message.into());
             }
-            let lon = line_parts[0]
-                .parse::<f32>()
-                .unwrap_or_else(|_| panic!("Invalid line in file: {}", line));
-            let lat = line_parts[1]
-                .parse::<f32>()
-                .unwrap_or_else(|_| panic!("Invalid line in file: {}", line));
+            let lon = line_parts[0].parse::<f32>().map_err(|_| {
+                format!("Invalid `lon` value in file {file_path} at line #{index}: '{line}'")
+            })?;
+            let lat = line_parts[1].parse::<f32>().map_err(|_| {
+                format!("Invalid `lat` value in file {file_path} at line #{index}: '{line}'")
+            })?;
             lons.push(lon);
             lats.push(lat);
         }
-        let props = AngstromCellPropertiesContainer {
-            lats,
-            lons,
-        };
+        let props = AngstromCellPropertiesContainer { lats, lons };
         Ok(props)
     }
 
@@ -1340,9 +1402,7 @@ impl AngstromConfig {
     }
 }
 
-
 impl FosbergConfig {
-
     // New Fosberg index configuration
     pub fn new(
         config_defs: &FosbergConfigBuilder,
@@ -1354,8 +1414,7 @@ impl FosbergConfig {
         let props_container = FosbergConfig::properties_from_file(cells_file)
             .map_err(|error| format!("error reading {}, {error}", cells_file))?;
         let n_cells = props_container.lons.len();
-        if n_cells != props_container.lats.len()
-        {
+        if n_cells != props_container.lats.len() {
             panic!("All properties must have the same length");
         }
         let props = FosbergProperties::new(props_container);
@@ -1370,35 +1429,36 @@ impl FosbergConfig {
     }
 
     // Read properties from file
-    pub fn properties_from_file(file_path: &str) -> Result<FosbergCellPropertiesContainer, RISICOError> {
+    pub fn properties_from_file(
+        file_path: &str,
+    ) -> Result<FosbergCellPropertiesContainer, RISICOError> {
         let file = fs::File::open(file_path).map_err(|err| format!("can't open file: {err}."))?;
         let mut lons: Vec<f32> = Vec::new();
         let mut lats: Vec<f32> = Vec::new();
         let reader = BufReader::new(file);
-        for line in reader.lines() {
+        for (index, line) in reader.lines().enumerate() {
             let line = line.map_err(|err| format!("can't read from file: {err}."))?;
             if line.starts_with("#") {
                 // skip header
                 continue;
             }
-            let line_parts: Vec<&str> = line.trim().split(' ').collect();
+            let line_parts: Vec<&str> = line.trim().split(char::is_whitespace).collect();
             if line_parts.len() < 2 {
                 let error_message = format!("Invalid line in file: {}", line);
                 return Err(error_message.into());
             }
-            let lon = line_parts[0]
-                .parse::<f32>()
-                .unwrap_or_else(|_| panic!("Invalid line in file: {}", line));
-            let lat = line_parts[1]
-                .parse::<f32>()
-                .unwrap_or_else(|_| panic!("Invalid line in file: {}", line));
+            let lon = line_parts[0].parse::<f32>().map_err(|_| {
+                format!("Invalid `lon` value in file {file_path} at line #{index}: '{line}'")
+            })?;
+
+            let lat = line_parts[1].parse::<f32>().map_err(|_| {
+                format!("Invalid `lat` value in file {file_path} at line #{index}: '{line}'")
+            })?;
+
             lons.push(lon);
             lats.push(lat);
         }
-        let props = FosbergCellPropertiesContainer {
-            lats,
-            lons,
-        };
+        let props = FosbergCellPropertiesContainer { lats, lons };
         Ok(props)
     }
 
@@ -1426,10 +1486,7 @@ impl FosbergConfig {
     }
 }
 
-
-
 impl NesterovConfig {
-
     // New Nesterov index configuration
     pub fn new(
         config_defs: &NesterovConfigBuilder,
@@ -1441,16 +1498,16 @@ impl NesterovConfig {
         let props_container = NesterovConfig::properties_from_file(cells_file)
             .map_err(|error| format!("error reading {}, {error}", cells_file))?;
         let n_cells = props_container.lons.len();
-        if n_cells != props_container.lats.len()
-        {
+        if n_cells != props_container.lats.len() {
             panic!("All properties must have the same length");
         }
         let warm_state_hour = config_defs.warm_state_hour;
-        let (warm_state, warm_state_time) = NesterovConfig::read_warm_state(&config_defs.warm_state_path, date, &warm_state_hour)
-            .unwrap_or((
-                vec![NesterovWarmState::default(); n_cells],
-                date - Duration::try_days(1).expect("Should be a valid duration"),
-            ));
+        let (warm_state, warm_state_time) =
+            NesterovConfig::read_warm_state(&config_defs.warm_state_path, date, &warm_state_hour)
+                .unwrap_or((
+                    vec![NesterovWarmState::default(); n_cells],
+                    date - Duration::try_days(1).expect("Should be a valid duration"),
+                ));
         let props = NesterovProperties::new(props_container);
         let config = NesterovConfig {
             run_date: date,
@@ -1466,36 +1523,37 @@ impl NesterovConfig {
     }
 
     // Read properties from file
-    pub fn properties_from_file(file_path: &str) -> Result<NesterovCellPropertiesContainer, RISICOError> {
+    pub fn properties_from_file(
+        file_path: &str,
+    ) -> Result<NesterovCellPropertiesContainer, RISICOError> {
         let file = fs::File::open(file_path).map_err(|err| format!("can't open file: {err}."))?;
         let mut lons: Vec<f32> = Vec::new();
         let mut lats: Vec<f32> = Vec::new();
         let reader = BufReader::new(file);
-        for line in reader.lines() {
+        for (index, line) in reader.lines().enumerate() {
             let line = line.map_err(|err| format!("can't read from file: {err}."))?;
             if line.starts_with("#") {
                 // skip header
                 continue;
             }
-            let line_parts: Vec<&str> = line.trim().split(' ').collect();
+            let line_parts: Vec<&str> = line.trim().split(char::is_whitespace).collect();
             if line_parts.len() < 2 {
                 let error_message = format!("Invalid line in file: {}", line);
                 return Err(error_message.into());
             }
-            let lon = line_parts[0]
-                .parse::<f32>()
-                .unwrap_or_else(|_| panic!("Invalid line in file: {}", line));
-            let lat = line_parts[1]
-                .parse::<f32>()
-                .unwrap_or_else(|_| panic!("Invalid line in file: {}", line));
+            let lon = line_parts[0].parse::<f32>().map_err(|_| {
+                format!("Invalid `lon` value in file {file_path} at line #{index}: '{line}'")
+            })?;
+
+            let lat = line_parts[1].parse::<f32>().map_err(|_| {
+                format!("Invalid `lon` value in file {file_path} at line #{index}: '{line}'")
+            })?;
+
             lons.push(lon);
             lats.push(lat);
         }
-    
-        let props = NesterovCellPropertiesContainer {
-            lats,
-            lons,
-        };
+
+        let props = NesterovCellPropertiesContainer { lats, lons };
         Ok(props)
     }
 
@@ -1557,15 +1615,17 @@ impl NesterovConfig {
             let nesterov = components[0]
                 .parse::<f32>()
                 .unwrap_or_else(|_| panic!("Could not parse snow_cover from {}", line));
-            warm_state.push(NesterovWarmState {
-                nesterov
-            });
+            warm_state.push(NesterovWarmState { nesterov });
         }
         Some((warm_state, current_date))
     }
 
     #[allow(non_snake_case)]
-    pub fn write_warm_state(&self, state: &NesterovState, warm_state_time: DateTime<Utc>) -> Result<(), RISICOError> {
+    pub fn write_warm_state(
+        &self,
+        state: &NesterovState,
+        warm_state_time: DateTime<Utc>,
+    ) -> Result<(), RISICOError> {
         let date_string = warm_state_time.format("%Y%m%d%H%M").to_string();
         let warm_state_name = format!("{}{}", self.warm_state_path, date_string);
         let mut warm_state_file = File::create(&warm_state_name)
@@ -1573,11 +1633,7 @@ impl NesterovConfig {
         let mut warm_state_writer = BufWriter::new(&mut warm_state_file);
         for state in &state.data {
             let nesterov = state.nesterov;
-            let line = format!(
-                "{}",
-                nesterov
-
-            );
+            let line = format!("{}", nesterov);
             writeln!(warm_state_writer, "{}", line)
                 .map_err(|error| format!("error writing to {}, {}", &warm_state_name, error))?;
         }
@@ -1585,10 +1641,7 @@ impl NesterovConfig {
     }
 }
 
-
-
 impl SharplesConfig {
-
     // New Sharples index configuration
     pub fn new(
         config_defs: &SharplesConfigBuilder,
@@ -1600,8 +1653,7 @@ impl SharplesConfig {
         let props_container = SharplesConfig::properties_from_file(cells_file)
             .map_err(|error| format!("error reading {}, {error}", cells_file))?;
         let n_cells = props_container.lons.len();
-        if n_cells != props_container.lats.len()
-        {
+        if n_cells != props_container.lats.len() {
             panic!("All properties must have the same length");
         }
         let props = SharplesProperties::new(props_container);
@@ -1616,35 +1668,36 @@ impl SharplesConfig {
     }
 
     // Read properties from file
-    pub fn properties_from_file(file_path: &str) -> Result<SharplesCellPropertiesContainer, RISICOError> {
+    pub fn properties_from_file(
+        file_path: &str,
+    ) -> Result<SharplesCellPropertiesContainer, RISICOError> {
         let file = fs::File::open(file_path).map_err(|err| format!("can't open file: {err}."))?;
         let mut lons: Vec<f32> = Vec::new();
         let mut lats: Vec<f32> = Vec::new();
         let reader = BufReader::new(file);
-        for line in reader.lines() {
+        for (index, line) in reader.lines().enumerate() {
             let line = line.map_err(|err| format!("can't read from file: {err}."))?;
             if line.starts_with("#") {
                 // skip header
                 continue;
             }
-            let line_parts: Vec<&str> = line.trim().split(' ').collect();
+            let line_parts: Vec<&str> = line.trim().split(char::is_whitespace).collect();
             if line_parts.len() < 2 {
                 let error_message = format!("Invalid line in file: {}", line);
                 return Err(error_message.into());
             }
-            let lon = line_parts[0]
-                .parse::<f32>()
-                .unwrap_or_else(|_| panic!("Invalid line in file: {}", line));
-            let lat = line_parts[1]
-                .parse::<f32>()
-                .unwrap_or_else(|_| panic!("Invalid line in file: {}", line));
+            let lon = line_parts[0].parse::<f32>().map_err(|_| {
+                format!("Invalid `lon` value in file {file_path} at line #{index}: '{line}'")
+            })?;
+
+            let lat = line_parts[1].parse::<f32>().map_err(|_| {
+                format!("Invalid `lat` value in file {file_path} at line #{index}: '{line}'")
+            })?;
+
             lons.push(lon);
             lats.push(lat);
         }
-        let props = SharplesCellPropertiesContainer {
-            lats,
-            lons,
-        };
+        let props = SharplesCellPropertiesContainer { lats, lons };
         Ok(props)
     }
 
@@ -1671,10 +1724,7 @@ impl SharplesConfig {
     }
 }
 
-
-
 impl OrieuxConfig {
-
     // New Orieux index configuration
     pub fn new(
         config_defs: &OrieuxConfigBuilder,
@@ -1686,16 +1736,16 @@ impl OrieuxConfig {
         let props_container = OrieuxConfig::properties_from_file(cells_file)
             .map_err(|error| format!("error reading {}, {error}", cells_file))?;
         let n_cells = props_container.lons.len();
-        if n_cells != props_container.lats.len()
-        {
+        if n_cells != props_container.lats.len() {
             panic!("All properties must have the same length");
         }
         let warm_state_hour = config_defs.warm_state_hour;
-        let (warm_state, warm_state_time) = OrieuxConfig::read_warm_state(&config_defs.warm_state_path, date, &warm_state_hour)
-            .unwrap_or((
-                vec![OrieuxWarmState::default(); n_cells],
-                date - Duration::try_days(1).expect("Should be a valid duration"),
-            ));
+        let (warm_state, warm_state_time) =
+            OrieuxConfig::read_warm_state(&config_defs.warm_state_path, date, &warm_state_hour)
+                .unwrap_or((
+                    vec![OrieuxWarmState::default(); n_cells],
+                    date - Duration::try_days(1).expect("Should be a valid duration"),
+                ));
         let props = OrieuxProperties::new(props_container);
         let config = OrieuxConfig {
             run_date: date,
@@ -1711,32 +1761,36 @@ impl OrieuxConfig {
     }
 
     // Read properties from file
-    pub fn properties_from_file(file_path: &str) -> Result<OrieuxCellPropertiesContainer, RISICOError> {
+    pub fn properties_from_file(
+        file_path: &str,
+    ) -> Result<OrieuxCellPropertiesContainer, RISICOError> {
         let file = fs::File::open(file_path).map_err(|err| format!("can't open file: {err}."))?;
         let mut lons: Vec<f32> = Vec::new();
         let mut lats: Vec<f32> = Vec::new();
         let mut heat_indices: Vec<f32> = Vec::new();
         let reader = BufReader::new(file);
-        for line in reader.lines() {
+        for (index, line) in reader.lines().enumerate() {
             let line = line.map_err(|err| format!("can't read from file: {err}."))?;
             if line.starts_with("#") {
                 // skip header
                 continue;
             }
-            let line_parts: Vec<&str> = line.trim().split(' ').collect();
+            let line_parts: Vec<&str> = line.trim().split(char::is_whitespace).collect();
             if line_parts.len() < 3 {
                 let error_message = format!("Invalid line in file: {}", line);
                 return Err(error_message.into());
             }
-            let lon = line_parts[0]
-                .parse::<f32>()
-                .unwrap_or_else(|_| panic!("Invalid line in file: {}", line));
-            let lat = line_parts[1]
-                .parse::<f32>()
-                .unwrap_or_else(|_| panic!("Invalid line in file: {}", line));
-            let hindex = line_parts[2]
-                .parse::<f32>()
-                .unwrap_or_else(|_| panic!("Invalid line in file: {}", line));
+            let lon = line_parts[0].parse::<f32>().map_err(|_| {
+                format!("Invalid `lon` value in file {file_path} at line #{index}: '{line}'")
+            })?;
+
+            let lat = line_parts[1].parse::<f32>().map_err(|_| {
+                format!("Invalid `lat` value in file {file_path} at line #{index}: '{line}'")
+            })?;
+
+            let hindex = line_parts[2].parse::<f32>().map_err(|_| {
+                format!("Invalid `hindex` value in file {file_path} at line #{index}: '{line}'")
+            })?;
 
             lons.push(lon);
             lats.push(lat);
@@ -1807,15 +1861,17 @@ impl OrieuxConfig {
             let orieux_wr = components[0]
                 .parse::<f32>()
                 .unwrap_or_else(|_| panic!("Could not parse snow_cover from {}", line));
-            warm_state.push(OrieuxWarmState {
-                orieux_wr
-            });
+            warm_state.push(OrieuxWarmState { orieux_wr });
         }
         Some((warm_state, current_date))
     }
 
     #[allow(non_snake_case)]
-    pub fn write_warm_state(&self, state: &OrieuxState, warm_state_time: DateTime<Utc>) -> Result<(), RISICOError> {
+    pub fn write_warm_state(
+        &self,
+        state: &OrieuxState,
+        warm_state_time: DateTime<Utc>,
+    ) -> Result<(), RISICOError> {
         let date_string = warm_state_time.format("%Y%m%d%H%M").to_string();
         let warm_state_name = format!("{}{}", self.warm_state_path, date_string);
         let mut warm_state_file = File::create(&warm_state_name)
@@ -1823,11 +1879,7 @@ impl OrieuxConfig {
         let mut warm_state_writer = BufWriter::new(&mut warm_state_file);
         for state in &state.data {
             let orieux_wr = state.orieux_wr;
-            let line = format!(
-                "{}",
-                orieux_wr
-
-            );
+            let line = format!("{}", orieux_wr);
             writeln!(warm_state_writer, "{}", line)
                 .map_err(|error| format!("error writing to {}, {}", &warm_state_name, error))?;
         }
@@ -1889,7 +1941,7 @@ impl OrieuxConfig {
 //                // skip header
 //                continue;
 //            }
-//            let line_parts: Vec<&str> = line.trim().split(' ').collect();
+//            let line_parts: Vec<&str> = line.trim().split(char::is_whitespace).collect();
 //            if line_parts.len() < 2 {
 //                let error_message = format!("Invalid line in file: {}", line);
 //                return Err(error_message.into());
@@ -2026,9 +2078,7 @@ impl OrieuxConfig {
 //    }
 //}
 
-
 impl HdwConfig {
-
     // New Hot-dry-wind index configuration
     pub fn new(
         config_defs: &HdwConfigBuilder,
@@ -2040,8 +2090,7 @@ impl HdwConfig {
         let props_container = HdwConfig::properties_from_file(cells_file)
             .map_err(|error| format!("error reading {}, {error}", cells_file))?;
         let n_cells = props_container.lons.len();
-        if n_cells != props_container.lats.len()
-        {
+        if n_cells != props_container.lats.len() {
             panic!("All properties must have the same length");
         }
         let props = HdwProperties::new(props_container);
@@ -2056,35 +2105,36 @@ impl HdwConfig {
     }
 
     // Read properties from file
-    pub fn properties_from_file(file_path: &str) -> Result<HdwCellPropertiesContainer, RISICOError> {
+    pub fn properties_from_file(
+        file_path: &str,
+    ) -> Result<HdwCellPropertiesContainer, RISICOError> {
         let file = fs::File::open(file_path).map_err(|err| format!("can't open file: {err}."))?;
         let mut lons: Vec<f32> = Vec::new();
         let mut lats: Vec<f32> = Vec::new();
         let reader = BufReader::new(file);
-        for line in reader.lines() {
+        for (index, line) in reader.lines().enumerate() {
             let line = line.map_err(|err| format!("can't read from file: {err}."))?;
             if line.starts_with("#") {
                 // skip header
                 continue;
             }
-            let line_parts: Vec<&str> = line.trim().split(' ').collect();
+            let line_parts: Vec<&str> = line.trim().split(char::is_whitespace).collect();
             if line_parts.len() < 2 {
                 let error_message = format!("Invalid line in file: {}", line);
                 return Err(error_message.into());
             }
-            let lon = line_parts[0]
-                .parse::<f32>()
-                .unwrap_or_else(|_| panic!("Invalid line in file: {}", line));
-            let lat = line_parts[1]
-                .parse::<f32>()
-                .unwrap_or_else(|_| panic!("Invalid line in file: {}", line));
+            let lon = line_parts[0].parse::<f32>().map_err(|_| {
+                format!("Invalid `lon` value in file {file_path} at line #{index}: '{line}'")
+            })?;
+
+            let lat = line_parts[1].parse::<f32>().map_err(|_| {
+                format!("Invalid `lat` value in file {file_path} at line #{index}: '{line}'")
+            })?;
+
             lons.push(lon);
             lats.push(lat);
         }
-        let props = HdwCellPropertiesContainer {
-            lats,
-            lons,
-        };
+        let props = HdwCellPropertiesContainer { lats, lons };
         Ok(props)
     }
 

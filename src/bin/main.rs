@@ -7,18 +7,20 @@ use chrono::prelude::*;
 use clap::{arg, command, Parser};
 
 use common::config::builder::{
-    ConfigBuilderType, ConfigContainer, PaletteMap,
-    RISICOConfigBuilder,
-    FWIConfigBuilder,
-    Mark5ConfigBuilder,
-    KbdiConfigBuilder,
     AngstromConfigBuilder,
+    ConfigBuilderType,
+    ConfigContainer,
+    FWIConfigBuilder,
     FosbergConfigBuilder,
+    //    PortugueseConfigBuilder,
+    HdwConfigBuilder,
+    KbdiConfigBuilder,
+    Mark5ConfigBuilder,
     NesterovConfigBuilder,
-    SharplesConfigBuilder,
     OrieuxConfigBuilder,
-//    PortugueseConfigBuilder,
-    HdwConfigBuilder
+    PaletteMap,
+    RISICOConfigBuilder,
+    SharplesConfigBuilder,
 };
 use common::helpers::{get_input, RISICOError};
 use common::io::readers::binary::BinaryInputHandler;
@@ -60,7 +62,7 @@ fn run_risico(
     // run risico
     let config = model_config
         .build(date, palettes)
-        .map_err(|_| "Could not configure model")?;
+        .map_err(|err| format!("Could not configure model {err}"))?;
 
     let mut output_writer = config
         .get_output_writer()
@@ -72,7 +74,9 @@ fn run_risico(
     let (lats, lons) = config.get_properties().get_coords();
     let (lats, lons) = (lats.as_slice(), lons.as_slice());
 
-    handler.set_coordinates(lats, lons).expect("Should set coordinates");
+    handler
+        .set_coordinates(lats, lons)
+        .expect("Should set coordinates");
 
     let current_time = Utc::now();
     trace!(
@@ -124,7 +128,7 @@ fn run_fwi(
     // run risico
     let config = model_config
         .build(date, palettes)
-        .map_err(|_| "Could not configure model")?;
+        .map_err(|err| format!("Could not configure model {err}"))?;
 
     let mut output_writer = config
         .get_output_writer()
@@ -136,7 +140,9 @@ fn run_fwi(
     let (lats, lons) = config.get_properties().get_coords();
     let (lats, lons) = (lats.as_slice(), lons.as_slice());
 
-    handler.set_coordinates(lats, lons).expect("Should set coordinates");
+    handler
+        .set_coordinates(lats, lons)
+        .expect("Should set coordinates");
 
     let current_time = Utc::now();
     trace!(
@@ -167,7 +173,7 @@ fn run_fwi(
             trace!("Writing output took {} seconds", Utc::now() - c);
         }
 
-        if config.should_write_warm_state(&state.time){
+        if config.should_write_warm_state(&state.time) {
             info!("Writing warm state");
             let c = Utc::now();
             if let Err(err) = config.write_warm_state(&state, state.time) {
@@ -180,7 +186,6 @@ fn run_fwi(
     Ok(())
 }
 
-
 fn run_mark5(
     model_config: &Mark5ConfigBuilder,
     date: &DateTime<Utc>,
@@ -190,7 +195,7 @@ fn run_mark5(
     // run risico
     let config = model_config
         .build(date, palettes)
-        .map_err(|_| "Could not configure model")?;
+        .map_err(|err| format!("Could not configure model {err}"))?;
 
     let mut output_writer = config
         .get_output_writer()
@@ -202,7 +207,9 @@ fn run_mark5(
     let (lats, lons) = config.get_properties().get_coords();
     let (lats, lons) = (lats.as_slice(), lons.as_slice());
 
-    handler.set_coordinates(lats, lons).expect("Should set coordinates");
+    handler
+        .set_coordinates(lats, lons)
+        .expect("Should set coordinates");
 
     let current_time = Utc::now();
     trace!(
@@ -220,7 +227,7 @@ fn run_mark5(
         // store the input of the day
         state.store(&input, props);
 
-        if config.should_write_warm_state(&state.time){
+        if config.should_write_warm_state(&state.time) {
             // update the state with the input of the day and compute output
             let c = Utc::now();
             let output = state.output(props);
@@ -244,7 +251,6 @@ fn run_mark5(
     Ok(())
 }
 
-
 fn run_kbdi(
     model_config: &KbdiConfigBuilder,
     date: &DateTime<Utc>,
@@ -255,16 +261,18 @@ fn run_kbdi(
     // build configuration
     let config = model_config
         .build(date, palettes)
-        .map_err(|_| "Could not configure model")?;
+        .map_err(|err| format!("Could not configure model {err}"))?;
     let mut output_writer = config
         .get_output_writer()
         .map_err(|_| "Could not configure output writer")?;
-    let props = config.get_properties();  // get properties
-    let mut state = config.new_state();  // get state
-    // set coordinates for the input handlerq
+    let props = config.get_properties(); // get properties
+    let mut state = config.new_state(); // get state
+                                        // set coordinates for the input handlerq
     let (lats, lons) = config.get_properties().get_coords();
     let (lats, lons) = (lats.as_slice(), lons.as_slice());
-    handler.set_coordinates(lats, lons).expect("Should set coordinates");
+    handler
+        .set_coordinates(lats, lons)
+        .expect("Should set coordinates");
     trace!(
         "Loading input configuration took {} seconds",
         Utc::now() - current_time
@@ -278,7 +286,7 @@ fn run_kbdi(
         // store the input of the day
         state.store(&input);
         // check if we should write the output
-        if config.should_write_warm_state(&state.time){
+        if config.should_write_warm_state(&state.time) {
             // update the state with the input of the day
             let c = Utc::now();
             state.update(props);
@@ -317,15 +325,17 @@ fn run_angstrom(
     // configure the model
     let config = model_config
         .build(date, palettes)
-        .map_err(|_| "Could not configure model")?;
+        .map_err(|err| format!("Could not configure model {err}"))?;
     let mut output_writer = config
         .get_output_writer()
         .map_err(|_| "Could not configure output writer")?;
-    let mut state = config.new_state();  // inizialized the state
-    // set coordinates for the input handler
+    let mut state = config.new_state(); // inizialized the state
+                                        // set coordinates for the input handler
     let (lats, lons) = config.get_properties().get_coords();
     let (lats, lons) = (lats.as_slice(), lons.as_slice());
-    handler.set_coordinates(lats, lons).expect("Should set coordinates");
+    handler
+        .set_coordinates(lats, lons)
+        .expect("Should set coordinates");
     trace!(
         "Loading input configuration took {} seconds",
         Utc::now() - current_time
@@ -340,7 +350,7 @@ fn run_angstrom(
         // store the input
         state.store(&input);
         // check if we should write the output
-        if config.should_write_output( &state.time) {
+        if config.should_write_output(&state.time) {
             let c = Utc::now();
             let output = state.output();
             trace!("Generating output took {} seconds", Utc::now() - c);
@@ -366,15 +376,17 @@ fn run_fosberg(
     // configure the model
     let config = model_config
         .build(date, palettes)
-        .map_err(|_| "Could not configure model")?;
+        .map_err(|err| format!("Could not configure model {err}"))?;
     let mut output_writer = config
         .get_output_writer()
         .map_err(|_| "Could not configure output writer")?;
-    let mut state = config.new_state();  // initialize the state
-    // set coordinates for the input handler
+    let mut state = config.new_state(); // initialize the state
+                                        // set coordinates for the input handler
     let (lats, lons) = config.get_properties().get_coords();
     let (lats, lons) = (lats.as_slice(), lons.as_slice());
-    handler.set_coordinates(lats, lons).expect("Should set coordinates");
+    handler
+        .set_coordinates(lats, lons)
+        .expect("Should set coordinates");
     trace!(
         "Loading input configuration took {} seconds",
         Utc::now() - current_time
@@ -404,7 +416,6 @@ fn run_fosberg(
     Ok(())
 }
 
-
 /// Run Nesterov index
 fn run_nesterov(
     model_config: &NesterovConfigBuilder,
@@ -416,16 +427,18 @@ fn run_nesterov(
     // configure the model
     let config = model_config
         .build(date, palettes)
-        .map_err(|_| "Could not configure model")?;
+        .map_err(|err| format!("Could not configure model {err}"))?;
     let mut output_writer = config
         .get_output_writer()
         .map_err(|_| "Could not configure output writer")?;
-    let props = config.get_properties();  // get properties
-    let mut state = config.new_state();  // initialize the state
-    // set coordinates for the input handler
+    let props = config.get_properties(); // get properties
+    let mut state = config.new_state(); // initialize the state
+                                        // set coordinates for the input handler
     let (lats, lons) = config.get_properties().get_coords();
     let (lats, lons) = (lats.as_slice(), lons.as_slice());
-    handler.set_coordinates(lats, lons).expect("Should set coordinates");
+    handler
+        .set_coordinates(lats, lons)
+        .expect("Should set coordinates");
     trace!(
         "Loading input configuration took {} seconds",
         Utc::now() - current_time
@@ -440,7 +453,7 @@ fn run_nesterov(
         // store the input of the day
         state.store(&input, props);
         // check if we should write the output
-        if config.should_write_warm_state(&state.time){
+        if config.should_write_warm_state(&state.time) {
             // update the state with the input of the day
             let c = Utc::now();
             state.update();
@@ -479,15 +492,17 @@ fn run_sharples(
     // configure the model
     let config = model_config
         .build(date, palettes)
-        .map_err(|_| "Could not configure model")?;
+        .map_err(|err| format!("Could not configure model {err}"))?;
     let mut output_writer = config
         .get_output_writer()
         .map_err(|_| "Could not configure output writer")?;
-    let mut state = config.new_state();  // initialize the state
-    // set coordinates for the input handler
+    let mut state = config.new_state(); // initialize the state
+                                        // set coordinates for the input handler
     let (lats, lons) = config.get_properties().get_coords();
     let (lats, lons) = (lats.as_slice(), lons.as_slice());
-    handler.set_coordinates(lats, lons).expect("Should set coordinates");
+    handler
+        .set_coordinates(lats, lons)
+        .expect("Should set coordinates");
     trace!(
         "Loading input configuration took {} seconds",
         Utc::now() - current_time
@@ -518,7 +533,6 @@ fn run_sharples(
     Ok(())
 }
 
-
 // Run Orieux index
 fn run_orieux(
     model_config: &OrieuxConfigBuilder,
@@ -530,16 +544,18 @@ fn run_orieux(
     // configure the model
     let config = model_config
         .build(date, palettes)
-        .map_err(|_| "Could not configure model")?;
+        .map_err(|err| format!("Could not configure model {err}"))?;
     let mut output_writer = config
         .get_output_writer()
         .map_err(|_| "Could not configure output writer")?;
-    let props = config.get_properties();  // get properties
-    let mut state = config.new_state();  // initialize the state
-    // set coordinates for the input handler
+    let props = config.get_properties(); // get properties
+    let mut state = config.new_state(); // initialize the state
+                                        // set coordinates for the input handler
     let (lats, lons) = config.get_properties().get_coords();
     let (lats, lons) = (lats.as_slice(), lons.as_slice());
-    handler.set_coordinates(lats, lons).expect("Should set coordinates");
+    handler
+        .set_coordinates(lats, lons)
+        .expect("Should set coordinates");
     trace!(
         "Loading input configuration took {} seconds",
         Utc::now() - current_time
@@ -553,7 +569,7 @@ fn run_orieux(
         let input = get_input(handler, &time, len);
         // store the input of the day
         state.store(&input);
-        if config.should_write_warm_state(&state.time){
+        if config.should_write_warm_state(&state.time) {
             // update the state with the input of the day
             let c = Utc::now();
             state.update(props);
@@ -592,7 +608,7 @@ fn run_orieux(
 //     // configuration of the model
 //     let config = model_config
 //         .build(date, palettes)
-//         .map_err(|_| "Could not configure model")?;
+//         .maerrp_err(|_| format!("Could not configure model {err}"))?;
 //     let mut output_writer = config
 //         .get_output_writer()
 //         .map_err(|_| "Could not configure output writer")?;
@@ -645,7 +661,6 @@ fn run_orieux(
 //     Ok(())
 // }
 
-
 // Run Hot-Dry-Wind index
 fn run_hdw(
     model_config: &HdwConfigBuilder,
@@ -657,15 +672,17 @@ fn run_hdw(
     // configuration of the model
     let config = model_config
         .build(date, palettes)
-        .map_err(|_| "Could not configure model")?;
+        .map_err(|err| format!("Could not configure model {err}"))?;
     let mut output_writer = config
         .get_output_writer()
         .map_err(|_| "Could not configure output writer")?;
-    let mut state = config.new_state();  // initialize the state
-    // set coordinates for the input handler
+    let mut state = config.new_state(); // initialize the state
+                                        // set coordinates for the input handler
     let (lats, lons) = config.get_properties().get_coords();
     let (lats, lons) = (lats.as_slice(), lons.as_slice());
-    handler.set_coordinates(lats, lons).expect("Should set coordinates");
+    handler
+        .set_coordinates(lats, lons)
+        .expect("Should set coordinates");
     trace!(
         "Loading input configuration took {} seconds",
         Utc::now() - current_time
@@ -695,8 +712,6 @@ fn run_hdw(
     }
     Ok(())
 }
-
-
 
 fn get_input_handler(
     input_path_str: &str,
