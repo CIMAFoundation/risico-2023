@@ -1,7 +1,7 @@
-pub const FULL_VERSION: &str = "v1.0.0-5740113";
+pub const FULL_VERSION: &str = "v1.0.0-a79ec6c";
 pub const LONG_VERSION: &str = "
 version: v1.0.0
-commit: 574011336c7e023cd902540abe2397b182e3ac26
+commit: a79ec6c0672491706538f4f259fe89638998191c
 branch: main
-released on: Fri, 14 Feb 2025 10:38:05 +0100";
+released on: Mon, 24 Mar 2025 16:55:59 +0100";
 
