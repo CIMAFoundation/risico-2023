@@ -140,7 +140,7 @@ pub fn get_v_legacy(
     t_effect: f32,
 ) -> (f32, f32) {
     let w_effect: f32 = get_wind_effect_legacy(wind_speed, wind_dir, slope, aspect);
-    if snow_cover > 0.0 || d0 == NODATAVAL {
+    if snow_cover > SNOW_COVER_THRESHOLD || d0 == NODATAVAL {
         return (0.0, w_effect);
     }
 
@@ -405,7 +405,7 @@ pub fn get_v_v2023(
     t_effect: f32,
 ) -> (f32, f32) {
     let w_s_eff: f32 = get_wind_slope_effect(slope, aspect, wind_speed, wind_dir);
-    if snow_cover > 0.0 || d0 == NODATAVAL {
+    if snow_cover > SNOW_COVER_THRESHOLD || d0 == NODATAVAL {
         return (0.0, w_s_eff);
     }
     if dffm == NODATAVAL {
@@ -487,7 +487,7 @@ pub fn get_v_v2025(
         return (0.0, NODATAVAL);
     }
     let w_s_eff: f32 = get_wind_slope_effect(slope, aspect, wind_speed, wind_dir);
-    if snow_cover > 0.0 || d0 == NODATAVAL {
+    if snow_cover > SNOW_COVER_THRESHOLD || d0 == NODATAVAL {
         return (0.0, w_s_eff);
     }
     if dffm == NODATAVAL {
