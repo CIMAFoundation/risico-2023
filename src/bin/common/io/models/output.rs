@@ -12,7 +12,10 @@ use serde_derive::{Deserialize, Serialize};
 use crate::common::{
     config::{builder::OutputTypeConfig, models::PaletteMap},
     helpers::RISICOError,
-    io::writers::{netcdf::NetcdfWriter, png::PngWriter, prelude::OutputSink, zbin::ZBinWriter},
+    io::writers::{
+        netcdf::NetcdfWriter, png::PngWriter, prelude::OutputSink, zarr::ZarrWriter,
+        zbin::ZBinWriter,
+    },
 };
 
 #[cfg(feature = "gdal")]
@@ -155,6 +158,7 @@ impl OutputType {
             "ZBIN" => Box::new(ZBinWriter::new(path, name, run_date)),
             "PNGWJSON" => Box::new(PngWriter::new(path, name, palettes, run_date)),
             "NETCDF" => Box::new(NetcdfWriter::new(path)),
+            "ZARR" => Box::new(ZarrWriter::new(path, name, run_date)),
             #[cfg(feature = "gdal")]
             "GEOTIFF" => Box::new(GeotiffWriter::new(path, name, run_date)),
             _ => Box::new(ZBinWriter::new(path, name, run_date)),
