@@ -4,14 +4,12 @@ use ndarray::{Array1, Zip};
 
 use super::{
     constants::*,
-    functions::{store_day_fn, update_fn, get_output_fn},
+    functions::{get_output_fn, store_day_fn, update_fn},
 };
-
 
 /// Orieux fire index
 /// Source: https://wikifire.wsl.ch/tiki-index182c.html?page=Orieux+index&structure=Fire
 /// Note: the Orieux is suitable only in summer
-
 
 // CELLS PROPERTIES
 #[derive(Debug)]
@@ -46,10 +44,7 @@ impl OrieuxProperties {
             })
             .collect();
         let len = data.len();
-        Self {
-            data,
-            len,
-        }
+        Self { data, len }
     }
 
     pub fn get_coords(&self) -> (Vec<f32>, Vec<f32>) {
@@ -57,37 +52,34 @@ impl OrieuxProperties {
         let lons: Vec<f32> = self.data.iter().map(|p| p.lon).collect();
         (lats, lons)
     }
-
 }
-
 
 // WARM STATE
 #[allow(non_snake_case)]
 #[derive(Debug, Clone)]
 pub struct OrieuxWarmState {
-    pub orieux_wr: f32,  // Orieux index of the previous day [mm]
+    pub orieux_wr: f32, // Orieux index of the previous day [mm]
 }
 
 impl Default for OrieuxWarmState {
     fn default() -> Self {
         Self {
-            orieux_wr: ORIEUX_WR_INIT
+            orieux_wr: ORIEUX_WR_INIT,
         }
     }
 }
-
 
 // STATE
 #[derive(Debug)]
 #[allow(non_snake_case)]
 pub struct OrieuxStateElement {
-    pub orieux_wr: f32,  // Orieux water reserve [mm]
-    pub pet: f32,  // potential evapotranspiration [mm]
-    pub orieux_fd: f32,  // Orieux fire danger class [0-3]
-    pub cum_rain: f32,  // daily cumulative precipitation [mm]
-    pub min_temp: f32,  // min daily temperature [°C]
-    pub max_temp: f32,  // max daily temperature [°C]
-    pub max_wind_speed: f32,  // max daily wind speed [m/s]
+    pub orieux_wr: f32,      // Orieux water reserve [mm]
+    pub pet: f32,            // potential evapotranspiration [mm]
+    pub orieux_fd: f32,      // Orieux fire danger class [0-3]
+    pub cum_rain: f32,       // daily cumulative precipitation [mm]
+    pub min_temp: f32,       // min daily temperature [°C]
+    pub max_temp: f32,       // max daily temperature [°C]
+    pub max_wind_speed: f32, // max daily wind speed [m/s]
 }
 
 impl OrieuxStateElement {
@@ -100,7 +92,6 @@ impl OrieuxStateElement {
         self.max_wind_speed = NODATAVAL;
     }
 }
-
 
 #[derive(Debug)]
 pub struct OrieuxState {
@@ -135,7 +126,6 @@ impl OrieuxState {
         }
     }
 
-
     pub fn len(&self) -> usize {
         self.len
     }
@@ -146,7 +136,7 @@ impl OrieuxState {
 
     #[allow(non_snake_case)]
     fn store_day(&mut self, input: &Input) {
-        self.time = input.time;  // reference time of the input
+        self.time = input.time; // reference time of the input
         Zip::from(&mut self.data)
             .and(&input.data)
             .par_for_each(|state, input_data| {
@@ -165,10 +155,7 @@ impl OrieuxState {
     #[allow(non_snake_case)]
     pub fn get_output(&mut self) -> Output {
         let time = &self.time;
-        let output_data = self.data
-                    .map(|state| {
-                        get_output_fn(state)
-                    });
+        let output_data = self.data.map(|state| get_output_fn(state));
         // clean the daily values
         self.data.iter_mut().for_each(|state| state.clean_day());
         Output::new(*time, output_data)

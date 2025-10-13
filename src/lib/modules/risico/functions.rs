@@ -15,7 +15,6 @@ use super::{
     models::{RISICOPropertiesElement, RISICOStateElement},
 };
 
-
 // ---------------- LEGACY - RISICO 2015 ---------------- //
 
 ///Get the new value for the dfmm when is raining (p>p*)
@@ -124,7 +123,6 @@ pub fn get_t_effect(t: f32) -> f32 {
     f32::exp(t * 0.0171)
 }
 
-
 ///calculate the rate of spread
 #[allow(clippy::too_many_arguments)]
 pub fn get_v_legacy(
@@ -210,7 +208,6 @@ pub fn index_from_swi(dffm: f32, swi: f32) -> f32 {
     dffm
 }
 
-
 /// Get the Meteorological Index by using dffm and w_effect
 pub fn get_meteo_index_legacy(dffm: f32, w_effect: f32) -> f32 {
     if dffm <= NODATAVAL || w_effect < 1.0 || w_effect == NODATAVAL {
@@ -246,9 +243,7 @@ pub fn get_meteo_index_legacy(dffm: f32, w_effect: f32) -> f32 {
     FWI_TABLE[col + row * 6]
 }
 
-
 // ---------------- v2023 ---------------- //
-
 
 ///Get the new value for the dfmm when is raining (p>p*)
 pub fn update_dffm_rain(r: f32, dffm: f32, sat: f32) -> f32 {
@@ -294,9 +289,6 @@ pub fn update_dffm_dry(dffm: f32, _sat: f32, T: f32, W: f32, H: f32, T0: f32, dT
         0.0
     }
 }
-
-
-
 
 /// Get the wind effect on the fire propagation at the desired angle
 /// # Arguments
@@ -425,34 +417,33 @@ pub fn get_meteo_index_v2023(dffm: f32, w_effect: f32) -> f32 {
     };
     // values set according to RISICO 2023 Italia implementation
     let col = if (0.0..=3.5).contains(&dffm) {
-        0  // extreme
+        0 // extreme
     } else if dffm <= 5.9 && dffm > 3.5 {
-        1  // high - medium high
+        1 // high - medium high
     } else if dffm <= 10.3 && dffm > 5.9 {
-        2  // medium
+        2 // medium
     } else if dffm <= 15.9 && dffm > 10.3 {
-        3  // medium low
+        3 // medium low
     } else if dffm <= 25.0 && dffm > 15.9 {
-        4  // low
+        4 // low
     } else {
-        5  // very low
+        5 // very low
     };
 
     let row = if (1.0..=1.24).contains(&w_effect) {
-        0  // very low - low
+        0 // very low - low
     } else if w_effect > 1.24 && w_effect <= 2.1 {
-        1  // medium low - medium
+        1 // medium low - medium
     } else if w_effect > 2.1 && w_effect <= 2.44 {
-        2  // medium high
+        2 // medium high
     } else if w_effect > 2.44 && w_effect <= 3.38 {
-        3  // high
+        3 // high
     } else {
-        4  // extreme
+        4 // extreme
     };
 
     FWI_TABLE[col + row * 6]
 }
-
 
 // ---------------- v2025 ---------------- //
 
@@ -465,7 +456,7 @@ pub fn get_moisture_effect_v2025(dffm: f32) -> f32 {
     let a: f32 = 0.2;
     let b: f32 = 20.0;
     let d: f32 = 1.0;
-    let moist_eff: f32 = (x0-d)*f32::exp(-f*x) + d / (1.0 + f32::exp(b*(x-a))); 
+    let moist_eff: f32 = (x0 - d) * f32::exp(-f * x) + d / (1.0 + f32::exp(b * (x - a)));
     // clip in [0, 2]
     moist_eff.clamp(0.0, x0)
 }
@@ -508,36 +499,35 @@ pub fn get_meteo_index_v2025(dffm: f32, w_effect: f32) -> f32 {
     };
     // values set according to RISICO 2023 Italia implementation
     let col = if (0.0..=3.7).contains(&dffm) {
-        0  // extreme
+        0 // extreme
     } else if dffm <= 4.7 && dffm > 3.7 {
-        1  // high - medium high
+        1 // high - medium high
     } else if dffm <= 6.0 && dffm > 4.7 {
-        2  // medium
+        2 // medium
     } else if dffm <= 9.6 && dffm > 6.0 {
-        3  // medium low
+        3 // medium low
     } else if dffm <= 13.7 && dffm > 9.6 {
-        4  // low
+        4 // low
     } else {
-        5  // very low
+        5 // very low
     };
 
     let row = if (1.0..=1.73).contains(&w_effect) {
-        0  // very low - low
+        0 // very low - low
     } else if w_effect > 1.73 && w_effect <= 2.96 {
-        1  // medium low - medium
+        1 // medium low - medium
     } else if w_effect > 2.96 && w_effect <= 4.07 {
-        2  // medium high
+        2 // medium high
     } else if w_effect > 4.07 && w_effect <= 5.21 {
-        3  // high
+        3 // high
     } else {
-        4  // extreme
+        4 // extreme
     };
 
     FWI_TABLE[col + row * 6]
 }
 
 //------------------ GENERIC UPDATE FUNCTIONS ------------------//
-
 
 #[allow(non_snake_case)]
 pub fn update_moisture_fn(
@@ -587,7 +577,6 @@ pub fn update_moisture_fn(
 
     state.dffm = f32::max(0.0, f32::min(sat, state.dffm));
 }
-
 
 #[allow(non_snake_case)]
 pub fn get_output_fn(

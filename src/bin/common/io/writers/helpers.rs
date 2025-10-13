@@ -1,27 +1,46 @@
 use chrono::Utc;
 #[cfg(feature = "gdal")]
-#[cfg(feature = "gdal")]
 use gdal::raster::{Buffer, RasterCreationOption};
-
 use libflate::gzip::{self, Encoder};
 use log::warn;
 use netcdf::extent::Extents;
-use risico::constants::NODATAVAL;
-use risico::version::FULL_VERSION;
-
-use std::io::BufWriter;
-use std::path::Path;
+use risico::{constants::NODATAVAL, version::FULL_VERSION};
+use strum::EnumProperty;
 
 use std::{
     fs::File,
-    io::{self, Write},
+    io::{self, BufWriter, Write},
+    path::Path,
 };
 
-use crate::common::helpers::RISICOError;
+use crate::common::{
+    helpers::RISICOError,
+    io::models::{grid::RegularGrid, palette::Palette},
+};
 
-use strum::EnumProperty;
+/// Extract error messages generated from writing variables to files.
+pub fn extract_errors(
+    error_message: &str,
+    results: Vec<Result<(), RISICOError>>,
+) -> Result<(), RISICOError> {
+    let error_messages: Vec<_> = results
+        .iter()
+        .filter_map(|r| match r {
+            Ok(_) => None,
+            Err(e) => Some(e.to_string()),
+        })
+        .collect();
 
-use super::models::{grid::RegularGrid, palette::Palette};
+    if !error_messages.is_empty() {
+        let all_messages = error_messages.join("\n");
+        Err(RISICOError::from(format!(
+            "{}: {}",
+            error_message, all_messages
+        )))
+    } else {
+        Ok(())
+    }
+}
 
 pub fn write_and_check(
     encoder: &mut Encoder<BufWriter<File>>,

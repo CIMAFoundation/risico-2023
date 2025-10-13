@@ -102,9 +102,8 @@ pub struct OutputElement {
     pub portuguese_fdi: f32,
 
     // ------------- Hot-Dry-Wind Index ----------------- //
-    pub hdw: f32,  // [-]
+    pub hdw: f32, // [-]
 }
-
 
 impl Default for OutputElement {
     fn default() -> Self {
@@ -190,7 +189,6 @@ impl Default for OutputElement {
 )]
 #[strum(ascii_case_insensitive)]
 pub enum OutputVariableName {
-
     /// ----------- INPUTS ----------------- //
     /// Input Temperature
     #[strum(props(long_name = "Input Temperature", units = "°C"))]
@@ -315,7 +313,7 @@ pub enum OutputVariableName {
     // ---------- Angstrom Index ----------------- //
     #[strum(props(long_name = "Angstrom Index", units = "-"))]
     angstrom,
-    
+
     // ---------- Fosberg Index ----------------- //
     #[strum(props(long_name = "Fosberg Fire Weather Index", units = "-"))]
     ffwi,
@@ -334,15 +332,20 @@ pub enum OutputVariableName {
 
     // ---------- Orieux Index ----------------- //
     // Potential evapotranspiration
-    #[strum(props(long_name = "Potential Evapotranspiration - Thornthwaite formulation", units = "mm"))]
+    #[strum(props(
+        long_name = "Potential Evapotranspiration - Thornthwaite formulation",
+        units = "mm"
+    ))]
     pet_t,
     // Orieux water reserve
     #[strum(props(long_name = "Orieux Water Reserve", units = "mm"))]
     orieux_wr,
     // Orieux fire danger class
-    #[strum(props(long_name = "Orieux Fire Danger Class (0:low, 1:moderate, 2:high, 3:extreme)", units = "-"))]
+    #[strum(props(
+        long_name = "Orieux Fire Danger Class (0:low, 1:moderate, 2:high, 3:extreme)",
+        units = "-"
+    ))]
     orieux_fd,
-
 
     // ---------- Portuguese Index ----------------- //
     #[strum(props(long_name = "Portuguese Ignition Index", units = "-"))]
@@ -354,7 +357,6 @@ pub enum OutputVariableName {
     #[strum(props(long_name = "Hot-Dry-Wind Index", units = "-"))]
     hdw,
 }
-
 
 fn get_derived(a: &f32, b: &f32, c: Option<&f32>) -> f32 {
     let mut r = *a;
@@ -429,7 +431,7 @@ impl Output {
             bui => Some(self.get_array(|o| o.bui)),
             fwi => Some(self.get_array(|o| o.fwi)),
             ifwi => Some(self.get_array(|o| o.ifwi)),
-        
+
             // Keech-Byram Drought Index
             kbdi => Some(self.get_array(|o| o.kbdi)),
 

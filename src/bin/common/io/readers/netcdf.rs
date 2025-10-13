@@ -1,16 +1,16 @@
 use std::{collections::HashMap, error::Error, str::FromStr};
 
-use cftime_rs::{calendars::Calendar, utils::get_datetime_and_unit_from_units, parser::Unit};
+use cftime_rs::{calendars::Calendar, parser::Unit, utils::get_datetime_and_unit_from_units};
 use chrono::{DateTime, TimeZone, Utc};
 use itertools::Itertools;
-use log::{warn, debug};
+use log::{debug, warn};
 use ndarray::Array1;
 use netcdf::{extent::Extents, AttrValue, Variable};
 use rayon::prelude::*;
 
 use risico::{constants::NODATAVAL, models::input::InputVariableName};
-use serde_derive::{Deserialize, Serialize};
 use serde;
+use serde_derive::{Deserialize, Serialize};
 use std::fs;
 use strum::IntoEnumIterator;
 
@@ -20,7 +20,7 @@ use super::prelude::InputHandler;
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct VariableEntry {
-    pub name: String,  // variable name in netcdf file
+    pub name: String, // variable name in netcdf file
     pub offset: i64,  // offset in seconds to be aplied in the variable time line
 }
 
@@ -35,7 +35,7 @@ impl VariableEntry {
 struct VariableMapEntry {
     internal_name: String,
     name: String,
-    offset: i64
+    offset: i64,
 }
 
 #[derive(Clone, Debug, Serialize)]
@@ -114,7 +114,6 @@ impl<'de> serde::Deserialize<'de> for NetCdfInputConfiguration {
     }
 }
 
-
 impl<T> From<T> for NetCdfInputConfiguration
 where
     T: Into<String>,
@@ -149,26 +148,24 @@ where
             .get("time")
             .cloned()
             .unwrap_or_else(|| "time".to_owned());
-        
-        let coords_dims = raw_variable_map
-            .get("coords_dims")
-            .map(|s| {
-                let parts: Vec<&str> = s.split(',').collect();
-                (parts[0].to_owned(), parts[1].to_owned())
-            });
+
+        let coords_dims = raw_variable_map.get("coords_dims").map(|s| {
+            let parts: Vec<&str> = s.split(',').collect();
+            (parts[0].to_owned(), parts[1].to_owned())
+        });
 
         let mut variable_map: HashMap<InputVariableName, VariableEntry> = raw_variable_map
             .iter()
             .filter(|(k, _)| *k == "variable_map")
             .filter_map(|(k, v)| {
                 if let Ok(var) = InputVariableName::from_str(k) {
-                        let parts: Vec<&str> = v.split(';').collect();
-                        let name = parts[0].to_owned();
-                        let offset = parts[1].parse::<i64>().unwrap_or_else(|e| {
-                            warn!("Error parsing offset: {}", e);
-                            0
-                        });
-                        let entry = VariableEntry::new(name, offset);
+                    let parts: Vec<&str> = v.split(';').collect();
+                    let name = parts[0].to_owned();
+                    let offset = parts[1].parse::<i64>().unwrap_or_else(|e| {
+                        warn!("Error parsing offset: {}", e);
+                        0
+                    });
+                    let entry = VariableEntry::new(name, offset);
                     Some((var, entry))
                 } else {
                     warn!("Variable {} not recognized", k);
@@ -221,7 +218,7 @@ fn extract_time(
             .values::<i64, _>(Extents::All)?
             .into_iter()
             .filter_map(|t| {
-                let adjusted_time = t + offset_seconds;  // apply the offset
+                let adjusted_time = t + offset_seconds; // apply the offset
                 DateTime::from_timestamp_millis(adjusted_time * 1000)
             })
             .collect::<Array1<DateTime<Utc>>>()
@@ -257,7 +254,7 @@ fn extract_time(
             .values::<i64, _>(Extents::All)?
             .into_iter()
             .filter_map(|t| {
-                let adjusted_time = t + offset_in_specified_unit;  // apply the offset
+                let adjusted_time = t + offset_in_specified_unit; // apply the offset
                 (&cf_datetime + (&duration * adjusted_time)).ok()
             })
             .map(|d| {
@@ -301,17 +298,17 @@ fn register_nc_file(
         .ok_or_else(|| format!("Could not find variable {}", &config.time_name))?;
 
     let (variables, offsets): (Vec<InputVariableName>, Vec<i64>) = nc_file
-    .variables()
-    .filter_map(|var| {
-        let nc_var = var.name().to_owned();
-        // Find the variable in the config and handle both enum variants
-        config
-            .variable_map
-            .iter()
-            .find(|(_, entry)| entry.name == nc_var)
-            .map(|(k, entry)| (*k, entry.offset))
-    })
-    .unzip();
+        .variables()
+        .filter_map(|var| {
+            let nc_var = var.name().to_owned();
+            // Find the variable in the config and handle both enum variants
+            config
+                .variable_map
+                .iter()
+                .find(|(_, entry)| entry.name == nc_var)
+                .map(|(k, entry)| (*k, entry.offset))
+        })
+        .unzip();
 
     // If no variables are found, return None
     if variables.is_empty() {
@@ -320,7 +317,7 @@ fn register_nc_file(
 
     // check it all offests are the same, and extract the unique value, otherwise return an error
     let offset: &i64 = if offsets.is_empty() {
-        &0  // default offset
+        &0 // default offset
     } else {
         offsets
             .iter()

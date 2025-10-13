@@ -2,10 +2,7 @@ use crate::models::{input::Input, output::Output};
 use chrono::prelude::*;
 use ndarray::{Array1, Zip};
 
-use super::{
-    constants::*,
-    functions::get_output_fn,
-};
+use super::{constants::*, functions::get_output_fn};
 
 /// Angstrom index
 /// Source: https://wikifire.wsl.ch/tiki-index8902.html?page=Angstr%C3%B6m+index&structure=Fire
@@ -39,12 +36,9 @@ impl AngstromProperties {
                 lat: props.lats[idx],
             })
             .collect();
-    
+
         let len = data.len();
-        Self {
-            data,
-            len,
-        }
+        Self { data, len }
     }
 
     pub fn get_coords(&self) -> (Vec<f32>, Vec<f32>) {
@@ -52,16 +46,14 @@ impl AngstromProperties {
         let lons: Vec<f32> = self.data.iter().map(|p| p.lon).collect();
         (lats, lons)
     }
-
 }
-
 
 // STATE
 #[derive(Debug)]
 #[allow(non_snake_case)]
 pub struct AngstromStateElement {
-    pub temp: f32,  // temperature [°C]
-    pub humidity: f32,  // relative humidity [%]
+    pub temp: f32,     // temperature [°C]
+    pub humidity: f32, // relative humidity [%]
 }
 
 #[derive(Debug)]
@@ -99,7 +91,6 @@ impl AngstromState {
         self.len() == 0
     }
 
-
     // store the weather data
     pub fn store(&mut self, input: &Input) {
         self.time = input.time;
@@ -115,10 +106,7 @@ impl AngstromState {
     #[allow(non_snake_case)]
     pub fn get_output(&mut self) -> Output {
         let time = &self.time;
-        let output_data = self.data
-                    .map(|state| {
-                        get_output_fn(state)
-                    });
+        let output_data = self.data.map(|state| get_output_fn(state));
         Output::new(*time, output_data)
     }
 

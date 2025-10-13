@@ -113,7 +113,11 @@ pub struct RISICOState {
 impl RISICOState {
     #[allow(dead_code, non_snake_case)]
     /// Create a new state.
-    pub fn new(warm_state: &[RISICOWarmState], time: &DateTime<Utc>, config: RISICOModelConfig) -> RISICOState {
+    pub fn new(
+        warm_state: &[RISICOWarmState],
+        time: &DateTime<Utc>,
+        config: RISICOModelConfig,
+    ) -> RISICOState {
         let data = Array1::from_vec(
             warm_state
                 .iter()

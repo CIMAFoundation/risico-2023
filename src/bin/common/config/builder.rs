@@ -14,17 +14,17 @@ use crate::common::io::models::output::OutputVariable;
 use crate::common::io::readers::netcdf::NetCdfInputConfiguration;
 
 use super::models::{
-    RISICOConfig,
-    FWIConfig,
-    Mark5Config,
-    KbdiConfig,
     AngstromConfig,
+    FWIConfig,
     FosbergConfig,
-    NesterovConfig,
-    SharplesConfig,
-    OrieuxConfig,
-//    PortugueseConfig,
+    //    PortugueseConfig,
     HdwConfig,
+    KbdiConfig,
+    Mark5Config,
+    NesterovConfig,
+    OrieuxConfig,
+    RISICOConfig,
+    SharplesConfig,
 };
 
 pub type PaletteMap = HashMap<String, String>;
@@ -208,7 +208,6 @@ pub struct HdwConfigBuilder {
     pub output_time_resolution: u32,
 }
 
-
 #[allow(clippy::upper_case_acronyms)]
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(tag = "type")]
@@ -222,10 +221,9 @@ pub enum ConfigBuilderType {
     Nesterov(NesterovConfigBuilder),
     Sharples(SharplesConfigBuilder),
     Orieux(OrieuxConfigBuilder),
-//     Portuguese(PortugueseConfigBuilder),
+    //     Portuguese(PortugueseConfigBuilder),
     Hdw(HdwConfigBuilder),
 }
-
 
 impl ConfigBuilderType {
     pub fn get_model_name(&self) -> &str {
@@ -239,7 +237,7 @@ impl ConfigBuilderType {
             ConfigBuilderType::Nesterov(_) => "Nesterov",
             ConfigBuilderType::Sharples(_) => "Sharples",
             ConfigBuilderType::Orieux(_) => "Orieux",
-//             ConfigBuilderType::Portuguese(_) => "Portuguese",
+            //             ConfigBuilderType::Portuguese(_) => "Portuguese",
             ConfigBuilderType::Hdw(_) => "Hdw",
         }
     }
@@ -347,7 +345,7 @@ impl ConfigContainer {
         let warm_state_path = config_map
             .first(WARM_STATE_PATH_KEY)
             .ok_or(format!("Error: {WARM_STATE_PATH_KEY} not found in config"))?;
-        
+
         // try to get the warm state offset, otherwise default to 0
         let warm_state_hour = match config_map.first(WARM_STATE_HOUR_KEY) {
             Some(value) => value.parse::<i64>().unwrap_or(0),
@@ -452,7 +450,6 @@ impl RISICOConfigBuilder {
     }
 }
 
-
 impl FWIConfigBuilder {
     pub fn build(
         &self,
@@ -463,8 +460,7 @@ impl FWIConfigBuilder {
     }
 }
 
-
-impl  Mark5ConfigBuilder {
+impl Mark5ConfigBuilder {
     pub fn build(
         &self,
         date: &DateTime<Utc>,
@@ -472,7 +468,6 @@ impl  Mark5ConfigBuilder {
     ) -> Result<Mark5Config, RISICOError> {
         Mark5Config::new(self, *date, palettes)
     }
-    
 }
 
 impl KbdiConfigBuilder {
@@ -554,7 +549,6 @@ impl HdwConfigBuilder {
         HdwConfig::new(self, *date, palettes)
     }
 }
-
 
 pub fn load_palettes(config_map: &ConfigMap) -> HashMap<String, String> {
     let mut palettes: HashMap<String, String> = HashMap::new();

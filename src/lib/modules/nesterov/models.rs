@@ -4,9 +4,8 @@ use ndarray::{Array1, Zip};
 
 use super::{
     constants::*,
-    functions::{store_day_fn, update_fn, get_output_fn},
+    functions::{get_output_fn, store_day_fn, update_fn},
 };
-
 
 /// Nesterov index
 /// Source: https://wikifire.wsl.ch/tiki-indexfa8e.html?page=Nesterov+ignition+index&structure=Fire
@@ -41,10 +40,7 @@ impl NesterovProperties {
             })
             .collect();
         let len = data.len();
-        Self {
-            data,
-            len,
-        }
+        Self { data, len }
     }
 
     pub fn get_coords(&self) -> (Vec<f32>, Vec<f32>) {
@@ -52,20 +48,19 @@ impl NesterovProperties {
         let lons: Vec<f32> = self.data.iter().map(|p| p.lon).collect();
         (lats, lons)
     }
-
 }
 
 // WARM STATE
 #[allow(non_snake_case)]
 #[derive(Debug, Clone)]
 pub struct NesterovWarmState {
-    pub nesterov: f32,  // Nesterov index of the previous day
+    pub nesterov: f32, // Nesterov index of the previous day
 }
 
 impl Default for NesterovWarmState {
     fn default() -> Self {
         Self {
-            nesterov: NESTEROV_INIT
+            nesterov: NESTEROV_INIT,
         }
     }
 }
@@ -74,18 +69,14 @@ impl Default for NesterovWarmState {
 #[derive(Debug)]
 #[allow(non_snake_case)]
 pub struct NesterovStateElement {
-    pub nesterov: f32,  // Nesterov index
-    pub temp_15: f32,  // temperature [°C] at 15:00
-    pub temp_dew_15: f32,  // dew point temperature [°C] at 15:00
-    pub cum_rain: f32,  // cumulated daily rain [mm]
+    pub nesterov: f32,    // Nesterov index
+    pub temp_15: f32,     // temperature [°C] at 15:00
+    pub temp_dew_15: f32, // dew point temperature [°C] at 15:00
+    pub cum_rain: f32,    // cumulated daily rain [mm]
 }
 
-
 impl NesterovStateElement {
-
-    pub fn clean_day(
-        &mut self
-    ) {
+    pub fn clean_day(&mut self) {
         self.temp_15 = NODATAVAL;
         self.temp_dew_15 = NODATAVAL;
         self.cum_rain = 0.0;
@@ -132,7 +123,7 @@ impl NesterovState {
     // Store the daily info at 15:00 local time
     #[allow(non_snake_case)]
     fn store_day(&mut self, input: &Input, prop: &NesterovProperties) {
-        let time = input.time;  // reference time of the input
+        let time = input.time; // reference time of the input
         Zip::from(&mut self.data)
             .and(&input.data)
             .and(&prop.data)
@@ -144,17 +135,14 @@ impl NesterovState {
 
     fn get_update(&mut self) {
         self.data.map_inplace(|state| {
-                update_fn(state);
-            });
+            update_fn(state);
+        });
     }
 
     #[allow(non_snake_case)]
     pub fn get_output(&mut self) -> Output {
         let time = &self.time;
-        let output_data = self.data
-            .map(|state| {
-                get_output_fn(state)
-            });
+        let output_data = self.data.map(|state| get_output_fn(state));
         // clean the daily values
         self.data.iter_mut().for_each(|state| state.clean_day());
         Output::new(*time, output_data)

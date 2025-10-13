@@ -2,10 +2,7 @@ use crate::models::{input::Input, output::Output};
 use chrono::prelude::*;
 use ndarray::{Array1, Zip};
 
-use super::{
-    constants::*,
-    functions::get_output_fn,
-};
+use super::{constants::*, functions::get_output_fn};
 
 /// Hor-Dry-Wind Fire Weather index
 /// Source: Srock, A.F.; Charney, J.J.; Potter, B.E.; Goodrick, S.L. The Hot-Dry-Windy Index: A New Fire Weather Index. Atmosphere 2018, 9, 279. https://doi.org/10.3390/atmos9070279
@@ -39,12 +36,9 @@ impl HdwProperties {
                 lat: props.lats[idx],
             })
             .collect();
-    
+
         let len = data.len();
-        Self {
-            data,
-            len,
-        }
+        Self { data, len }
     }
 
     pub fn get_coords(&self) -> (Vec<f32>, Vec<f32>) {
@@ -52,18 +46,15 @@ impl HdwProperties {
         let lons: Vec<f32> = self.data.iter().map(|p| p.lon).collect();
         (lats, lons)
     }
-
 }
-
 
 // STATE
 #[derive(Debug)]
 #[allow(non_snake_case)]
 pub struct HdwStateElement {
-    pub vpd: f32,  // vapor pressure deificit [hPa]
-    pub wind_speed: f32,  // wind speed [m/h]
+    pub vpd: f32,        // vapor pressure deificit [hPa]
+    pub wind_speed: f32, // wind speed [m/h]
 }
-
 
 #[derive(Debug)]
 pub struct HdwState {
@@ -100,7 +91,7 @@ impl HdwState {
     }
 
     pub fn store(&mut self, input: &Input) {
-        self.time = input.time;  // reference time of the input
+        self.time = input.time; // reference time of the input
         Zip::from(&mut self.data)
             .and(&input.data)
             .par_for_each(|state, input_data| {
@@ -112,10 +103,7 @@ impl HdwState {
     #[allow(non_snake_case)]
     pub fn get_output(&mut self) -> Output {
         let time = &self.time;
-        let output_data = self.data
-                    .map(|state| {
-                        get_output_fn(state)
-                    });
+        let output_data = self.data.map(|state| get_output_fn(state));
         Output::new(*time, output_data)
     }
 

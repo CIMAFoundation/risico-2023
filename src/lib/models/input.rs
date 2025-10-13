@@ -102,5 +102,4 @@ pub enum InputVariableName {
     M,
     /// SWI value
     SWI,
-
 }
