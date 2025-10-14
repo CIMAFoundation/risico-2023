@@ -2,7 +2,7 @@ use chrono::{DateTime, Utc};
 use ndarray::Array1;
 use rayon::prelude::*;
 use serde_derive::{Deserialize, Serialize};
-use strum_macros::{Display, EnumProperty, EnumString};
+use strum_macros::{Display, EnumIter, EnumProperty, EnumString};
 
 use crate::constants::NODATAVAL;
 
@@ -182,6 +182,7 @@ impl Default for OutputElement {
     Copy,
     Clone,
     EnumString,
+    EnumIter,
     EnumProperty,
     Display,
     Serialize,

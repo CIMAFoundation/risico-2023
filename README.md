@@ -100,6 +100,56 @@ fn main() {
 }
 ```
 
+## Python Bindings
+
+The crate exposes optional Python bindings built with [PyO3](https://pyo3.rs). A
+`pyproject.toml` is included so you can build and install the extension module with
+[maturin](https://www.maturin.rs/):
+
+```bash
+pip install maturin
+maturin develop --release --features python-bindings
+```
+
+This installs a `risico_py` module in the current Python environment. The snippet below mirrors the
+Rust example using the Python API:
+
+```python
+from datetime import datetime, timezone
+
+from risico_py import (
+    Input,
+    InputElement,
+    Properties,
+    State,
+    WarmState,
+    available_output_variables,
+)
+
+# Initialise domain properties (single cell)
+props = Properties(
+    lons=[0.0],
+    lats=[0.0],
+    slopes=[0.0],
+    aspects=[0.0],
+    vegetations=["default"],
+)
+
+warm_state = WarmState(dffm=40.0)
+state = State([warm_state], datetime.now(timezone.utc), "v2023")
+
+inputs = Input(
+    datetime.now(timezone.utc),
+    [InputElement(temperature=35.0, wind_speed=5.0, humidity=20.0)],
+)
+
+state.update(props, inputs)
+output = state.output(props, inputs)
+
+print("Available outputs:", available_output_variables())
+print("Rate of spread V:", output.get("V"))
+```
+
 
 
 

@@ -1,0 +1,28 @@
+[build-system]
+requires = ["maturin>=1.5,<2.0"]
+build-backend = "maturin"
+
+[project]
+name = "risico-py"
+version = "0.1.0"
+description = "Python bindings for the RISICO-2023 wildfire risk model"
+requires-python = ">=3.8"
+authors = [{ name = "CIMA Research Foundation" }]
+readme = "README.md"
+license = { text = "EUPL-1.2" }
+classifiers = [
+    "Programming Language :: Python",
+    "Programming Language :: Rust",
+    "License :: OSI Approved :: European Union Public Licence 1.2 (EUPL 1.2)",
+]
+
+[tool.maturin]
+features = ["python-bindings"]
+module-name = "risico_py"
+manifest-path = "Cargo.toml"
+
+[dependency-groups]
+dev = [
+    "ipython>=8.12.3",
+    "maturin>=1.9.6",
+]
