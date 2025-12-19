@@ -9,6 +9,23 @@ use super::{
     models::{FWIPropertiesElement, FWIStateElement},
 };
 
+// HELPER FUNCTIONS
+
+// Lawson & Armitage latitude bands: (-90,-30], (-30,-10], (-10,10], (10,30], (30,90]
+fn lat_band_la(latitude: f32) -> u8 {
+    if latitude < -30.0 {
+        1
+    } else if latitude < -10.0 {
+        2
+    } else if latitude < 10.0 {
+        3
+    } else if latitude < 30.0 {
+        4
+    } else {
+        5  // standard values -> Canada (Van Wagner 1987)
+    }
+}
+
 // FFMC MODULE
 pub fn from_ffmc_to_moisture(ffmc: f32) -> f32 {
     147.2 * (101.0 - ffmc) / (59.4688 + ffmc)
@@ -67,10 +84,61 @@ pub fn update_moisture(moisture: f32, rain24: f32, hum: f32, temp: f32, w_speed:
 }
 
 // DMC MODULE
-fn get_dmc_param(date: &DateTime<Utc>, latitude: f32) -> f32 {
-    if latitude >= 0.0 {
-        // North emisphere
-        match date.month() {
+
+// Le (monthly day-length adjustment) from:
+// Lawson, B.D. & Armitage, O.B., 2008. Weather guide for the Canadian Forest Fire Danger Rating System. Northern Forestry Centre, Edmonton (Canada).
+// Defaults to latitude=46 if caller passes NaN > reference of Van Wagner 1987.
+pub fn get_dmc_param(date: &DateTime<Utc>, latitude: f32) -> f32 {
+    let lat = if latitude.is_nan() { 46.0 } else { latitude };
+    let band = lat_band_la(lat);
+    match band {
+        1 => match date.month() {
+            1 => 11.5,
+            2 => 10.5,
+            3 => 9.2, 
+            4 => 7.9,
+            5 => 6.8,
+            6 => 6.2,
+            7 => 6.5,
+            8 => 7.4,
+            9 => 8.7,
+            10 => 10.0,
+            11 => 11.2,
+            12 => 11.8,
+            _ => 0.0,
+        },
+        2 => match date.month() {
+            1 => 10.1,
+            2 => 9.6,
+            3 => 9.1,
+            4 => 8.5,
+            5 => 8.1,
+            6 => 7.8,
+            7 => 7.9,
+            8 => 8.3,
+            9 => 8.9,
+            10 => 9.4,
+            11 => 9.9,
+            12 => 10.2,
+            _ => 0.0,
+        },
+        3 => 9.0,
+        4 => match date.month() {
+            1 => 7.9, 
+            2 => 8.4,
+            3 => 8.9,
+            4 => 9.5,
+            5 => 9.9,
+            6 => 10.2,
+            7 => 10.1,
+            8 => 9.7,
+            9 => 9.1,
+            10 => 8.6,
+            11 => 8.1,
+            12 => 7.8,
+            _ => 0.0,
+        },
+        _ => match date.month() {  // 5 and default
             1 => 6.5,
             2 => 7.5,
             3 => 9.0,
@@ -84,24 +152,7 @@ fn get_dmc_param(date: &DateTime<Utc>, latitude: f32) -> f32 {
             11 => 7.0,
             12 => 6.0,
             _ => 0.0,
-        }
-    } else {
-        // South emisphere
-        match date.month() {
-            1 => 12.4,
-            2 => 10.9,
-            3 => 9.4,
-            4 => 8.0,
-            5 => 7.0,
-            6 => 6.0,
-            7 => 6.5,
-            8 => 7.5,
-            9 => 9.0,
-            10 => 12.8,
-            11 => 13.9,
-            12 => 13.9,
-            _ => 0.0,
-        }
+        },
     }
 }
 
@@ -133,7 +184,7 @@ pub fn update_dmc(dmc: f32, rain24: f32, temp: f32, hum: f32, l_e: f32) -> f32 {
     }
     if temp >= -1.1 {
         // temperature effect
-        let k: f32 = 1.894 * (temp + 1.1) * (100.0 - hum) * l_e * 10e-6;
+        let k: f32 = 1.894 * (temp + 1.1) * (100.0 - hum) * l_e * 1e-6;
         dmc_new += 100.0 * k;
     }
     // clip to positive values
@@ -144,27 +195,15 @@ pub fn update_dmc(dmc: f32, rain24: f32, temp: f32, hum: f32, l_e: f32) -> f32 {
 }
 
 // DC MODULE
-fn get_dc_param(date: &DateTime<Utc>, latitude: f32) -> f32 {
-    if latitude >= 0.0 {
-        // North emisphere
-        match date.month() {
-            1 => -1.6,
-            2 => -1.6,
-            3 => -1.6,
-            4 => 0.9,
-            5 => 3.8,
-            6 => 5.8,
-            7 => 6.4,
-            8 => 5.0,
-            9 => 2.4,
-            10 => 0.4,
-            11 => -1.6,
-            12 => -1.6,
-            _ => 0.0,
-        }
-    } else {
-        // South emisphere
-        match date.month() {
+
+// Lf factor (monthly correction) from L&A tables.
+// Lawson, B.D. & Armitage, O.B., 2008. Weather guide for the Canadian Forest Fire Danger Rating System. Northern Forestry Centre, Edmonton (Canada).
+// Defaults to latitude=46 if caller passes NaN > reference of Van Wagner 1987.
+pub fn get_dc_param(date: &DateTime<Utc>, latitude: f32) -> f32 {
+    let lat = if latitude.is_nan() { 46.0 } else { latitude };
+    let band = lat_band_la(lat);
+    match band {
+        1 | 2 => match date.month() {  // southern emisphere
             1 => 6.4,
             2 => 5.0,
             3 => 2.4,
@@ -178,7 +217,24 @@ fn get_dc_param(date: &DateTime<Utc>, latitude: f32) -> f32 {
             11 => 3.8,
             12 => 5.8,
             _ => 0.0,
-        }
+        },
+        3 => 1.4,
+        4 | 5 => match date.month() {  // nothern emisphere
+            1 => -1.6,
+            2 => -1.6,
+            3 => -1.6,
+            4 => 0.9,
+            5 => 3.8,
+            6 => 5.8,
+            7 => 6.4,
+            8 => 5.0,
+            9 => 2.4,
+            10 => 0.4,
+            11 => -1.6,
+            12 => -1.6,
+            _ => 0.0,
+        },
+        _ => 0.0,
     }
 }
 
@@ -218,7 +274,7 @@ pub fn compute_isi(moisture: f32, w_speed: f32) -> f32 {
         1.0
     };
     let ff: f32 =
-        91.9 * f32::exp(-0.1386 * moisture) * (1.0 + f32::powf(moisture, 5.31) / (4.93 * 10e7));
+        91.9 * f32::exp(-0.1386 * moisture) * (1.0 + f32::powf(moisture, 5.31) / (4.93 * 1e7));
     let isi: f32 = 0.208 * fw * ff;
     isi
 }
