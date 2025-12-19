@@ -63,34 +63,35 @@ pub struct Input {
     Debug, PartialEq, Eq, Hash, Copy, Clone, EnumString, EnumIter, Display, Serialize, Deserialize,
 )]
 pub enum InputVariableName {
-    /// WEATHER VARIABLES
-    /// Observed relative humidity
+    /// WEATHER VARIABLES IN INPUT FILES
+
+    /// Observed relative humidity [%]
     F,
-    /// Relative humidity
+    /// Relative humidity [%]
     H,
-    /// Observed temperature
+    /// Observed temperature [K or C]
     K,
-    /// Forecasted temperature
+    /// Forecasted temperature [K or C]
     T,
-    /// Forecasted dew point temperature
+    /// Forecasted dew point temperature [K or C]
     R,
-    /// Forecasted specific humidity
+    /// Forecasted specific humidity [Kg/Kg]
     Q,
-    /// Forecasted pressure at surface level
+    /// Forecasted pressure at surface level [Pa]
     PSFC,
-    /// Wind Speed
+    /// Wind Speed [m/s]
     W,
-    /// Wind Direction
+    /// Wind Direction [degrees]
     D,
-    /// U component of the wind
+    /// U component of the wind [m/s]
     U,
-    /// V value of the wind
+    /// V value of the wind [m/s]
     V,
-    /// Observed precipitation
+    /// Observed precipitation [mm]
     O,
-    /// Forecasted precipitation
+    /// Forecasted precipitation [mm]
     P,
-    /// Forecasted snow cover
+    /// Forecasted snow cover [mm]
     SNOW,
 
     /// SATELLITE VARIABLES
