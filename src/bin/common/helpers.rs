@@ -261,7 +261,7 @@ pub fn get_input(handler: &dyn InputHandler, time: &DateTime<Utc>, len: usize) -
     let fp = handler.get_values(P, time); // supposed in mm
     maybe_replace(&mut data, &fp, |i| &mut i.rain);
 
-    // Forecasted snow cover
+    // Forecasted snow cover depth
     let snow = handler.get_values(SNOW, time); // supposed in mm
     maybe_replace(&mut data, &snow, |i| &mut i.snow_cover);
 
