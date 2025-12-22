@@ -65,7 +65,6 @@ pub fn get_input(handler: &dyn InputHandler, time: &DateTime<Utc>, len: usize) -
         let temp_dew = handler.get_values(R, time);  // supposed in K or °C
         if let Some(mut td) = temp_dew {
             // if the dew point temperature is available
-
             td.mapv_inplace(|_t| if _t > 200.0 { _t - 273.15 } else { _t }); // conversion to Celsius
             replace(&mut data, &td, |i| &mut i.temp_dew);  // save dew point temperature [°C]
 
@@ -74,19 +73,24 @@ pub fn get_input(handler: &dyn InputHandler, time: &DateTime<Utc>, len: usize) -
             let mut vpd: Array1<f32> = Array1::ones(len) * NODATAVAL;  // [hPa]
             azip!((
                 h in &mut h,  // %
-                vpd in &mut vpd,  // hPa
+                v in &mut vpd,  // hPa
                 r in &td,  // °C
                 t in &t  // °C
             ){
                 if *r > (NODATAVAL+1.0) && *t > (NODATAVAL+1.0) {
-                    // compute the relative humidity using the formulas from https://cran.r-project.org/web/packages/humidity/vignettes/humidity-measures.html
-                    let e = f32::exp((17.67 * r)/(r + 243.5));  // vapor pressure [hPa]
-                    let es = f32::exp((17.67 * t)/(t + 243.5));  // saturation vapor pressure [hPa]
+                    // compute the relative humidity > https://cran.r-project.org/web/packages/humidity/vignettes/humidity-measures.html
+                    // August–Roche–Magnus formula > https://en.wikipedia.org/wiki/Dew_point
+                    let es = 6.1094 * f32::exp((17.625 * t)/(t + 243.04));  // saturation vapor pressure [hPa]
+                    let e = 6.1094 * f32::exp((17.625 * r)/(r + 243.04));  // vapor pressure [hPa] > computed substituting the dew point temperature
                     *h = 100.0 * (e / es);  // relative humidity [%]
-                    if *h > 100.0 {
+                    if *h > 100.0 {  // clip to 100%
                         *h = 100.0;
                     }
-                    *vpd = es - e;  // difference between saturation vapor pressure and actual vapor pressure [hPa]
+                    // compute the vapor pressure deficit
+                    *v = es - e;  // difference between saturation vapor pressure and actual vapor pressure [hPa]
+                    if *v < 0.0 {  // clip to 0
+                        *v = 0.0;
+                    }
                 }
             });
             replace(&mut data, &h, |i| &mut i.humidity);  // replace the humidity values [%]
@@ -96,10 +100,10 @@ pub fn get_input(handler: &dyn InputHandler, time: &DateTime<Utc>, len: usize) -
             // if the dew point temperature is not available, you need the relative humidity
             // or you need to compute it from specific humidity and surface pressure
 
-            // compute the temperature dew point from the forecasted temperature and relative humidity
             if let Some(h) = humidity {
-                // there is the relative humidity forecasted
+                // there is the relative humidity data
 
+                // compute the temperature dew point from the temperature and relative humidity
                 let mut td: Array1<f32> = Array1::ones(len) * NODATAVAL;  // °C
                 let mut vpd: Array1<f32> = Array1::ones(len) * NODATAVAL;  // hPa
                 azip!((
@@ -110,17 +114,22 @@ pub fn get_input(handler: &dyn InputHandler, time: &DateTime<Utc>, len: usize) -
                 ){
                     if *h > (NODATAVAL+1.0) && *t > (NODATAVAL+1.0) {
                         let mut h = *h;
-                        if h > 100.0 {
+                        if h > 100.0 {  // clip to 100%
                             h = 100.0;
                         }
                         // compute dew point temperature from Magnus formula (https://en.wikipedia.org/wiki/Dew_point)
                         let gamma = f32::ln(h / 100.0) + ((17.625 * t) / (t + 243.04));
                         *r = (243.04 * gamma) / (17.625 - gamma);
                         // compute the vapor pressure deficit [hPa]
-                        let es = 6.112 * f32::exp((17.67 * t)/(t + 243.5));  // saturation vapor pressure [hPa]
+                        // August–Roche–Magnus formula > https://en.wikipedia.org/wiki/Clausius%E2%80%93Clapeyron_relation#August%E2%80%93Roche%E2%80%93Magnus_approximation
+                        let es = 6.1094 * f32::exp((17.625 * t)/(t + 243.04));  // saturation vapor pressure [hPa]
+                        // compute vapor pressure from relative humidity
                         let e = (h / 100.0) * es;  // vapor pressure [hPa]
                         // difference between saturation vapor pressure and actual vapor pressure [hPa]
                         *v = es - e;
+                        if *v < 0.0 {  // clip to 0
+                            *v = 0.0;
+                        }
                     }
                 });
                 replace(&mut data, &td, |i| &mut i.temp_dew);
@@ -146,15 +155,21 @@ pub fn get_input(handler: &dyn InputHandler, time: &DateTime<Utc>, len: usize) -
                         t in &t // °C
                     ){
                         if *q > (NODATAVAL+1.0) && *t > (NODATAVAL+1.0) && *p > (NODATAVAL+1.0) {
-                            // this implements the following formula
                             // T_C=temperature in °C; P_hPa=pressure in hPa; Q2=specific humidity at 2m
-                            // e=(Q2*P_hPa/(0.622+0.378*Q2)); es=6.112*exp((17.67*T_C)/(T_C+243.5)); RH=(e/es)*100;
-                            // https://cran.r-project.org/web/packages/humidity/vignettes/humidity-measures.html
+                            // vapor pressure: e=(Q2*P_hPa/(0.622+0.378*Q2)) > https://cran.r-project.org/web/packages/humidity/vignettes/humidity-measures.html
+                            // saturation vapor pressure: es=6.1094*exp((17.625*T_C)/(T_C+243.04)) > August–Roche–Magnus formula > https://en.wikipedia.org/wiki/Clausius%E2%80%93Clapeyron_relation#August%E2%80%93Roche%E2%80%93Magnus_approximation
+                            // RH=(e/es)*100;
                             let e = q * (p/100.0) / (0.622 + 0.378*q);  // vapor pressure [hPa]
-                            let es = 6.112 * f32::exp((17.67 * t)/(t + 243.5));  // saturation vapor pressure [hPa]
+                            let es = 6.1094 * f32::exp((17.625 * t)/(t + 243.04));  // saturation vapor pressure [hPa]
                             *h = 100.0 * e / es;
+                            if *h > 100.0 {
+                                *h = 100.0;
+                            }
                             // compute the vapor pressure deficit
                             *v = es - e;  // difference between saturation vapor pressure and actual vapor pressure [hPa]
+                            if *v < 0.0 {  // clip to 0
+                                *v = 0.0;
+                            }
                         }
                     });
                     replace(&mut data, &h, |i| &mut i.humidity);
