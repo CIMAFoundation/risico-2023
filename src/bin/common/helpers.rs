@@ -200,10 +200,10 @@ pub fn get_input(handler: &dyn InputHandler, time: &DateTime<Utc>, len: usize) -
 
     // wind speed and wind direction
     let ws = handler.get_values(W, time); // supposed in m/s
-    let wd = handler.get_values(D, time); // supposed in degree
+    let wd = handler.get_values(D, time); // supposed in degree with meteorological convenction (wind from, 0=from North)
     if let Some(ws) = ws {
         let ws = ws.mapv(|_ws| {
-            if _ws > -9998.0 {
+            if _ws > NODATAVAL + 1.0 {
                 _ws * 3600.0 // conversion to m/h
             } else {
                 NODATAVAL
@@ -241,11 +241,11 @@ pub fn get_input(handler: &dyn InputHandler, time: &DateTime<Utc>, len: usize) -
         // compute wind direction
         let wd = izip!(&u, &v)
             .map(|(_u, _v)| {
-                if *_u < -9998.0 || *_v < -9998.0 {
+                if *_u < NODATAVAL + 1.0 || *_v < NODATAVAL + 1.0 {
                     return NODATAVAL; // there is no data
                 }
                 // from https://confluence.ecmwf.int/pages/viewpage.action?pageId=133262398
-                (PI + f32::atan2(*_u, *_v)) % (PI * 2.0)
+                (PI + f32::atan2(*_u, *_v)).rem_euclid(PI * 2.0)  // rad
             })
             .collect::<Array1<f32>>();
         // save data
