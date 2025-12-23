@@ -43,7 +43,7 @@ pub fn get_input(handler: &dyn InputHandler, time: &DateTime<Utc>, len: usize) -
     // Observed temperature
     let temperature_obs = handler.get_values(K, time);  // supposed in K or °C
     if let Some(mut t) = temperature_obs {
-        t.mapv_inplace(|_t| if _t > 200.0 { _t - 273.15 } else { _t }); // conversion to Celsius
+        t.mapv_inplace(|_t| if _t <= (NODATAVAL + 1.0) { NODATAVAL } else if _t > 200.0 { _t - 273.15 } else { _t }); // conversion to Celsius
         replace(&mut data, &t, |i| &mut i.temperature); // save observed temperature [°C]
     }
 
@@ -58,14 +58,14 @@ pub fn get_input(handler: &dyn InputHandler, time: &DateTime<Utc>, len: usize) -
     // Forecasted temperature
     let temperature = handler.get_values(T, time);  // supposed in K or °C
     if let Some(mut t) = temperature {
-        t.mapv_inplace(|_t| if _t > 200.0 { _t - 273.15 } else { _t }); // conversion to Celsius
+        t.mapv_inplace(|_t| if _t <= (NODATAVAL + 1.0) { NODATAVAL } else if _t > 200.0 { _t - 273.15 } else { _t }); // conversion to Celsius
         replace(&mut data, &t, |i| &mut i.temperature); // save forecasted temperature [°C]
 
         // Forecasted dew point temperature
         let temp_dew = handler.get_values(R, time);  // supposed in K or °C
         if let Some(mut td) = temp_dew {
             // if the dew point temperature is available
-            td.mapv_inplace(|_t| if _t > 200.0 { _t - 273.15 } else { _t }); // conversion to Celsius
+            td.mapv_inplace(|_t| if _t <= (NODATAVAL + 1.0) { NODATAVAL } else if _t > 200.0 { _t - 273.15 } else { _t }); // conversion to Celsius
             replace(&mut data, &td, |i| &mut i.temp_dew);  // save dew point temperature [°C]
 
             // computation of the relative humidity and VPD from the forecasted temperature and dew point temperature
