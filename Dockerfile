@@ -1,5 +1,5 @@
-# Use Ubuntu 16.04 as the base image
-FROM ubuntu:16.04
+# Use Ubuntu 24.04 as the base image
+FROM ubuntu:24.04
 
 # install hdf5, netcdf, zlib
 RUN apt-get update && apt-get install -y \
