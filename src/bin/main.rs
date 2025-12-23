@@ -4,7 +4,7 @@ use std::error::Error;
 use std::path::Path;
 
 use chrono::prelude::*;
-use clap::{arg, command, Parser};
+use clap::Parser;
 
 use common::config::builder::{
     AngstromConfigBuilder,
