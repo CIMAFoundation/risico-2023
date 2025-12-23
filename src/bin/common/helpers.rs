@@ -203,10 +203,10 @@ pub fn get_input(handler: &dyn InputHandler, time: &DateTime<Utc>, len: usize) -
     let wd = handler.get_values(D, time); // supposed in degree with meteorological convenction (wind from, 0=from North)
     if let Some(ws) = ws {
         let ws = ws.mapv(|_ws| {
-            if _ws > NODATAVAL + 1.0 {
-                _ws * 3600.0 // conversion to m/h
+            if _ws <= (NODATAVAL + 1.0) {
+                return NODATAVAL;
             } else {
-                NODATAVAL
+                _ws * 3600.0 // conversion to m/h
             }
         });
         // save data
@@ -214,11 +214,11 @@ pub fn get_input(handler: &dyn InputHandler, time: &DateTime<Utc>, len: usize) -
     }
     if let Some(wd) = wd {
         let wd = wd.mapv(|_wd| {
-            let mut _wd = _wd / 180.0 * PI; // conversion to rad
-            if _wd < 0.0 {
-                _wd += PI * 2.0;
+            if _wd <= (NODATAVAL + 1.0) {
+                return NODATAVAL;
+            } else {
+                _wd.to_radians().rem_euclid(2.0 * PI)  // conversion to rad, remap to [0, 2PI]
             }
-            _wd
         });
         // save data
         replace(&mut data, &wd, |i| &mut i.wind_dir);
@@ -231,21 +231,21 @@ pub fn get_input(handler: &dyn InputHandler, time: &DateTime<Utc>, len: usize) -
         // compute wind speed
         let ws = izip!(&u, &v)
             .map(|(_u, _v)| {
-                if *_u < (NODATAVAL + 1.0) || *_v < (NODATAVAL + 1.0) {
+                if *_u <= (NODATAVAL + 1.0) || *_v <= (NODATAVAL + 1.0) {
                     return NODATAVAL;
                 }
-
+                // compute wind speed
                 f32::sqrt(_u * _u + _v * _v) * 3600.0 // conversion to m/h
             })
             .collect::<Array1<f32>>();
         // compute wind direction
         let wd = izip!(&u, &v)
             .map(|(_u, _v)| {
-                if *_u < NODATAVAL + 1.0 || *_v < NODATAVAL + 1.0 {
+                if *_u <= (NODATAVAL + 1.0) || *_v <= (NODATAVAL + 1.0) {
                     return NODATAVAL; // there is no data
                 }
                 // from https://confluence.ecmwf.int/pages/viewpage.action?pageId=133262398
-                (PI + f32::atan2(*_u, *_v)).rem_euclid(PI * 2.0)  // rad
+                (PI + f32::atan2(*_u, *_v)).rem_euclid(2.0 * PI)  // rad
             })
             .collect::<Array1<f32>>();
         // save data
