@@ -1,5 +1,5 @@
-# Use Ubuntu 24.04 as the base image
-FROM ubuntu:24.04
+# Use Ubuntu 16.04 as the base image
+FROM ubuntu:16.04
 
 # install hdf5, netcdf, zlib
 RUN apt-get update && apt-get install -y \
@@ -15,7 +15,7 @@ RUN curl https://sh.rustup.rs -sSf | sh -s -- -y
 ENV PATH="/root/.cargo/bin:${PATH}"
 
 # install anaconda
-RUN curl https://repo.anaconda.com/miniconda/Miniconda3-latest-Linux-x86_64.sh -o miniconda.sh
+RUN curl https://repo.anaconda.com/miniconda/Miniconda3-py38_4.12.0-Linux-x86_64.sh -o miniconda.sh
 RUN bash miniconda.sh -b -p /root/miniconda
 
 ENV PATH="/root/miniconda/bin:${PATH}"
