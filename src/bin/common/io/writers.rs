@@ -248,10 +248,10 @@ where
     file.add_unlimited_dimension("time")
         .map_err(|err| format!("Add time dimension failed {err}"))?;
     let lats: Vec<f32> = (0..n_lats)
-        .map(|i| grid.min_lat + (grid.max_lat - grid.min_lat) * (i as f32) / (grid.nrows as f32))
+        .map(|i| grid.min_lat + grid.step_lat * (i as f32) )
         .collect();
     let lons: Vec<f32> = (0..n_lons)
-        .map(|i| grid.min_lon + (grid.max_lon - grid.min_lon) * (i as f32) / (grid.ncols as f32))
+        .map(|i| grid.min_lon + grid.step_lon * (i as f32) )
         .collect();
 
     let mut var = file
