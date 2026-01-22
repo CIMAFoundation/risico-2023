@@ -81,7 +81,7 @@ impl FWIStateElement {
             self.dc.iter(),
             self.rain.iter()
         )
-        .filter(|(t, _, _, _, _)| time.signed_duration_since(**t).num_hours() <= TIME_WINDOW)
+        .filter(|(t, _, _, _, _)| time.signed_duration_since(**t).num_hours() < TIME_WINDOW)
         .map(|(t, f, d, c, r)| (*t, *f, *d, *c, *r))
         .collect::<Vec<_>>();
         let dates: Vec<DateTime<Utc>> = combined.iter().map(|(t, _, _, _, _)| *t).collect();

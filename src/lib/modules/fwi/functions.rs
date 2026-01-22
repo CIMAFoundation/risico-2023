@@ -360,7 +360,7 @@ pub fn update_state_fn(
     dates.push(*time);
     history_rain.push(rain);
     let rain24 = izip!(dates.iter(), history_rain.iter())
-        .filter(|(t, _)| time.signed_duration_since(**t).num_hours() <= TIME_WINDOW)
+        .filter(|(t, _)| time.signed_duration_since(**t).num_hours() < TIME_WINDOW)
         .filter(|(_, r)| !r.is_nan())
         .map(|(_, r)| *r)
         .sum();

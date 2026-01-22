@@ -98,7 +98,7 @@ impl Mark5StateElement {
         let mut combined = izip!(
             self.dates.iter(),
             self.daily_rain.iter())
-        .filter(|(t, _)| time.signed_duration_since(**t).num_days() <= TIME_WINDOW)
+        .filter(|(t, _)| time.signed_duration_since(**t).num_days() < TIME_WINDOW)
         .map(|(t, r)| (*t, *r))
         .collect::<Vec<_>>();
         // order the values according to the dates
