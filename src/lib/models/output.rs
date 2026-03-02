@@ -19,7 +19,7 @@ pub struct OutputElement {
     pub wind_dir: f32,
     /// Input relative humidity [%]
     pub humidity: f32,
-    /// Input snow cover [mm]
+    /// Input snow cover [cm]
     pub snow_cover: f32,
     /// Dew point temperature [°C]
     pub temp_dew: f32,
@@ -208,7 +208,7 @@ pub enum OutputVariableName {
     #[strum(props(long_name = "Input Relative Humidity", units = "%"))]
     humidity,
     /// Input Snow Cover
-    #[strum(props(long_name = "Input Snow Cover", units = "mm"))]
+    #[strum(props(long_name = "Input Snow Cover", units = "cm"))]
     snowCover,
     /// Dew Point Temperature
     #[strum(props(long_name = "Dew Point Temperature", units = "°C"))]

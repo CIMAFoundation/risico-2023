@@ -20,7 +20,7 @@ pub struct InputElement {
     pub wind_dir: f32,
     /// relative humidity [%]
     pub humidity: f32,
-    /// snow depth [mm]
+    /// snow depth [cm]
     pub snow_cover: f32,
     /// dew point temperature [°C]
     pub temp_dew: f32,
@@ -91,7 +91,7 @@ pub enum InputVariableName {
     O,
     /// Forecasted precipitation [mm]
     P,
-    /// Forecasted snow cover depth [mm]
+    /// Forecasted snow cover depth [cm]
     SNOW,
 
     /// SATELLITE VARIABLES

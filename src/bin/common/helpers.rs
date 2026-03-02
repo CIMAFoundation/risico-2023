@@ -262,7 +262,7 @@ pub fn get_input(handler: &dyn InputHandler, time: &DateTime<Utc>, len: usize) -
     maybe_replace(&mut data, &fp, |i| &mut i.rain);
 
     // Forecasted snow cover depth
-    let snow = handler.get_values(SNOW, time); // supposed in mm
+    let snow = handler.get_values(SNOW, time); // supposed in cm
     maybe_replace(&mut data, &snow, |i| &mut i.snow_cover);
 
     // SATELLITE VARIABLES
