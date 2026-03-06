@@ -76,20 +76,21 @@ pub fn check_write_warm_state(time: &DateTime<Utc>, warm_state_hour: i64) -> boo
     time.hour() as i64 == warm_state_hour
 }
 
-const WARM_STATE_OFFSET: i64 = 1; // number of days before the run date to search for the warm state file
+pub const WARM_STATE_HOUR: i64 = 0;  // hour for writing warm state
+pub const WARM_STATE_LAG_DAYS: i64 = 1; // number of days before the run date to search for the warm state file
 
 pub fn find_warm_state(
     base_warm_file: &str,
     run_date: DateTime<Utc>,
     hour: i64,
-    offset: i64
+    lag_days: i64
 ) -> (Option<File>, DateTime<Utc>) {
     // for the last n days before date, try to read the warm state
     // compose the filename as base_warm_file_YYYYmmDDHHMM
     let mut current_date = run_date;
     let mut file: Option<File> = None;
-    let end_search: i64 = offset + 4;  // search for warm state files up to 4 days before the offset
-    for days_before in offset..end_search {
+    let end_search: i64 = lag_days + 4;  // search for warm state files up to 4 days before the lag_days
+    for days_before in lag_days..end_search {
         current_date = run_date - Duration::try_days(days_before).expect("Should be valid");
         // add the time to the warm state time
         current_date += Duration::try_hours(hour).expect("Should be valid");
@@ -291,11 +292,11 @@ impl RISICOConfig {
         let vegetations_dict = RISICOConfig::read_vegetation(&config_defs.vegetation_file)
             .map_err(|error| format!("error reading {}, {error}", &config_defs.vegetation_file))?;
 
-        let warm_state_hour = config_defs.warm_state_hour;
-        let warm_state_offset = config_defs.warm_state_offset.unwrap_or(WARM_STATE_OFFSET);
+        let warm_state_hour = config_defs.warm_state_hour.unwrap_or(WARM_STATE_HOUR);
+        let warm_state_lag_days = config_defs.warm_state_lag_days.unwrap_or(WARM_STATE_LAG_DAYS);
 
         let (warm_state, warm_state_time) =
-            RISICOConfig::read_warm_state(&config_defs.warm_state_path, date, &warm_state_hour, &warm_state_offset)
+            RISICOConfig::read_warm_state(&config_defs.warm_state_path, date, &warm_state_hour, &warm_state_lag_days)
                 .unwrap_or((
                     vec![RISICOWarmState::default(); n_cells],
                     date - Duration::try_days(1).expect("Should be a valid duration"),
@@ -687,11 +688,11 @@ impl FWIConfig {
             panic!("All properties must have the same length");
         }
 
-        let warm_state_hour = config_defs.warm_state_hour;
-        let warm_state_offset = config_defs.warm_state_offset.unwrap_or(WARM_STATE_OFFSET);
+        let warm_state_hour = config_defs.warm_state_hour.unwrap_or(WARM_STATE_HOUR);
+        let warm_state_lag_days = config_defs.warm_state_lag_days.unwrap_or(WARM_STATE_LAG_DAYS);
 
         let (warm_state, warm_state_time) =
-            FWIConfig::read_warm_state(&config_defs.warm_state_path, date, &warm_state_hour, &warm_state_offset)
+            FWIConfig::read_warm_state(&config_defs.warm_state_path, date, &warm_state_hour, &warm_state_lag_days)
                 .unwrap_or((
                     vec![FWIWarmState::default(); n_cells],
                     date - Duration::try_days(1).expect("Should be a valid duration"),
@@ -940,11 +941,11 @@ impl Mark5Config {
         if n_cells != props_container.lats.len() {
             return Err(format!("All properties must have the same length").into());
         }
-        let warm_state_hour = config_defs.warm_state_hour;
-        let warm_state_offset = config_defs.warm_state_offset.unwrap_or(WARM_STATE_OFFSET);
+        let warm_state_hour = config_defs.warm_state_hour.unwrap_or(WARM_STATE_HOUR);
+        let warm_state_lag_days = config_defs.warm_state_lag_days.unwrap_or(WARM_STATE_LAG_DAYS);
 
         let (warm_state, warm_state_time) =
-            Mark5Config::read_warm_state(&config_defs.warm_state_path, date, &warm_state_hour, &warm_state_offset)
+            Mark5Config::read_warm_state(&config_defs.warm_state_path, date, &warm_state_hour, &warm_state_lag_days)
                 .unwrap_or((
                     vec![Mark5WarmState::default(); n_cells],
                     date - Duration::try_days(1).expect("Should be a valid duration"),
@@ -1146,11 +1147,11 @@ impl KbdiConfig {
         if n_cells != props_container.lats.len() {
             return Err(format!("All properties must have the same length").into());
         }
-        let warm_state_hour = config_defs.warm_state_hour;
-        let warm_state_offset = config_defs.warm_state_offset.unwrap_or(WARM_STATE_OFFSET);
+        let warm_state_hour = config_defs.warm_state_hour.unwrap_or(WARM_STATE_HOUR);
+        let warm_state_lag_days = config_defs.warm_state_lag_days.unwrap_or(WARM_STATE_LAG_DAYS);
 
         let (warm_state, warm_state_time) =
-            KbdiConfig::read_warm_state(&config_defs.warm_state_path, date, &warm_state_hour, &warm_state_offset)
+            KbdiConfig::read_warm_state(&config_defs.warm_state_path, date, &warm_state_hour, &warm_state_lag_days)
                 .unwrap_or((
                     vec![KBDIWarmState::default(); n_cells],
                     date - Duration::try_days(1).expect("Should be a valid duration"),
@@ -1515,11 +1516,11 @@ impl NesterovConfig {
         if n_cells != props_container.lats.len() {
             panic!("All properties must have the same length");
         }
-        let warm_state_hour = config_defs.warm_state_hour;
-        let warm_state_offset = config_defs.warm_state_offset.unwrap_or(WARM_STATE_OFFSET);
+        let warm_state_hour = config_defs.warm_state_hour.unwrap_or(WARM_STATE_HOUR);
+        let warm_state_lag_days = config_defs.warm_state_lag_days.unwrap_or(WARM_STATE_LAG_DAYS);
 
         let (warm_state, warm_state_time) =
-            NesterovConfig::read_warm_state(&config_defs.warm_state_path, date, &warm_state_hour, &warm_state_offset)
+            NesterovConfig::read_warm_state(&config_defs.warm_state_path, date, &warm_state_hour, &warm_state_lag_days)
                 .unwrap_or((
                     vec![NesterovWarmState::default(); n_cells],
                     date - Duration::try_days(1).expect("Should be a valid duration"),
@@ -1756,11 +1757,11 @@ impl OrieuxConfig {
         if n_cells != props_container.lats.len() {
             panic!("All properties must have the same length");
         }
-        let warm_state_hour = config_defs.warm_state_hour;
-        let warm_state_offset = config_defs.warm_state_offset.unwrap_or(WARM_STATE_OFFSET);
+        let warm_state_hour = config_defs.warm_state_hour.unwrap_or(WARM_STATE_HOUR);
+        let warm_state_lag_days = config_defs.warm_state_lag_days.unwrap_or(WARM_STATE_LAG_DAYS);
 
         let (warm_state, warm_state_time) =
-            OrieuxConfig::read_warm_state(&config_defs.warm_state_path, date, &warm_state_hour, &warm_state_offset)
+            OrieuxConfig::read_warm_state(&config_defs.warm_state_path, date, &warm_state_hour, &warm_state_lag_days)
                 .unwrap_or((
                     vec![OrieuxWarmState::default(); n_cells],
                     date - Duration::try_days(1).expect("Should be a valid duration"),
