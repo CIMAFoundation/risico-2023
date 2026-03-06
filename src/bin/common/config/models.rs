@@ -113,8 +113,8 @@ pub struct RISICOConfig {
     warm_state_hour: i64,
     properties: RISICOProperties,
     palettes: PaletteMap,
-    // use_temperature_effect: bool,
-    // use_ndvi: bool,
+    // use_temperature_effect: bool,  // DEPRECATED
+    // use_ndvi: bool,  // DEPRECATED
     output_time_resolution: u32,
     output_types_defs: Vec<OutputTypeConfig>,
     model_version: String,
@@ -323,8 +323,8 @@ impl RISICOConfig {
             warm_state_hour,
             properties: props,
             palettes,
-            // use_temperature_effect: config_defs.use_temperature_effect,
-            // use_ndvi: config_defs.use_ndvi,
+            // use_temperature_effect: config_defs.use_temperature_effect,  // DEPRECATED
+            // use_ndvi: config_defs.use_ndvi,  // DEPRECATED
             output_time_resolution: config_defs.output_time_resolution,
             model_version: config_defs.model_version.clone(),
             output_types_defs: config_defs.output_types.clone(),

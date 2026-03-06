@@ -40,8 +40,8 @@ const CELLS_FILE_KEY: &str = "CELLE";
 const VEGETATION_FILE_KEY: &str = "VEG";
 const PPF_FILE_KEY: &str = "PPF";
 const MODEL_VERSION_KEY: &str = "MODEL_VERSION";
-const USE_TEMPERATURE_EFFECT_KEY: &str = "USETCONTR";
-const USE_NDVI_KEY: &str = "USENDVI";
+// const USE_TEMPERATURE_EFFECT_KEY: &str = "USETCONTR";  // DEPRECATED
+// const USE_NDVI_KEY: &str = "USENDVI";  // DEPRECATED
 const OUTPUTS_KEY: &str = "MODEL";
 const NETCDF_INPUT_CONFIG: &str = "NETCDFINPUTCONFIG";
 const VARIABLES_KEY: &str = "VARIABLE";
@@ -116,8 +116,8 @@ pub struct RISICOConfigBuilder {
     pub warm_state_lag_days: Option<i64>,
     pub ppf_file: Option<String>,
     pub output_types: Vec<OutputTypeConfig>,
-    pub use_temperature_effect: bool,
-    pub use_ndvi: bool,
+    // pub use_temperature_effect: bool,  // DEPRECATED
+    // pub use_ndvi: bool,  // DEPRECATED
     pub output_time_resolution: u32,
     pub model_version: String,
 }
@@ -384,18 +384,20 @@ impl ConfigContainer {
 
         let ppf_file = config_map.first(PPF_FILE_KEY);
 
-        let use_temperature_effect =
-            if let Some(value) = config_map.first(USE_TEMPERATURE_EFFECT_KEY) {
-                matches!(value.as_str(), "true" | "True" | "TRUE" | "1")
-            } else {
-                false
-            };
+        // DEPRECATED
+        // let use_temperature_effect =
+        //     if let Some(value) = config_map.first(USE_TEMPERATURE_EFFECT_KEY) {
+        //         matches!(value.as_str(), "true" | "True" | "TRUE" | "1")
+        //     } else {
+        //         false
+        //     };
 
-        let use_ndvi = if let Some(value) = config_map.first(USE_NDVI_KEY) {
-            matches!(value.as_str(), "true" | "True" | "TRUE" | "1")
-        } else {
-            false
-        };
+        // DEPRECATED
+        // let use_ndvi = if let Some(value) = config_map.first(USE_NDVI_KEY) {
+        //     matches!(value.as_str(), "true" | "True" | "TRUE" | "1")
+        // } else {
+        //     false
+        // };
 
         let output_time_resolution = match config_map.first(KEY_HOURSRESOLUTION) {
             Some(value) => value.parse::<u32>().unwrap_or(3),
@@ -427,9 +429,8 @@ impl ConfigContainer {
             vegetation_file,
             ppf_file,
             output_types,
-
-            use_temperature_effect,
-            use_ndvi,
+            // use_temperature_effect,  // DEPRECATED
+            // use_ndvi,  // DEPRECATED
             output_time_resolution,
             model_version,
         };
