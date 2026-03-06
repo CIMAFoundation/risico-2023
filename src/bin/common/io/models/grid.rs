@@ -149,6 +149,9 @@ impl Grid for RegularGrid {
         }
         let i = ((lat - self.min_lat) / self.step_lat).round() as usize;
         let j = ((lon - self.min_lon) / self.step_lon).round() as usize;
+        if i >= self.nrows || j >= self.ncols {
+            return None;
+        }
         Some(i * self.ncols + j)
     }
 
