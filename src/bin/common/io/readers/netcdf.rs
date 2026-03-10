@@ -21,11 +21,11 @@ use super::prelude::InputHandler;
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct VariableEntry {
     pub name: String,  // variable name in netcdf file
-    pub offset: i64,  // offset in seconds to be aplied in the variable time line
+    pub offset: Option<i64>,  // offset in seconds to be aplied in the variable time line
 }
 
 impl VariableEntry {
-    pub fn new(name: String, offset: i64) -> Self {
+    pub fn new(name: String, offset: Option<i64>) -> Self {
         VariableEntry { name, offset }
     }
 }
@@ -35,7 +35,7 @@ impl VariableEntry {
 struct VariableMapEntry {
     internal_name: String,
     name: String,
-    offset: i64
+    offset: Option<i64>
 }
 
 #[derive(Clone, Debug, Serialize)]
@@ -56,7 +56,7 @@ impl Default for NetCdfInputConfiguration {
                 return;
             }
             warn!("Variable {} not found in configuration", &var);
-            variable_map.insert(var, VariableEntry::new(var.to_string(), 0));
+            variable_map.insert(var, VariableEntry::new(var.to_string(), Some(0)));
         });
 
         NetCdfInputConfiguration {
@@ -161,19 +161,20 @@ where
             .iter()
             .filter(|(k, _)| *k == "variable_map")
             .filter_map(|(k, v)| {
-                if let Ok(var) = InputVariableName::from_str(k) {
-                        let parts: Vec<&str> = v.split(';').collect();
-                        let name = parts[0].to_owned();
-                        let offset = parts[1].parse::<i64>().unwrap_or_else(|e| {
-                            warn!("Error parsing offset: {}", e);
-                            0
-                        });
-                        let entry = VariableEntry::new(name, offset);
-                    Some((var, entry))
+            if let Ok(var) = InputVariableName::from_str(k) {
+                let parts: Vec<&str> = v.split(';').collect();
+                let name = parts[0].to_owned();
+                let offset = if parts.len() > 1 {
+                    parts[1].parse::<i64>().ok()
                 } else {
-                    warn!("Variable {} not recognized", k);
                     None
-                }
+                };
+                let entry = VariableEntry::new(name, offset);
+                Some((var, entry))
+            } else {
+                warn!("Variable {} not recognized", k);
+                None
+            }
             })
             .collect();
 
@@ -183,7 +184,7 @@ where
                 return;
             }
             warn!("Variable {} not found in configuration", &var);
-            variable_map.insert(var, VariableEntry::new(var.to_string(), 0));
+            variable_map.insert(var, VariableEntry::new(var.to_string(), Some(0)));
         });
 
         NetCdfInputConfiguration {
@@ -300,7 +301,7 @@ fn register_nc_file(
         .variable(&config.time_name)
         .ok_or_else(|| format!("Could not find variable {}", &config.time_name))?;
 
-    let (variables, offsets): (Vec<InputVariableName>, Vec<i64>) = nc_file
+    let (variables, offsets): (Vec<InputVariableName>, Vec<Option<i64>>) = nc_file
     .variables()
     .filter_map(|var| {
         let nc_var = var.name().to_owned();
@@ -312,6 +313,8 @@ fn register_nc_file(
             .map(|(k, entry)| (*k, entry.offset))
     })
     .unzip();
+
+    let offsets: Vec<i64> = offsets.into_iter().map(|opt| opt.unwrap_or(0)).collect();
 
     // If no variables are found, return None
     if variables.is_empty() {
