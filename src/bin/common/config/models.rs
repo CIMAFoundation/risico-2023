@@ -554,9 +554,9 @@ impl RISICOConfig {
         base_warm_file: &str,
         run_date: DateTime<Utc>,
         hour: &i64,
-        offset: &i64,
+        lag_days: &i64,
     ) -> Option<(Vec<RISICOWarmState>, DateTime<Utc>)> {
-        let (file, current_date) = find_warm_state(base_warm_file, run_date, *hour, *offset);
+        let (file, current_date) = find_warm_state(base_warm_file, run_date, *hour, *lag_days);
         let file = match file {
             Some(file) => file,
             None => {
@@ -797,9 +797,9 @@ impl FWIConfig {
         base_warm_file: &str,
         run_date: DateTime<Utc>,
         hour: &i64,
-        offset: &i64,
+        lag_days: &i64,
     ) -> Option<(Vec<FWIWarmState>, DateTime<Utc>)> {
-        let (file, current_date) = find_warm_state(base_warm_file, run_date, *hour, *offset);
+        let (file, current_date) = find_warm_state(base_warm_file, run_date, *hour, *lag_days);
         let file = match file {
             Some(file) => file,
             None => {
@@ -1043,9 +1043,9 @@ impl Mark5Config {
         base_warm_file: &str,
         run_date: DateTime<Utc>,
         hour: &i64,
-        offset: &i64,
+        lag_days: &i64,
     ) -> Option<(Vec<Mark5WarmState>, DateTime<Utc>)> {
-        let (file, current_date) = find_warm_state(base_warm_file, run_date, *hour, *offset);
+        let (file, current_date) = find_warm_state(base_warm_file, run_date, *hour, *lag_days);
         let file = match file {
             Some(file) => file,
             None => {
@@ -1245,9 +1245,9 @@ impl KbdiConfig {
         base_warm_file: &str,
         run_date: DateTime<Utc>,
         hour: &i64,
-        offset: &i64,
+        lag_days: &i64,
     ) -> Option<(Vec<KBDIWarmState>, DateTime<Utc>)> {
-        let (file, current_date) = find_warm_state(base_warm_file, run_date, *hour, *offset);
+        let (file, current_date) = find_warm_state(base_warm_file, run_date, *hour, *lag_days);
         let file = match file {
             Some(file) => file,
             None => {
@@ -1603,9 +1603,9 @@ impl NesterovConfig {
         base_warm_file: &str,
         run_date: DateTime<Utc>,
         hour: &i64,
-        offset: &i64
+        lag_days: &i64
     ) -> Option<(Vec<NesterovWarmState>, DateTime<Utc>)> {
-        let (file, current_date) = find_warm_state(base_warm_file, run_date, *hour, *offset);
+        let (file, current_date) = find_warm_state(base_warm_file, run_date, *hour, *lag_days);
         let file = match file {
             Some(file) => file,
             None => {
@@ -1853,9 +1853,9 @@ impl OrieuxConfig {
         base_warm_file: &str,
         run_date: DateTime<Utc>,
         hour: &i64,
-        offset: &i64
+        lag_days: &i64
     ) -> Option<(Vec<OrieuxWarmState>, DateTime<Utc>)> {
-        let (file, current_date) = find_warm_state(base_warm_file, run_date, *hour, *offset);
+        let (file, current_date) = find_warm_state(base_warm_file, run_date, *hour, *lag_days);
         let file = match file {
             Some(file) => file,
             None => {
