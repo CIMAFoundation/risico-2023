@@ -1,13 +1,20 @@
-use chrono::{DateTime, Datelike, Utc};
+use chrono::{DateTime, Datelike, Timelike, Utc};
 use itertools::izip;
+use chrono_tz::Tz;
+use lazy_static::lazy_static;
+use tzf_rs::DefaultFinder;
 
-use crate::models::{input::InputElement, output::OutputElement};
+use crate::{models::{input::InputElement, output::OutputElement}};
 
 use super::{
     config::FWIModelConfig,
     constants::*,
     models::{FWIPropertiesElement, FWIStateElement},
 };
+
+lazy_static! {
+    static ref TZ_FINDER: DefaultFinder = DefaultFinder::new();
+}
 
 // HELPER FUNCTIONS
 
@@ -349,14 +356,13 @@ pub fn update_state_fn(
         let last_ffmc = state.ffmc.iter().copied().last().unwrap_or(FFMC_INIT);
         let last_dmc = state.dmc.iter().copied().last().unwrap_or(DMC_INIT);
         let last_dc = state.dc.iter().copied().last().unwrap_or(DC_INIT);
-        let rain_nan = f32::NAN; // add NaN to rain history
-                                 // update state
-        state.update(time, last_ffmc, last_dmc, last_dc, rain_nan);
+        // update state
+        state.update(time, last_ffmc, last_dmc, last_dc, rain, humidity, temperature, wind_speed);
         return;
     }
 
     // add last rain in input, get 24 hours of rain and aggregate
-    let (mut dates, _, _, _, mut history_rain) = state.get_time_window(time);
+    let (mut dates, _, _, _, mut history_rain, _, _, _) = state.get_time_window(time);
     dates.push(*time);
     history_rain.push(rain);
     let rain24 = izip!(dates.iter(), history_rain.iter())
@@ -384,46 +390,93 @@ pub fn update_state_fn(
     let new_dc = config.dc(dc_24h_ago, rain24, temperature, l_f);
 
     // update history of states
-    state.update(time, new_ffmc, new_dmc, new_dc, rain);
+    state.update(time, new_ffmc, new_dmc, new_dc, rain, humidity, temperature, wind_speed);
 }
+
+
+pub fn get_indices_noon(
+    state: &FWIStateElement,
+    prop: &FWIPropertiesElement,
+) -> Option<(f32, f32, f32, f32, f32, f32, f32)> {
+    // Find local timezone from coordinates
+    let tz_name = TZ_FINDER.get_tz_name(prop.lon as f64, prop.lat as f64);
+    let tz: Tz = tz_name.parse().ok()?;
+
+    // Pick the latest record at 12:00 local time
+    let selected = izip!(
+        state.dates.iter(),
+        state.ffmc.iter(),
+        state.dmc.iter(),
+        state.dc.iter(),
+        state.humidity.iter(),
+        state.temperature.iter(),
+        state.wind_speed.iter()
+    )
+    .rev()
+    .find_map(|(t, ffmc, dmc, dc, humidity, temperature, wind_speed)| {
+        let local_time = t.with_timezone(&tz);
+        if local_time.hour() == 12 {
+            Some((*t, *ffmc, *dmc, *dc, *humidity, *temperature, *wind_speed))
+        } else {
+            None
+        }
+    })?;
+
+    let (selected_time, ffmc, dmc, dc, humidity, temperature, wind_speed) = selected;
+
+    // Sum rain in the 24h before selected_time
+    let (_, _, _, _, rain_last_24h, _, _, _) = state.get_time_window(&selected_time);
+    let rain_24h = rain_last_24h.iter().filter(|&r| !r.is_nan()).sum();
+
+    Some((ffmc, dmc, dc, rain_24h, humidity, temperature, wind_speed))
+}
+
+
+pub fn get_indices_last(
+    state: &FWIStateElement,
+    _prop: &FWIPropertiesElement,
+) -> Option<(f32, f32, f32, f32, f32, f32, f32)> {
+    // return the last indices in the state
+    let ffmc = state.ffmc.iter().copied().last()?;
+    let dmc = state.dmc.iter().copied().last()?;
+    let dc = state.dc.iter().copied().last()?;
+    // return the last input values
+    let rain_tot: f32 = state.rain.iter().filter(|&r| !r.is_nan()).sum();
+    let humidity = state.humidity.iter().copied().last()?;
+    let temperature = state.temperature.iter().copied().last()?;
+    let wind_speed = state.wind_speed.iter().copied().last()?;
+    Some((ffmc, dmc, dc, rain_tot, humidity, temperature, wind_speed))
+}   
 
 // COMPUTE OUTPUTS
 #[allow(non_snake_case)]
 pub fn get_output_fn(
     state: &FWIStateElement,
-    input: &InputElement,
+    props: &FWIPropertiesElement,
     config: &FWIModelConfig,
 ) -> OutputElement {
-    // let rain = input.rain;  // DEPRECATED
-    // the rain information to save in output is the total rain in the state time window
-    let rain_tot: f32 = state.rain.iter().filter(|&r| !r.is_nan()).sum();
 
-    let humidity = input.humidity;
-    let temperature = input.temperature;
-    let wind_speed = input.wind_speed;
-
-    // get last moisture values to save in output
-    let ffmc_last = state.ffmc.iter().copied().last().unwrap_or(FFMC_INIT);
-    let dmc_last = state.dmc.iter().copied().last().unwrap_or(DMC_INIT);
-    let dc_last = state.dc.iter().copied().last().unwrap_or(DC_INIT);
+    // get the indices and weather variables to compute the outputs
+    let (ffmc, dmc, dc, rain_tot, humidity, temperature, wind_speed) = config.get_indices(state, props).unwrap_or((FFMC_INIT, DMC_INIT, DC_INIT, 0.0, f32::NAN, f32::NAN, f32::NAN));
 
     // compute fine fuel moisture in [0, 100]
-    let moisture_last = from_ffmc_to_moisture(ffmc_last);
-    let dffm_last = (moisture_last / (100.0 + moisture_last)) * 100.0;
+    // intended as moisture content with respect to total weight of the fuel (not dry weight)
+    let moisture = from_ffmc_to_moisture(ffmc);
+    let dffm = (moisture / (100.0 + moisture)) * 100.0;
 
-    let isi = config.isi(moisture_last, wind_speed);
-    let bui = config.bui(dmc_last, dc_last);
-    let fwi = config.fwi(isi, bui);
+    let isi = config.isi(moisture, wind_speed);
+    let bui = config.bui(dmc, dc);
+    let fwi = config.fwi(bui, isi);
 
     let ifwi = compute_ifwi(fwi);
 
     let wind_speed_out = wind_speed / 3600.0; // convert from m/h to m/s
 
     OutputElement {
-        ffmc: ffmc_last,
-        dffm: dffm_last,
-        dmc: dmc_last,
-        dc: dc_last,
+        ffmc: ffmc,
+        dffm: dffm,
+        dmc: dmc,
+        dc: dc,
         isi,
         bui,
         fwi,
