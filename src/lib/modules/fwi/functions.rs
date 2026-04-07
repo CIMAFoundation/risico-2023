@@ -357,12 +357,12 @@ pub fn update_state_fn(
         let last_dmc = state.dmc.iter().copied().last().unwrap_or(DMC_INIT);
         let last_dc = state.dc.iter().copied().last().unwrap_or(DC_INIT);
         // update state
-        state.update(time, last_ffmc, last_dmc, last_dc, rain, humidity, temperature, wind_speed);
+        state.update(time, last_ffmc, last_dmc, last_dc, rain, humidity, temperature, wind_speed, NODATAVAL);
         return;
     }
 
     // add last rain in input, get 24 hours of rain and aggregate
-    let (mut dates, _, _, _, mut history_rain, _, _, _) = state.get_time_window(time);
+    let (mut dates, _, _, _, mut history_rain, _, _, _, _) = state.get_time_window(time);
     dates.push(*time);
     history_rain.push(rain);
     let rain24 = izip!(dates.iter(), history_rain.iter())
@@ -390,7 +390,7 @@ pub fn update_state_fn(
     let new_dc = config.dc(dc_24h_ago, rain24, temperature, l_f);
 
     // update history of states
-    state.update(time, new_ffmc, new_dmc, new_dc, rain, humidity, temperature, wind_speed);
+    state.update(time, new_ffmc, new_dmc, new_dc, rain, humidity, temperature, wind_speed, rain24);
 }
 
 
@@ -410,25 +410,22 @@ pub fn get_indices_noon(
         state.dc.iter(),
         state.humidity.iter(),
         state.temperature.iter(),
-        state.wind_speed.iter()
+        state.wind_speed.iter(),
+        state.rain24h.iter()
     )
     .rev()
-    .find_map(|(t, ffmc, dmc, dc, humidity, temperature, wind_speed)| {
+    .find_map(|(t, ffmc, dmc, dc, humidity, temperature, wind_speed, rain24h)| {
         let local_time = t.with_timezone(&tz);
         if local_time.hour() == 12 {
-            Some((*t, *ffmc, *dmc, *dc, *humidity, *temperature, *wind_speed))
+            Some((*ffmc, *dmc, *dc, *humidity, *temperature, *wind_speed, *rain24h))
         } else {
             None
         }
     })?;
 
-    let (selected_time, ffmc, dmc, dc, humidity, temperature, wind_speed) = selected;
+    let (ffmc, dmc, dc, humidity, temperature, wind_speed, rain24h) = selected;
 
-    // Sum rain in the 24h before selected_time
-    let (_, _, _, _, rain_last_24h, _, _, _) = state.get_time_window(&selected_time);
-    let rain_24h = rain_last_24h.iter().filter(|&r| !r.is_nan()).sum();
-
-    Some((ffmc, dmc, dc, rain_24h, humidity, temperature, wind_speed))
+    Some((ffmc, dmc, dc, rain24h, humidity, temperature, wind_speed))
 }
 
 
@@ -441,11 +438,11 @@ pub fn get_indices_last(
     let dmc = state.dmc.iter().copied().last()?;
     let dc = state.dc.iter().copied().last()?;
     // return the last input values
-    let rain_tot: f32 = state.rain.iter().filter(|&r| !r.is_nan()).sum();
+    let rain24h: f32 = state.rain24h.iter().copied().last()?;
     let humidity = state.humidity.iter().copied().last()?;
     let temperature = state.temperature.iter().copied().last()?;
     let wind_speed = state.wind_speed.iter().copied().last()?;
-    Some((ffmc, dmc, dc, rain_tot, humidity, temperature, wind_speed))
+    Some((ffmc, dmc, dc, rain24h, humidity, temperature, wind_speed))
 }   
 
 // COMPUTE OUTPUTS
@@ -457,7 +454,7 @@ pub fn get_output_fn(
 ) -> OutputElement {
 
     // get the indices and weather variables to compute the outputs
-    let (ffmc, dmc, dc, rain_tot, humidity, temperature, wind_speed) = config.get_indices(state, props).unwrap_or((FFMC_INIT, DMC_INIT, DC_INIT, 0.0, f32::NAN, f32::NAN, f32::NAN));
+    let (ffmc, dmc, dc, rain24h, humidity, temperature, wind_speed) = config.get_indices(state, props).unwrap_or((FFMC_INIT, DMC_INIT, DC_INIT, NODATAVAL, NODATAVAL, NODATAVAL, NODATAVAL));
 
     // compute fine fuel moisture in [0, 100]
     // intended as moisture content with respect to total weight of the fuel (not dry weight)
@@ -481,7 +478,7 @@ pub fn get_output_fn(
         bui,
         fwi,
         ifwi,
-        rain: rain_tot,
+        rain: rain24h,
         humidity,
         temperature,
         wind_speed: wind_speed_out,
