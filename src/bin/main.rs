@@ -163,7 +163,7 @@ fn run_fwi(
 
         if config.should_write_output(&state.time) {
             let c = Utc::now();
-            let output = state.output(&input);
+            let output = state.output(&props);
             trace!("Generating output took {} seconds", Utc::now() - c);
 
             let c = Utc::now();

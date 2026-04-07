@@ -130,7 +130,7 @@ pub struct FWIConfigBuilder {
     pub warm_state_hour: Option<i64>,
     pub warm_state_lag_days: Option<i64>,
     pub output_types: Vec<OutputTypeConfig>,
-    pub output_time_resolution: u32,
+    pub output_time_resolution: Option<u32>,
     pub model_version: String,
 }
 

@@ -700,6 +700,13 @@ impl FWIConfig {
 
         let props = FWIProperties::new(props_container);
 
+        // if config_defs.model_version = 'legacy' them put output_time_resolution to 24
+        let mut output_time_resolution = config_defs.output_time_resolution.unwrap_or(24);
+        if config_defs.model_version == "legacy" && output_time_resolution != 24 {
+            warn!("Using legacy model version, setting output_time_resolution to 24");
+            output_time_resolution = 24;
+        }
+
         let config = FWIConfig {
             run_date: date,
             // model_name: config_defs.model_name.clone(),
@@ -709,7 +716,7 @@ impl FWIConfig {
             warm_state_hour,
             properties: props,
             palettes,
-            output_time_resolution: config_defs.output_time_resolution,
+            output_time_resolution,
             model_version: config_defs.model_version.clone(),
             output_types_defs: config_defs.output_types.clone(),
         };

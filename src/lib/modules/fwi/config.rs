@@ -1,6 +1,10 @@
 use super::functions::{
     update_moisture, update_dmc, update_dc,
-    compute_isi, compute_bui, compute_fwi
+    compute_isi, compute_bui, compute_fwi,
+    get_indices_noon, get_indices_last
+};
+use super::models::{
+    FWIStateElement, FWIPropertiesElement
 };
 
 /// configuration structure for model config
@@ -14,7 +18,8 @@ pub struct FWIModelConfig {
     dc_fn: fn(f32, f32, f32, f32) -> f32,
     isi_fn: fn(f32, f32) -> f32,
     bui_fn: fn(f32, f32) -> f32,
-    fwi_fn: fn(f32, f32) -> f32
+    fwi_fn: fn(f32, f32) -> f32,
+    get_indices_fn: fn(&FWIStateElement, &FWIPropertiesElement) -> Option<(f32, f32, f32, f32, f32, f32, f32)>
 }
 
 impl FWIModelConfig {
@@ -25,6 +30,7 @@ impl FWIModelConfig {
         let isi_fn: fn(f32, f32) -> f32;
         let bui_fn: fn(f32, f32) -> f32;
         let fwi_fn: fn(f32, f32) -> f32;
+        let get_indices_fn: fn(&FWIStateElement, &FWIPropertiesElement) -> Option<(f32, f32, f32, f32, f32, f32, f32)>;
 
         match model_version_str {
             "legacy" => {
@@ -34,6 +40,16 @@ impl FWIModelConfig {
                 isi_fn = compute_isi;
                 bui_fn = compute_bui;
                 fwi_fn = compute_fwi;
+                get_indices_fn = get_indices_noon;
+            }
+            "sliding_window" => {
+                moisture_fn = update_moisture;
+                dmc_fn = update_dmc;
+                dc_fn = update_dc;
+                isi_fn = compute_isi;
+                bui_fn = compute_bui;
+                fwi_fn = compute_fwi;
+                get_indices_fn = get_indices_last;
             }
             _ => {
                 moisture_fn = update_moisture;
@@ -42,6 +58,7 @@ impl FWIModelConfig {
                 isi_fn = compute_isi;
                 bui_fn = compute_bui;
                 fwi_fn = compute_fwi;
+                get_indices_fn = get_indices_noon;
             }
         }
 
@@ -52,7 +69,8 @@ impl FWIModelConfig {
             dc_fn,
             isi_fn,
             bui_fn,
-            fwi_fn
+            fwi_fn,
+            get_indices_fn
         }
     }
 
@@ -116,6 +134,15 @@ impl FWIModelConfig {
         bui: f32
     ) -> f32 {
         (self.fwi_fn)(isi, bui)
+    }
+
+    #[allow(non_snake_case)]
+    pub fn get_indices(
+        &self,
+        state: &FWIStateElement,
+        props: &FWIPropertiesElement
+    ) -> Option<(f32, f32, f32, f32, f32, f32, f32)> {
+        (self.get_indices_fn)(state, props)
     }
 
 }
