@@ -1,6 +1,5 @@
 use crate::models::{input::Input, output::Output};
 use chrono::prelude::*;
-use itertools::izip;
 use ndarray::{Array1, Zip};
 
 use super::{
@@ -73,58 +72,6 @@ pub struct FWIStateElement {
     pub rain24h: Vec<f32>
 }
 
-
-impl FWIStateElement {
-
-    pub fn get_weather_time_window(&self, time: &DateTime<Utc>) -> (Vec<DateTime<Utc>>, Vec<f32>, Vec<f32>, Vec<f32>, Vec<f32>, Vec<f32>) {
-        // zip with dates and take only weather < 24 hours
-        let combined = izip!(
-            self.dates.iter(),
-            self.rain.iter(),
-            self.humidity.iter(),
-            self.temperature.iter(),
-            self.wind_speed.iter(),
-            self.rain24h.iter()
-        )
-        .filter(|(t, _, _, _, _, _)| time.signed_duration_since(**t) < chrono::Duration::hours(TIME_WINDOW.into()))
-        .map(|(t, r, h, temp , w, r24)| (*t, *r, *h, *temp, *w, *r24))
-        .collect::<Vec<_>>();
-        let dates: Vec<DateTime<Utc>> = combined.iter().map(|(t, _, _, _, _, _)| *t).collect();
-        let rain: Vec<f32> = combined.iter().map(|(_, r, _, _, _, _)| *r).collect();
-        let humidity: Vec<f32> = combined.iter().map(|(_, _, h, _, _, _)| *h).collect();
-        let temperature: Vec<f32> = combined.iter().map(|(_, _, _, temp, _, _)| *temp).collect();
-        let wind_speed: Vec<f32> = combined.iter().map(|(_, _, _, _, w, _)| *w).collect();
-        let rain24h: Vec<f32> = combined.iter().map(|(_, _, _, _, _, r24)| *r24).collect();
-        (dates, rain, humidity, temperature, wind_speed, rain24h)
-    }
-
-    pub fn update_weather(&mut self, time: &DateTime<Utc>, rain: f32, humidity: f32, temperature: f32, wind_speed: f32, rain24h: f32) {
-        // add new values
-        self.dates.push(*time);
-        self.rain.push(rain);
-        self.humidity.push(humidity);
-        self.temperature.push(temperature);
-        self.wind_speed.push(wind_speed);
-        self.rain24h.push(rain24h);
-        // get the time window
-        let (new_dates, new_rain, new_humidity, new_temperature, new_wind_speed, new_rain24h) = self.get_weather_time_window(time);
-        // update the values
-        self.dates = new_dates;
-        self.rain = new_rain;
-        self.humidity = new_humidity;
-        self.temperature = new_temperature;
-        self.wind_speed = new_wind_speed;
-        self.rain24h = new_rain24h;
-    }
-
-    pub fn get_moisture(&self) -> (f32, f32, f32) {
-        let ffmc = self.ffmc.iter().copied().last().unwrap_or(FFMC_INIT);
-        let dmc = self.dmc.iter().copied().last().unwrap_or(DMC_INIT);
-        let dc = self.dc.iter().copied().last().unwrap_or(DC_INIT);
-        (ffmc, dmc, dc)
-    }
-
-}
 
 #[derive(Debug)]
 pub struct FWIState {

@@ -4,7 +4,7 @@ use chrono_tz::Tz;
 use lazy_static::lazy_static;
 use tzf_rs::DefaultFinder;
 
-use crate::{models::{input::InputElement, output::OutputElement}};
+use crate::models::{input::InputElement, output::OutputElement};
 
 use super::{
     config::FWIModelConfig,
@@ -366,19 +366,7 @@ pub fn compute_ifwi(fwi: f32) -> f32 {
 }
 
 
-// WEATHER MANAGING FUNCTIONS
-
-pub fn get_weather_last(
-    state: &FWIStateElement,
-) -> Option<(f32, f32, f32, f32)> {
-    // return the last weather values
-    let rain24h: f32 = state.rain24h.iter().copied().last()?;
-    let humidity = state.humidity.iter().copied().last()?;
-    let temperature = state.temperature.iter().copied().last()?;
-    let wind_speed = state.wind_speed.iter().copied().last()?;
-    Some((rain24h, humidity, temperature, wind_speed))
-}
-
+// WEATHER NOON - HELPERS FUNCTIONS
 
 pub fn get_weather_noon(
     state: &FWIStateElement,
@@ -485,50 +473,181 @@ fn lerp_valid(a: f32, b: f32, w: f32) -> Option<f32> {
 }
 
 
-#[allow(non_snake_case)]
-pub fn store_weather_fn(
-    state: &mut FWIStateElement,
-    input: &InputElement,
-    time: &DateTime<Utc>,
-) {
-    let mut rain = input.rain;
-    let humidity = input.humidity;
-    let temperature = input.temperature;
-    let wind_speed = input.wind_speed;
+// UPDATE STATE FUNCTION
 
-    if rain == NODATAVAL
+pub fn update_state_legacy(
+    state: &mut FWIStateElement,
+    _prop: &FWIPropertiesElement,
+    input: &InputElement,
+    time: &DateTime<Utc>
+) {
+    let mut rain_in = input.rain;
+    let humidity_in = input.humidity;
+    let temperature_in = input.temperature;
+    let wind_speed_in = input.wind_speed;
+
+    if rain_in == NODATAVAL
     {
         // put rain as NaN value
-        rain = f32::NAN;
+        rain_in = f32::NAN;
     }
 
-    // add last rain in input, get 24 hours of rain and aggregate
-    let (mut dates, mut history_rain, _, _, _, _) = state.get_weather_time_window(time);
-    dates.push(*time);
-    history_rain.push(rain);
-    let rain24 = izip!(dates.iter(), history_rain.iter())
-        .filter(|(t, _)| time.signed_duration_since(**t) < chrono::Duration::hours(TIME_WINDOW.into()))
-        .filter(|(_, r)| !r.is_nan())
-        .map(|(_, r)| *r)
-        .sum();
+    // get the last 24 hours conditions
+    let combined = izip!(
+        state.dates.iter(),
+        state.rain.iter(),
+        state.humidity.iter(),
+        state.temperature.iter(),
+        state.wind_speed.iter(),
+        state.rain24h.iter()
+    )
+    .filter(|(t, _, _, _, _, _)| time.signed_duration_since(**t) < chrono::Duration::hours(TIME_WINDOW.into()))
+    .map(|(t, r, h, temp , w, r24)| (*t, *r, *h, *temp, *w, *r24))
+    .collect::<Vec<_>>();
 
-    // update history of weather
-    state.update_weather(time, rain, humidity, temperature, wind_speed, rain24);
+    let mut dates: Vec<DateTime<Utc>> = combined.iter().map(|(t, _, _, _, _, _)| *t).collect();
+    let mut rain: Vec<f32> = combined.iter().map(|(_, r, _, _, _, _)| *r).collect();
+    let mut humidity: Vec<f32> = combined.iter().map(|(_, _, h, _, _, _)| *h).collect();
+    let mut temperature: Vec<f32> = combined.iter().map(|(_, _, _, temp, _, _)| *temp).collect();
+    let mut wind_speed: Vec<f32> = combined.iter().map(|(_, _, _, _, w, _)| *w).collect();
+    let mut rain24h: Vec<f32> = combined.iter().map(|(_, _, _, _, _, r24)| *r24).collect();
+
+    // add last weather input    
+    dates.push(*time);
+    rain.push(rain_in);
+    humidity.push(humidity_in);
+    temperature.push(temperature_in);
+    wind_speed.push(wind_speed_in);
+
+    // aggregate the last 24 hours of rain and add to state
+    let rain24h_in = rain.iter().filter(|r| !r.is_nan()).map(|r| *r).sum();
+    rain24h.push(rain24h_in);
+
+    // update state
+    state.dates = dates;
+    state.rain = rain;
+    state.humidity = humidity;
+    state.temperature = temperature;
+    state.wind_speed = wind_speed;
+    state.rain24h = rain24h;
 }
 
 
-// UPDATE MOISTURE FUNCTIONS
-
-#[allow(non_snake_case)]
-pub fn update_moisture_legacy(
+pub fn update_state_sliding(
     state: &mut FWIStateElement,
     prop: &FWIPropertiesElement,
+    input: &InputElement,
     time: &DateTime<Utc>
 ) {
-    // get weather variables
+    // first get weather
+    let mut rain_in = input.rain;
+    let humidity_in = input.humidity;
+    let temperature_in = input.temperature;
+    let wind_speed_in = input.wind_speed;
+
+    if rain_in == NODATAVAL
+    {
+        // put rain as NaN value
+        rain_in = f32::NAN;
+    }
+
+    // get last 24 hours conditions
+    let combined = izip!(
+        state.dates.iter(),
+        state.rain.iter(),
+        state.humidity.iter(),
+        state.temperature.iter(),
+        state.wind_speed.iter(),
+        state.rain24h.iter(),
+        state.ffmc.iter(),
+        state.dmc.iter(),
+        state.dc.iter(),
+    )
+    .filter(|(t, _, _, _, _, _, _, _, _)| time.signed_duration_since(**t) < chrono::Duration::hours(TIME_WINDOW.into()))
+    .map(|(t, r, h, temp, w, r24, ffmc, dmc, dc)| (*t, *r, *h, *temp, *w, *r24, *ffmc, *dmc, *dc))
+    .collect::<Vec<_>>();
+
+    let mut dates: Vec<DateTime<Utc>> = combined.iter().map(|(t, _, _, _, _, _, _, _, _)| *t).collect();
+    let mut rain: Vec<f32> = combined.iter().map(|(_, r, _, _, _, _, _, _, _)| *r).collect();
+    let mut humidity: Vec<f32> = combined.iter().map(|(_, _, h, _, _, _, _, _, _)| *h).collect();
+    let mut temperature: Vec<f32> = combined.iter().map(|(_, _, _, temp, _, _, _, _, _)| *temp).collect();
+    let mut wind_speed: Vec<f32> = combined.iter().map(|(_, _, _, _, w, _, _, _, _)| *w).collect();
+    let mut rain24h: Vec<f32> = combined.iter().map(|(_, _, _, _, _, r24, _, _, _)| *r24).collect();
+    let mut ffmc: Vec<f32> = combined.iter().map(|(_, _, _, _, _, _, ffmc, _, _)| *ffmc).collect();
+    let mut dmc: Vec<f32> = combined.iter().map(|(_, _, _, _, _, _, _, dmc, _)| *dmc).collect();
+    let mut dc: Vec<f32> = combined.iter().map(|(_, _, _, _,  _, _, _, _, dc)| *dc).collect();
+
+    // add last rain in input and last time
+    dates.push(*time);
+    rain.push(rain_in);
+    humidity.push(humidity_in);
+    temperature.push(temperature_in);
+    wind_speed.push(wind_speed_in);
+
+    // aggregate the last 24 hours of rain and add to state
+    let rain24h_in = rain.iter().filter(|r| !r.is_nan()).map(|r| *r).sum();
+    rain24h.push(rain24h_in);
+
+    // get initial moisture values > it is the first, so it is 24 hours ago
+    let ffmc_init = *ffmc.first().unwrap_or(&FFMC_INIT);
+    let dmc_init = *dmc.first().unwrap_or(&DMC_INIT);
+    let dc_init = *dc.first().unwrap_or(&DC_INIT);
+
+    // compute moisture
+    let (new_ffmc, new_dmc, new_dc) = compute_moisture_codes(
+        ffmc_init,
+        dmc_init,
+        dc_init,
+        rain24h_in,
+        humidity_in,
+        temperature_in,
+        wind_speed_in,
+        time,
+        prop.lat
+    );
+
+    // update moisture states
+    ffmc.push(new_ffmc);
+    dmc.push(new_dmc);
+    dc.push(new_dc);
+
+    // update state with filtered values
+    state.dates = dates;
+    state.rain = rain;
+    state.humidity = humidity;
+    state.temperature = temperature;
+    state.wind_speed = wind_speed;
+    state.rain24h = rain24h;
+    state.ffmc = ffmc;
+    state.dmc = dmc;
+    state.dc = dc;
+}
+
+
+pub fn update_state_fn(
+    state: &mut FWIStateElement,
+    prop: &FWIPropertiesElement,
+    input: &InputElement,
+    time: &DateTime<Utc>,
+    config: &FWIModelConfig
+) {
+    config.update_state(state, prop, input, time);
+}
+
+
+// COMPUTE OUTPUTS
+
+#[allow(non_snake_case)]
+pub fn get_output_legacy(
+    state: &mut FWIStateElement,
+    prop: &FWIPropertiesElement,
+    time: &DateTime<Utc>,
+) -> OutputElement {
+
+    // get weather conditions at local noon
     let (rain24h, humidity, temperature, wind_speed) = get_weather_noon(state, prop).unwrap_or((NODATAVAL, NODATAVAL, NODATAVAL, NODATAVAL));
 
-    // get initial moisture values
+    // get initial moisture values > in legacy, state moisture values are composed by just one element
     let ffmc_init = *state.ffmc.first().unwrap_or(&FFMC_INIT);
     let dmc_init = *state.dmc.first().unwrap_or(&DMC_INIT);
     let dc_init = *state.dc.first().unwrap_or(&DC_INIT);
@@ -546,148 +665,28 @@ pub fn update_moisture_legacy(
         prop.lat
     );
 
-    // update moisture states
+    // update moisture states > in legacy, state moisture values are composed by just one element
     state.ffmc = vec![new_ffmc];
     state.dmc = vec![new_dmc];
     state.dc = vec![new_dc];
-}
 
+    // compute other indices
+    let new_moisture = from_ffmc_to_moisture(new_ffmc);
 
-#[allow(non_snake_case)]
-pub fn update_moisture_sliding(
-    state: &mut FWIStateElement,
-    prop: &FWIPropertiesElement,
-    time: &DateTime<Utc>
-) {
-
-    // get weather last
-    let (rain24h, humidity, temperature, wind_speed) = get_weather_last(state).unwrap_or((NODATAVAL, NODATAVAL, NODATAVAL, NODATAVAL));
-
-    // get moisture values in the time window
-    let combined = izip!(
-        state.dates.iter(),
-        state.ffmc.iter(),
-        state.dmc.iter(),
-        state.dc.iter(),
-    )
-    .filter(|(t, _, _, _)| time.signed_duration_since(**t) < chrono::Duration::hours(TIME_WINDOW.into()))
-    .map(|(t, ffmc, dmc, dc)| (*t, *ffmc, *dmc, *dc))
-    .collect::<Vec<_>>();
-
-    let mut dates: Vec<DateTime<Utc>> = combined.iter().map(|(t, _, _, _)| *t).collect();
-    let mut ffmc: Vec<f32> = combined.iter().map(|(_, ffmc, _, _)| *ffmc).collect();
-    let mut dmc: Vec<f32> = combined.iter().map(|(_, _, dmc, _)| *dmc).collect();
-    let mut dc: Vec<f32> = combined.iter().map(|(_, _, _, dc)| *dc).collect();
-
-    // get initial moisture values
-    let ffmc_init = *ffmc.first().unwrap_or(&FFMC_INIT);
-    let dmc_init = *dmc.first().unwrap_or(&DMC_INIT);
-    let dc_init = *dc.first().unwrap_or(&DC_INIT);
-
-    // compute moisture    
-    let (new_ffmc, new_dmc, new_dc) = compute_moisture_codes(
-        ffmc_init,
-        dmc_init,
-        dc_init,
-        rain24h,
-        humidity,
-        temperature,
-        wind_speed,
-        time,
-        prop.lat
-    );
-
-    // update moisture states
-    dates.push(*time);
-    ffmc.push(new_ffmc);
-    dmc.push(new_dmc);
-    dc.push(new_dc);
-
-    // save just the last TIME_WINDOW hours of moisture states
-    let combined = izip!(
-        dates.iter(),
-        ffmc.iter(),
-        dmc.iter(),
-        dc.iter(),
-    )
-    .filter(|(t, _, _, _)| time.signed_duration_since(**t) < chrono::Duration::hours(TIME_WINDOW.into()))
-    .map(|(t, ffmc, dmc, dc)| (*t, *ffmc, *dmc, *dc))
-    .collect::<Vec<_>>();
-
-    state.dates = combined.iter().map(|(t, _, _, _)| *t).collect();
-    state.ffmc = combined.iter().map(|(_, ffmc, _, _)| *ffmc).collect();
-    state.dmc = combined.iter().map(|(_, _, dmc, _)| *dmc).collect();
-    state.dc = combined.iter().map(|(_, _, _, dc)| *dc).collect();
-
-}
-
-
-// UPDATE STATE FUNCTION
-
-pub fn update_state_fn(
-    state: &mut FWIStateElement,
-    prop: &FWIPropertiesElement,
-    input: &InputElement,
-    time: &DateTime<Utc>,
-    config: &FWIModelConfig
-) {
-    // store weather
-    store_weather_fn(state, input, time);
-
-    // update moisture
-    config.update_moisture(state, prop, time);
-}
-
-
-pub fn update_moisture_state_legacy(
-    _state: &mut FWIStateElement,
-    _prop: &FWIPropertiesElement,
-    _time: &DateTime<Utc>
-) {
-    // legacy update state does not update moisture at each step, but only at the end of the day (in get_output)
-}
-
-
-pub fn update_moisture_state_sliding(
-    state: &mut FWIStateElement,
-    prop: &FWIPropertiesElement,
-    time: &DateTime<Utc>
-) {
-    update_moisture_sliding(state, prop, time);
-}
-
-
-// COMPUTE OUTPUTS
-
-#[allow(non_snake_case)]
-pub fn get_output_legacy(
-    state: &mut FWIStateElement,
-    prop: &FWIPropertiesElement,
-    time: &DateTime<Utc>,
-) -> OutputElement {
-
-    // update moisture
-    update_moisture_legacy(state, prop, time);
-
-    // get moisture values
-    let (ffmc, dmc, dc) = state.get_moisture();
-    let moisture = from_ffmc_to_moisture(ffmc);
-    let dffm = (moisture / (100.0 + moisture)) * 100.0;
-
-    // compute the other indices
-    let (rain24h, humidity, temperature, wind_speed) = get_weather_noon(state, prop).unwrap_or((NODATAVAL, NODATAVAL, NODATAVAL, NODATAVAL));
-    let wind_speed_out = wind_speed / 3600.0; // convert from m/h to m/s
-
-    let isi = compute_isi(moisture, wind_speed);
-    let bui = compute_bui(dmc, dc);
+    let isi = compute_isi(new_moisture, wind_speed);
+    let bui = compute_bui(new_dmc, new_dc);
     let fwi = compute_fwi(bui, isi);
     let ifwi = compute_ifwi(fwi);
 
+    // compute other outputs information
+    let dffm = (new_moisture / (100.0 + new_moisture)) * 100.0;  // moisture in [0, 100]
+    let wind_speed_out = wind_speed / 3600.0; // convert from m/h to m/s
+
     OutputElement {
-        ffmc: ffmc,
+        ffmc: new_ffmc,
         dffm: dffm,
-        dmc: dmc,
-        dc: dc,
+        dmc: new_dmc,
+        dc: new_dc,
         isi,
         bui,
         fwi,
@@ -708,19 +707,28 @@ pub fn get_output_sliding(
     _time: &DateTime<Utc>
 ) -> OutputElement {
 
-    // get moisture values
-    let (ffmc, dmc, dc) = state.get_moisture();
-    let moisture = from_ffmc_to_moisture(ffmc);
-    let dffm = (moisture / (100.0 + moisture)) * 100.0;
+    // get weather conditions > last ones
+    let rain24h: f32 = state.rain24h.iter().copied().last().unwrap_or(NODATAVAL);
+    let humidity = state.humidity.iter().copied().last().unwrap_or(NODATAVAL);
+    let temperature = state.temperature.iter().copied().last().unwrap_or(NODATAVAL);
+    let wind_speed = state.wind_speed.iter().copied().last().unwrap_or(NODATAVAL);
 
-    // get weather variables
-    let (rain24h, humidity, temperature, wind_speed) = get_weather_last(state).unwrap_or((NODATAVAL, NODATAVAL, NODATAVAL, NODATAVAL));
-    let wind_speed_out = wind_speed / 3600.0; // convert from m/h to m/s
+    // get moisture values > last ones
+    let ffmc = state.ffmc.iter().copied().last().unwrap_or(FFMC_INIT);
+    let dmc = state.dmc.iter().copied().last().unwrap_or(DMC_INIT);
+    let dc = state.dc.iter().copied().last().unwrap_or(DC_INIT);
+
+    // compute other indices
+    let moisture = from_ffmc_to_moisture(ffmc);
 
     let isi = compute_isi(moisture, wind_speed);
     let bui = compute_bui(dmc, dc);
     let fwi = compute_fwi(bui, isi);
     let ifwi = compute_ifwi(fwi);
+
+    // get other outputs information
+    let dffm = (moisture / (100.0 + moisture)) * 100.0; // moisture in [0, 100]
+    let wind_speed_out = wind_speed / 3600.0; // convert from m/h to m/s
 
     OutputElement {
         ffmc: ffmc,
