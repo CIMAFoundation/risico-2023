@@ -587,10 +587,20 @@ pub fn update_state_sliding(
     let rain24h_in = rain.iter().filter(|r| **r != NODATAVAL).map(|r| *r).sum();
     rain24h.push(rain24h_in);
 
-    // get initial moisture values > it is the first, so it is 24 hours ago
-    let ffmc_init = *ffmc.first().unwrap_or(&FFMC_INIT);
-    let dmc_init = *dmc.first().unwrap_or(&DMC_INIT);
-    let dc_init = *dc.first().unwrap_or(&DC_INIT);
+    // get initial moisture values > 24 hours ago, or default value
+    let combined_moisture_init = izip!(
+        state.dates.iter(),
+        state.ffmc.iter(),
+        state.dmc.iter(),
+        state.dc.iter(),
+    )
+    .filter(|(t, _, _, _)| time.signed_duration_since(**t) == chrono::Duration::hours(TIME_WINDOW.into()))
+    .map(|(t, ffmc, dmc, dc)| (*t, *ffmc, *dmc, *dc))
+    .collect::<Vec<_>>();
+
+    let ffmc_init = combined_moisture_init.iter().map(|(_, ffmc, _, _)| *ffmc).collect::<Vec<_>>().first().copied().unwrap_or(FFMC_INIT);
+    let dmc_init = combined_moisture_init.iter().map(|(_, _, dmc, _)| *dmc).collect::<Vec<_>>().first().copied().unwrap_or(DMC_INIT);
+    let dc_init = combined_moisture_init.iter().map(|(_, _, _, dc)| *dc).collect::<Vec<_>>().first().copied().unwrap_or(DC_INIT);
 
     // compute moisture
     let (new_ffmc, new_dmc, new_dc) = compute_moisture_codes(
