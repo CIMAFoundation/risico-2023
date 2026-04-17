@@ -285,6 +285,16 @@ pub fn compute_moisture_codes(
     time: &DateTime<Utc>,
     lat: f32
 ) -> (f32, f32, f32) {
+
+    // managing nodataval > keep initial values
+    if rain24h == NODATAVAL
+        || humidity == NODATAVAL
+        || temperature == NODATAVAL
+        || wind_speed == NODATAVAL
+    {
+        return (ffmc_init, dmc_init, dc_init);
+    }
+
     // FFMC MODULE
     // convert ffmc to moisture scale [0, 250]
     let mut moisture: f32 = from_ffmc_to_moisture(ffmc_init);
@@ -300,6 +310,7 @@ pub fn compute_moisture_codes(
     let l_f = get_dc_param(time, lat);
     let new_dc = update_dc(dc_init, rain24h, temperature, l_f);
     (new_ffmc, new_dmc, new_dc)
+
 }
 
 
@@ -466,7 +477,7 @@ fn lerp(a: f32, b: f32, w: f32) -> f32 {
 }
 
 fn lerp_valid(a: f32, b: f32, w: f32) -> Option<f32> {
-    if a.is_nan() || b.is_nan() {
+    if a.is_nan() || a==NODATAVAL || b.is_nan() || b==NODATAVAL {
         return None;
     }
     Some(lerp(a, b, w))
@@ -481,16 +492,10 @@ pub fn update_state_legacy(
     input: &InputElement,
     time: &DateTime<Utc>
 ) {
-    let mut rain_in = input.rain;
+    let rain_in = input.rain;
     let humidity_in = input.humidity;
     let temperature_in = input.temperature;
     let wind_speed_in = input.wind_speed;
-
-    if rain_in == NODATAVAL
-    {
-        // put rain as NaN value
-        rain_in = f32::NAN;
-    }
 
     // get the last 24 hours conditions
     let combined = izip!(
@@ -520,7 +525,7 @@ pub fn update_state_legacy(
     wind_speed.push(wind_speed_in);
 
     // aggregate the last 24 hours of rain and add to state
-    let rain24h_in = rain.iter().filter(|r| !r.is_nan()).map(|r| *r).sum();
+    let rain24h_in = rain.iter().filter(|r| **r != NODATAVAL).map(|r| *r).sum();
     rain24h.push(rain24h_in);
 
     // update state
@@ -540,16 +545,10 @@ pub fn update_state_sliding(
     time: &DateTime<Utc>
 ) {
     // first get weather
-    let mut rain_in = input.rain;
+    let rain_in = input.rain;
     let humidity_in = input.humidity;
     let temperature_in = input.temperature;
     let wind_speed_in = input.wind_speed;
-
-    if rain_in == NODATAVAL
-    {
-        // put rain as NaN value
-        rain_in = f32::NAN;
-    }
 
     // get last 24 hours conditions
     let combined = izip!(
@@ -585,7 +584,7 @@ pub fn update_state_sliding(
     wind_speed.push(wind_speed_in);
 
     // aggregate the last 24 hours of rain and add to state
-    let rain24h_in = rain.iter().filter(|r| !r.is_nan()).map(|r| *r).sum();
+    let rain24h_in = rain.iter().filter(|r| **r != NODATAVAL).map(|r| *r).sum();
     rain24h.push(rain24h_in);
 
     // get initial moisture values > it is the first, so it is 24 hours ago
