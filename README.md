@@ -100,6 +100,129 @@ fn main() {
 }
 ```
 
+## GeoTIFF static data and NetCDF warm state
+
+RISICO can use aligned, single-band GeoTIFF layers as an alternative to the legacy
+cell, PPF, and vegetation-ID text files. Legacy configuration remains supported.
+
+```yaml
+models:
+  - type: RISICO
+    model_name: RISICO2023
+    model_version: v2025
+    static_data:
+      type: geotiff
+      domain_mask: /opt/risico/static/domain_mask.tif
+      slope: /opt/risico/static/slope.tif
+      aspect: /opt/risico/static/aspect.tif
+      vegetation_id: /opt/risico/static/vegetation_id.tif
+      vegetation_catalog: /opt/risico/static/p_vegetazione.csv
+      ppf_summer: null
+      ppf_winter: null
+    warm_state:
+      type: netcdf
+      directory: /opt/risico/state-nc
+      legacy_fallback: /opt/risico/STATE0/state0RISICO_
+      max_age_hours: 120
+      on_missing: error
+    warm_state_hour: 0
+    output_time_resolution: 1
+    output_types: []
+```
+
+The domain mask defines the grid and active cells. All layers must be north-up,
+unrotated EPSG:4326 rasters with identical dimensions and affine transforms.
+Slope and aspect are stored in degrees. A non-zero, non-nodata mask pixel is
+active. PPF layers must either both be configured or both omitted.
+
+NetCDF snapshots contain the active cells in row-major order plus their full-grid
+`cell_index`. Snapshots are validated against the model version and a hash of the
+grid and mask. They are written through a temporary file and atomically renamed.
+When `legacy_fallback` is set, the first migrated run may read a legacy text state
+and will subsequently write NetCDF snapshots.
+
+FWI uses the same domain-mask and warm-state configuration, without the
+RISICO-specific layers:
+
+```yaml
+models:
+  - type: FWI
+    model_name: FWIWORLD
+    model_version: legacy
+    static_data:
+      type: geotiff
+      domain_mask: /opt/risico/static/domain_mask.tif
+    warm_state:
+      type: netcdf
+      directory: /opt/risico/state-nc
+      legacy_fallback: /opt/risico/STATE0/state0FWI_
+      max_age_hours: 120
+      on_missing: error
+    warm_state_hour: 0
+    output_types: []
+```
+
+FWI snapshots preserve each cell's complete moisture/rain history using a compact
+contiguous ragged layout. Legacy snapshots use one scalar observation per cell,
+matching the deployed `rain ffmc dmc dc` warm-state representation. The fallback
+reader accepts both the current five-column history text format and the deployed
+four-column scalar format.
+
+Existing legacy snapshots can be converted before cutover. The domain mask is
+required so every NetCDF file is bound to the correct active-cell ordering and
+grid hash. By default all timestamped files matching the prefix are converted;
+existing NetCDF files are skipped unless `--overwrite` is used.
+
+```console
+cargo run --bin warm-state-converter -- config \
+  --config /opt/risico/configuration.yml \
+  --latest-only
+
+# The explicit form is useful outside a migrated deployment:
+cargo run --bin warm-state-converter -- risico \
+  --legacy-prefix /opt/risico/STATE0/state0RISICO_ \
+  --domain-mask /opt/risico/static/domain_mask.tif \
+  --output /opt/risico/state-nc \
+  --model-version v2025
+
+cargo run --bin warm-state-converter -- fwi \
+  --legacy-prefix /opt/risico/STATE0/state0FWI_ \
+  --domain-mask /opt/risico/static/domain_mask.tif \
+  --output /opt/risico/state-nc \
+  --model-version legacy \
+  --latest-only
+```
+
+`--legacy-prefix` may also name a directory when its files are bare
+`YYYYMMDDHHMM` timestamps. Every written snapshot is read back and validated
+before the conversion is reported as successful. A cell-count mismatch or a
+malformed legacy file is reported without preventing other discovered snapshots
+from being checked.
+
+Convert existing regular-grid static files with the offline GDAL-based utility.
+Runtime reading remains pure Rust and does not require GDAL. The converter
+detects, per axis, whether legacy bounds represent outer edges or cell centres;
+this accommodates the conventions used by the deployed grids.
+
+```console
+cargo run --features gdal --bin static-converter -- risico \
+  --cells /share/risico/RISICO2023/STATIC/risico2023_input_1km.txt \
+  --grid /share/risico/RISICO2023/GRID/input_1km_GRID.txt \
+  --output /opt/risico/RISICO2023/STATIC/geotiff
+
+cargo run --features gdal --bin static-converter -- fwi \
+  --cells /share/risico/FWIWORLD/STATIC/FWI_world.txt \
+  --grid /share/risico/FWIWORLD/GRID/GRID.txt \
+  --output /opt/risico/FWIWORLD/STATIC/geotiff
+```
+
+Use `--features gdal_bindgen` instead of `--features gdal` when the installed
+GDAL version is newer than the bindings bundled by `gdal-sys`.
+
+The converter checks that cells are unique and in the canonical north-to-south,
+west-to-east order. This keeps legacy state rows aligned during a progressive
+migration.
+
 
 
 
