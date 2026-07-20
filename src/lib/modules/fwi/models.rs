@@ -1,6 +1,5 @@
 use crate::models::{input::Input, output::Output};
 use chrono::prelude::*;
-use itertools::izip;
 use ndarray::{Array1, Zip};
 
 use super::{
@@ -67,56 +66,10 @@ pub struct FWIStateElement {
     pub dmc: Vec<f32>,
     pub dc: Vec<f32>,
     pub rain: Vec<f32>,
-}
-
-pub type FWIStateData = (Vec<DateTime<Utc>>, Vec<f32>, Vec<f32>, Vec<f32>, Vec<f32>);
-
-impl FWIStateElement {
-    pub fn get_time_window(&self, time: &DateTime<Utc>) -> FWIStateData {
-        // zip with dates and take only moistures where history < 24 hours
-        let combined = izip!(
-            self.dates.iter(),
-            self.ffmc.iter(),
-            self.dmc.iter(),
-            self.dc.iter(),
-            self.rain.iter()
-        )
-        .filter(|(t, _, _, _, _)| time.signed_duration_since(**t).num_hours() <= TIME_WINDOW)
-        .map(|(t, f, d, c, r)| (*t, *f, *d, *c, *r))
-        .collect::<Vec<_>>();
-        let dates: Vec<DateTime<Utc>> = combined.iter().map(|(t, _, _, _, _)| *t).collect();
-        let ffmc: Vec<f32> = combined.iter().map(|(_, f, _, _, _)| *f).collect();
-        let dmc: Vec<f32> = combined.iter().map(|(_, _, d, _, _)| *d).collect();
-        let dc: Vec<f32> = combined.iter().map(|(_, _, _, c, _)| *c).collect();
-        let rain: Vec<f32> = combined.iter().map(|(_, _, _, _, r)| *r).collect();
-        (dates, ffmc, dmc, dc, rain)
-    }
-
-    pub fn get_initial_moisture(&self, time: &DateTime<Utc>) -> (f32, f32, f32) {
-        // get the initial value of the moisture variables for computation
-        let (_, ffmc_tw, dmc_tw, dc_tw, _) = self.get_time_window(time);
-        let ffmc_initial = *ffmc_tw.first().unwrap_or(&FFMC_INIT);
-        let dmc_initial = *dmc_tw.first().unwrap_or(&DMC_INIT);
-        let dc_initial = *dc_tw.first().unwrap_or(&DC_INIT);
-        (ffmc_initial, dmc_initial, dc_initial)
-    }
-
-    pub fn update(&mut self, time: &DateTime<Utc>, ffmc: f32, dmc: f32, dc: f32, rain: f32) {
-        // add new values
-        self.dates.push(*time);
-        self.ffmc.push(ffmc);
-        self.dmc.push(dmc);
-        self.dc.push(dc);
-        self.rain.push(rain);
-        // get the time window
-        let (new_dates, new_ffmc, new_dmc, new_dc, new_rain) = self.get_time_window(time);
-        // update the values
-        self.dates = new_dates;
-        self.ffmc = new_ffmc;
-        self.dmc = new_dmc;
-        self.dc = new_dc;
-        self.rain = new_rain;
-    }
+    pub humidity: Vec<f32>,
+    pub temperature: Vec<f32>,
+    pub wind_speed: Vec<f32>,
+    pub rain24h: Vec<f32>,
 }
 
 #[derive(Debug)]
@@ -138,12 +91,19 @@ impl FWIState {
         let data = Array1::from_vec(
             warm_state
                 .iter()
-                .map(|w| FWIStateElement {
-                    dates: w.dates.clone(),
-                    ffmc: w.ffmc.clone(),
-                    dmc: w.dmc.clone(),
-                    dc: w.dc.clone(),
-                    rain: w.rain.clone(),
+                .map(|w| {
+                    let n = w.dates.len();
+                    FWIStateElement {
+                        dates: w.dates.clone(),
+                        ffmc: w.ffmc.clone(),
+                        dmc: w.dmc.clone(),
+                        dc: w.dc.clone(),
+                        rain: w.rain.clone(),
+                        humidity: vec![NODATAVAL; n],
+                        temperature: vec![NODATAVAL; n],
+                        wind_speed: vec![NODATAVAL; n],
+                        rain24h: vec![NODATAVAL; n],
+                    }
                 })
                 .collect(),
         );
@@ -176,12 +136,12 @@ impl FWIState {
     }
 
     #[allow(non_snake_case)]
-    pub fn get_output(self: &FWIState, input: &Input) -> Output {
+    pub fn get_output(&mut self, props: &FWIProperties) -> Output {
         let time = &self.time;
 
-        let output_data = Zip::from(&self.data)
-            .and(&input.data)
-            .par_map_collect(|state, input| get_output_fn(state, input, &self.config));
+        let output_data = Zip::from(&mut self.data)
+            .and(&props.data)
+            .par_map_collect(|state, prop| get_output_fn(state, prop, time, &self.config));
 
         Output::new(*time, output_data)
     }
@@ -193,7 +153,7 @@ impl FWIState {
         self.update_state(props, input);
     }
 
-    pub fn output(&self, input: &Input) -> Output {
-        self.get_output(input)
+    pub fn output(&mut self, props: &FWIProperties) -> Output {
+        self.get_output(props)
     }
 }

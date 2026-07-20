@@ -4,7 +4,7 @@ use std::error::Error;
 use std::path::Path;
 
 use chrono::prelude::*;
-use clap::{arg, command, Parser};
+use clap::Parser;
 
 use common::config::builder::{
     AngstromConfigBuilder,
@@ -163,7 +163,7 @@ fn run_fwi(
 
         if config.should_write_output(&state.time) {
             let c = Utc::now();
-            let output = state.output(&input);
+            let output = state.output(&props);
             trace!("Generating output took {} seconds", Utc::now() - c);
 
             let c = Utc::now();

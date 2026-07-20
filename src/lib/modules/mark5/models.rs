@@ -90,7 +90,7 @@ impl Mark5StateElement {
     pub fn get_time_window(&self, time: &DateTime<Utc>) -> (Vec<DateTime<Utc>>, Vec<f32>) {
         // zip with dates and take only cumulated rain where history < 20 days (default time window)
         let mut combined = izip!(self.dates.iter(), self.daily_rain.iter())
-            .filter(|(t, _)| time.signed_duration_since(**t).num_days() <= TIME_WINDOW)
+            .filter(|(t, _)| time.signed_duration_since(**t).num_days() < TIME_WINDOW)
             .map(|(t, r)| (*t, *r))
             .collect::<Vec<_>>();
         // order the values according to the dates

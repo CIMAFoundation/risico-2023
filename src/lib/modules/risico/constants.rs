@@ -73,7 +73,7 @@ pub const PHI: f32 = 6.667;
 
 pub const CLOUDCOVER: f32 = 1.0;
 
-/// snow depth threhsold [mm]
+/// snow depth threhsold [cm]
 pub const SNOW_COVER_THRESHOLD: f32 = 1.0;
 
 pub const SATELLITE_DATA_SECONDS_VALIDITY: i64 = 10 * 24 * 3600;
