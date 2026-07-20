@@ -1,7 +1,8 @@
 use chrono::Utc;
 #[cfg(feature = "gdal")]
+use gdal::raster::{Buffer, RasterCreationOptions};
 #[cfg(feature = "gdal")]
-use gdal::raster::{Buffer, RasterCreationOption};
+use gdal::spatial_ref::SpatialRef;
 
 use libflate::gzip::{self, Encoder};
 use log::warn;
@@ -152,26 +153,10 @@ pub fn write_to_geotiff(
     // Open a GDAL driver for GeoTIFF files
     let driver = gdal::DriverManager::get_driver_by_name(&"GTiff")?;
 
-    let options = vec![
-        RasterCreationOption {
-            key: "COMPRESS",
-            value: "LZW",
-        },
-        RasterCreationOption {
-            key: "PROFILE",
-            value: "GDALGeoTIFF",
-        },
-        RasterCreationOption {
-            key: "BIGTIFF",
-            value: "YES",
-        },
-    ];
+    let options =
+        RasterCreationOptions::from_iter(["COMPRESS=LZW", "PROFILE=GDALGeoTIFF", "BIGTIFF=YES"]);
     let mut dataset = driver.create_with_band_type_with_options::<f32, &str>(
-        file,
-        grid.ncols as isize,
-        grid.nrows as isize,
-        1,
-        &options,
+        file, grid.ncols, grid.nrows, 1, &options,
     )?;
 
     // Set the geo-transform for the dataset
@@ -203,11 +188,67 @@ pub fn write_to_geotiff(
         }
     }
     let size = (grid.ncols, grid.nrows);
-    let buffer = Buffer::new(size, data);
+    let mut buffer = Buffer::new(size, data);
 
     // Write the data to the band
-    band.write((0, 0), size, &buffer)?;
+    band.write((0, 0), size, &mut buffer)?;
 
+    Ok(())
+}
+
+/// Write an already north-up regular grid through GDAL.
+///
+/// This is used by offline conversion tools. Runtime static-data loading does
+/// not depend on GDAL.
+#[cfg(feature = "gdal")]
+#[allow(dead_code)]
+pub fn write_north_up_geotiff(
+    file: &str,
+    width: usize,
+    height: usize,
+    transform: &[f64; 6],
+    epsg: u32,
+    values: &[f32],
+    nodata: f32,
+) -> Result<(), RISICOError> {
+    if values.len() != width * height {
+        return Err(format!(
+            "cannot write {file}: {} samples for a {width}x{height} grid",
+            values.len()
+        )
+        .into());
+    }
+
+    let driver = gdal::DriverManager::get_driver_by_name("GTiff")
+        .map_err(|error| format!("cannot load GDAL GTiff driver: {error}"))?;
+    let options = RasterCreationOptions::from_iter([
+        "COMPRESS=DEFLATE",
+        "PREDICTOR=3",
+        "TILED=YES",
+        "BIGTIFF=IF_SAFER",
+    ]);
+    let mut dataset = driver
+        .create_with_band_type_with_options::<f32, _>(file, width, height, 1, &options)
+        .map_err(|error| format!("cannot create GeoTIFF {file}: {error}"))?;
+    dataset
+        .set_geo_transform(transform)
+        .map_err(|error| format!("cannot georeference {file}: {error}"))?;
+    let spatial_reference = SpatialRef::from_epsg(epsg)
+        .map_err(|error| format!("cannot create EPSG:{epsg} reference: {error}"))?;
+    dataset
+        .set_spatial_ref(&spatial_reference)
+        .map_err(|error| format!("cannot set CRS on {file}: {error}"))?;
+    let mut band = dataset
+        .rasterband(1)
+        .map_err(|error| format!("cannot access band in {file}: {error}"))?;
+    band.set_no_data_value(Some(nodata as f64))
+        .map_err(|error| format!("cannot set nodata on {file}: {error}"))?;
+    let mut buffer = Buffer::new((width, height), values.to_vec());
+    band.write((0, 0), (width, height), &mut buffer)
+        .map_err(|error| format!("cannot write pixels to {file}: {error}"))?;
+    dataset
+        .flush_cache()
+        .map_err(|error| format!("cannot flush {file}: {error}"))?;
     Ok(())
 }
 
@@ -248,10 +289,10 @@ where
     file.add_unlimited_dimension("time")
         .map_err(|err| format!("Add time dimension failed {err}"))?;
     let lats: Vec<f32> = (0..n_lats)
-        .map(|i| grid.min_lat + grid.step_lat * (i as f32) )
+        .map(|i| grid.min_lat + grid.step_lat * (i as f32))
         .collect();
     let lons: Vec<f32> = (0..n_lons)
-        .map(|i| grid.min_lon + grid.step_lon * (i as f32) )
+        .map(|i| grid.min_lon + grid.step_lon * (i as f32))
         .collect();
 
     let mut var = file

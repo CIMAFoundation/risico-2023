@@ -23,9 +23,11 @@ build-binary = [
     "dep:netcdf-sys",
     "dep:hdf5",
     "dep:hdf5-sys",
+    "dep:geotiff-reader",
+    "dep:sha2",
 ]
 
-gdal_bindgen = ["gdal/bindgen"]
+gdal_bindgen = ["gdal", "gdal/bindgen"]
 gdal = ["dep:gdal"]
 static_deps = ["netcdf-sys/static", "hdf5-sys/static"]
 
@@ -54,11 +56,13 @@ chrono-tz = {version = "0.6"}
 lazy_static = "1.4.0"
 
 # Native dependencies
-gdal = { version = "0.17.0", default-features = false, optional = true }
+gdal = { version = "0.19.0", default-features = false, optional = true }
 hdf5 = { version = "0.8.1", optional = true }
 hdf5-sys = { version = "0.8.1", optional = true }
 netcdf = { version = "0.8.1", optional = true }
 netcdf-sys = { version = "0.5.1", optional = true }
+geotiff-reader = { version = "=0.7.0", default-features = false, features = ["local"], optional = true }
+sha2 = { version = "0.10", optional = true }
 tzf-rs = { version = "0.4.9", default-features = false }
 
 
@@ -71,6 +75,11 @@ path = "src/lib/mod.rs"
 name = "risico-2023"
 path = "src/bin/main.rs"
 # required-features = ["build-binary"]
+
+[[bin]]
+name = "static-converter"
+path = "src/bin/static-converter.rs"
+required-features = ["build-binary", "gdal"]
 
 # [[bin]]
 # name = "risico-2023-config-converter"
