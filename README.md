@@ -135,11 +135,15 @@ unrotated EPSG:4326 rasters with identical dimensions and affine transforms.
 Slope and aspect are stored in degrees. A non-zero, non-nodata mask pixel is
 active. PPF layers must either both be configured or both omitted.
 
-NetCDF snapshots contain the active cells in row-major order plus their full-grid
-`cell_index`. Snapshots are validated against the model version and a hash of the
-grid and mask. They are written through a temporary file and atomically renamed.
-When `legacy_fallback` is set, the first migrated run may read a legacy text state
-and will subsequently write NetCDF snapshots.
+NetCDF snapshots store every state field as a georeferenced `y, x` grid. The files
+include longitude and latitude coordinate axes, EPSG and affine-transform metadata,
+and fill values outside the active domain. On load, state is sampled onto the
+configured domain with nearest-neighbour sampling, so a snapshot can survive a
+compatible grid-resolution change. A target active cell that maps outside the
+snapshot or onto a fill pixel makes that snapshot invalid. Snapshots are also
+validated against the model version, written through a temporary file, and
+atomically renamed. When `legacy_fallback` is set, the first migrated run may read
+a legacy text state and will subsequently write NetCDF snapshots.
 
 FWI uses the same domain-mask and warm-state configuration, without the
 RISICO-specific layers:
@@ -162,16 +166,16 @@ models:
     output_types: []
 ```
 
-FWI snapshots preserve each cell's complete moisture/rain history using a compact
-contiguous ragged layout. Legacy snapshots use one scalar observation per cell,
-matching the deployed `rain ffmc dmc dc` warm-state representation. The fallback
-reader accepts both the current five-column history text format and the deployed
-four-column scalar format.
+FWI snapshots preserve each cell's complete moisture/rain history as
+`history, y, x` grids plus a `history_count` grid. Legacy-model snapshots use one
+scalar observation per pixel, matching the deployed `rain ffmc dmc dc` warm-state
+representation. The fallback reader accepts both the current five-column history
+text format and the deployed four-column scalar format.
 
-Existing legacy snapshots can be converted before cutover. The domain mask is
-required so every NetCDF file is bound to the correct active-cell ordering and
-grid hash. By default all timestamped files matching the prefix are converted;
-existing NetCDF files are skipped unless `--overwrite` is used.
+Existing legacy snapshots can be converted before cutover. The domain mask defines
+the output NetCDF grid and places each text row at its corresponding active pixel.
+By default all timestamped files matching the prefix are converted; existing
+NetCDF files are skipped unless `--overwrite` is used.
 
 ```console
 cargo run --bin warm-state-converter -- config \

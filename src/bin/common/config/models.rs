@@ -70,7 +70,7 @@ use super::builder::{
 
 use crate::common::helpers::RISICOError;
 use crate::common::io::models::{output::OutputType, palette::Palette};
-use crate::common::io::static_data::geotiff::RasterDomain;
+use crate::common::io::static_data::geotiff::{RasterDomain, RasterGrid};
 use crate::common::io::warm_state::legacy::{read_fwi, read_risico};
 use crate::common::io::warm_state::netcdf::{
     load_latest_fwi, load_latest_risico, write_fwi_snapshot, write_risico_snapshot,
@@ -86,6 +86,11 @@ pub fn check_write_warm_state(time: &DateTime<Utc>, warm_state_hour: i64) -> boo
 pub const WARM_STATE_HOUR: i64 = 0; // hour for writing warm state
 pub const WARM_STATE_LAG_DAYS: i64 = 1; // number of days before the run date to search for the warm state file
 
+fn warm_state_search_time(run_date: DateTime<Utc>, hour: i64, days_before: i64) -> DateTime<Utc> {
+    run_date - Duration::try_days(days_before).expect("Should be valid")
+        + Duration::try_hours(hour).expect("Should be valid")
+}
+
 pub fn find_warm_state(
     base_warm_file: &str,
     run_date: DateTime<Utc>,
@@ -98,9 +103,7 @@ pub fn find_warm_state(
     let mut file: Option<File> = None;
     let end_search: i64 = lag_days + 4; // search for warm state files up to 4 days before the lag_days
     for days_before in lag_days..end_search {
-        current_date = run_date - Duration::try_days(days_before).expect("Should be valid");
-        // add the time to the warm state time
-        current_date += Duration::try_hours(hour).expect("Should be valid");
+        current_date = warm_state_search_time(run_date, hour, days_before);
         let filename = format!("{}{}", base_warm_file, current_date.format("%Y%m%d%H%M"));
         let file_handle = File::open(filename);
         if file_handle.is_err() {
@@ -117,7 +120,7 @@ pub struct RISICOConfig {
     warm_state_path: Option<String>,
     netcdf_warm_state_path: Option<String>,
     cell_indexes: Vec<u32>,
-    grid_hash: Option<String>,
+    grid: Option<RasterGrid>,
     warm_state: Vec<RISICOWarmState>,
     warm_state_time: DateTime<Utc>,
     warm_state_hour: i64,
@@ -135,7 +138,7 @@ pub struct FWIConfig {
     warm_state_path: Option<String>,
     netcdf_warm_state_path: Option<String>,
     cell_indexes: Vec<u32>,
-    grid_hash: Option<String>,
+    grid: Option<RasterGrid>,
     warm_state: Vec<FWIWarmState>,
     warm_state_time: DateTime<Utc>,
     warm_state_hour: i64,
@@ -288,7 +291,7 @@ impl RISICOConfig {
     ) -> Result<RISICOConfig, RISICOError> {
         let palettes = load_palettes(palettes);
 
-        let (props_container, ppf, vegetation_file, cell_indexes, grid_hash) = match (
+        let (props_container, ppf, vegetation_file, cell_indexes, grid) = match (
             &config_defs.static_data,
             &config_defs.cells_file_path,
         ) {
@@ -388,7 +391,7 @@ impl RISICOConfig {
                         ppf,
                         vegetation_catalog,
                         domain.cell_indexes,
-                        Some(domain.grid_hash),
+                        Some(domain.grid),
                     )
                 }
             },
@@ -430,16 +433,20 @@ impl RISICOConfig {
                 max_age_hours,
                 on_missing,
             }) => {
-                let grid_hash = grid_hash.as_deref().ok_or(
-                    "NetCDF warm state requires GeoTIFF static_data so grid identity is known",
+                let grid = grid.as_ref().ok_or(
+                    "NetCDF warm state requires GeoTIFF static_data so grid geometry is known",
                 )?;
                 netcdf_warm_state_path = Some(directory.clone());
+                // Match legacy lookup semantics: a run must not seed itself from a
+                // snapshot written by an earlier execution of that same run.
+                let latest_warm_state_time =
+                    warm_state_search_time(date, warm_state_hour, warm_state_lag_days);
                 if let Some(snapshot) = load_latest_risico(
                     directory,
-                    date,
+                    latest_warm_state_time,
                     max_age_hours.unwrap_or(120),
                     &config_defs.model_version,
-                    grid_hash,
+                    grid,
                     &cell_indexes,
                 )? {
                     snapshot
@@ -491,7 +498,7 @@ impl RISICOConfig {
             warm_state_path: config_defs.warm_state_path.clone(),
             netcdf_warm_state_path,
             cell_indexes,
-            grid_hash,
+            grid,
             warm_state,
             warm_state_time,
             warm_state_hour,
@@ -763,15 +770,15 @@ impl RISICOConfig {
         warm_state_time: DateTime<Utc>,
     ) -> Result<(), RISICOError> {
         if let Some(directory) = &self.netcdf_warm_state_path {
-            let grid_hash = self
-                .grid_hash
-                .as_deref()
-                .ok_or("NetCDF warm state is missing its grid hash")?;
+            let grid = self
+                .grid
+                .as_ref()
+                .ok_or("NetCDF warm state is missing its grid")?;
             write_risico_snapshot(
                 directory,
                 state,
                 &self.model_version,
-                grid_hash,
+                grid,
                 &self.cell_indexes,
             )?;
             return Ok(());
@@ -819,7 +826,7 @@ impl FWIConfig {
     ) -> Result<FWIConfig, RISICOError> {
         let palettes = load_palettes(palettes);
 
-        let (props_container, cell_indexes, grid_hash) =
+        let (props_container, cell_indexes, grid) =
             match (&config_defs.static_data, &config_defs.cells_file_path) {
                 (Some(_), Some(_)) => {
                     return Err(
@@ -839,7 +846,7 @@ impl FWIConfig {
                     (
                         FWICellPropertiesContainer { lats, lons },
                         domain.cell_indexes,
-                        Some(domain.grid_hash),
+                        Some(domain.grid),
                     )
                 }
             };
@@ -873,16 +880,20 @@ impl FWIConfig {
                 max_age_hours,
                 on_missing,
             }) => {
-                let grid_hash = grid_hash.as_deref().ok_or(
-                    "NetCDF warm state requires GeoTIFF static_data so grid identity is known",
+                let grid = grid.as_ref().ok_or(
+                    "NetCDF warm state requires GeoTIFF static_data so grid geometry is known",
                 )?;
                 netcdf_warm_state_path = Some(directory.clone());
+                // Keep the NetCDF path numerically equivalent to find_warm_state.
+                // In particular, the default one-day lag excludes same-run files.
+                let latest_warm_state_time =
+                    warm_state_search_time(date, warm_state_hour, warm_state_lag_days);
                 if let Some(snapshot) = load_latest_fwi(
                     directory,
-                    date,
+                    latest_warm_state_time,
                     max_age_hours.unwrap_or(120),
                     &config_defs.model_version,
-                    grid_hash,
+                    grid,
                     &cell_indexes,
                 )? {
                     snapshot
@@ -937,7 +948,7 @@ impl FWIConfig {
             warm_state_path: config_defs.warm_state_path.clone(),
             netcdf_warm_state_path,
             cell_indexes,
-            grid_hash,
+            grid,
             warm_state,
             warm_state_time,
             warm_state_hour,
@@ -1065,15 +1076,15 @@ impl FWIConfig {
         warm_state_time: DateTime<Utc>,
     ) -> Result<(), RISICOError> {
         if let Some(directory) = &self.netcdf_warm_state_path {
-            let grid_hash = self
-                .grid_hash
-                .as_deref()
-                .ok_or("NetCDF warm state is missing its grid hash")?;
+            let grid = self
+                .grid
+                .as_ref()
+                .ok_or("NetCDF warm state is missing its grid")?;
             write_fwi_snapshot(
                 directory,
                 state,
                 &self.model_version,
-                grid_hash,
+                grid,
                 &self.cell_indexes,
             )?;
             return Ok(());
@@ -1131,6 +1142,21 @@ impl FWIConfig {
 #[cfg(test)]
 mod fwi_warm_state_tests {
     use super::*;
+
+    #[test]
+    fn netcdf_cutoff_uses_the_same_lag_as_legacy_lookup() {
+        let run_date = Utc
+            .with_ymd_and_hms(2024, 1, 2, 0, 0, 0)
+            .single()
+            .expect("valid test date");
+
+        assert_eq!(
+            warm_state_search_time(run_date, 0, 1),
+            Utc.with_ymd_and_hms(2024, 1, 1, 0, 0, 0)
+                .single()
+                .expect("valid warm-state date")
+        );
+    }
 
     #[test]
     fn deployed_scalar_fwi_state_is_read_in_rain_ffmc_dmc_dc_order() {

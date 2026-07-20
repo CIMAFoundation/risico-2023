@@ -54,7 +54,7 @@ struct ConvertArgs {
     /// Legacy filename prefix, or a directory when files are named only by timestamp.
     #[arg(long)]
     legacy_prefix: PathBuf,
-    /// GeoTIFF domain mask used to validate cell count and bind grid identity.
+    /// GeoTIFF domain mask used to validate cell count and define the output grid.
     #[arg(long)]
     domain_mask: PathBuf,
     /// Destination directory for NetCDF snapshots.
@@ -192,7 +192,7 @@ fn convert_risico(args: ConvertArgs) -> Result<(), RISICOError> {
             &args.output,
             &state,
             &args.model_version,
-            &domain.grid_hash,
+            &domain.grid,
             &domain.cell_indexes,
         )?;
         let verified = load_latest_risico(
@@ -200,7 +200,7 @@ fn convert_risico(args: ConvertArgs) -> Result<(), RISICOError> {
             *time,
             0,
             &args.model_version,
-            &domain.grid_hash,
+            &domain.grid,
             &domain.cell_indexes,
         )?
         .is_some_and(|(_, loaded_time)| loaded_time == *time);
@@ -230,7 +230,7 @@ fn convert_fwi(args: ConvertArgs) -> Result<(), RISICOError> {
             &args.output,
             &state,
             &args.model_version,
-            &domain.grid_hash,
+            &domain.grid,
             &domain.cell_indexes,
         )?;
         let verified = load_latest_fwi(
@@ -238,7 +238,7 @@ fn convert_fwi(args: ConvertArgs) -> Result<(), RISICOError> {
             *time,
             0,
             &args.model_version,
-            &domain.grid_hash,
+            &domain.grid,
             &domain.cell_indexes,
         )?
         .is_some_and(|(_, loaded_time)| loaded_time == *time);

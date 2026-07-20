@@ -75,7 +75,7 @@ impl Palette {
                 continue;
             }
             let parts: Vec<&str> = line.split_whitespace().collect();
-            if line.len() < 5 {
+            if parts.len() < 5 {
                 warn!("warning skipping line: {}", line);
                 continue;
             }
@@ -104,12 +104,45 @@ impl Palette {
     }
 
     pub fn get_color(&self, val: f32) -> Color {
-        for (idx, bound) in self.bounds.iter().enumerate().take(self.bounds.len() - 1) {
-            if val >= *bound && val < self.bounds[idx + 1] {
-                return self.colors[idx];
+        let fallback = Color {
+            r: 0,
+            g: 0,
+            b: 0,
+            a: 0,
+        };
+        if self.bounds.is_empty() || self.colors.is_empty() {
+            return fallback;
+        }
+
+        for (idx, bounds) in self.bounds.windows(2).enumerate() {
+            if val >= bounds[0] && val < bounds[1] {
+                return self.colors.get(idx).copied().unwrap_or(fallback);
             }
         }
 
-        self.colors[self.bounds.len() - 1]
+        self.colors.last().copied().unwrap_or(fallback)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::Palette;
+    use std::{fs, path::PathBuf};
+
+    #[test]
+    fn malformed_rows_are_skipped_without_panicking_on_lookup() {
+        let path: PathBuf =
+            std::env::temp_dir().join(format!("risico-palette-test-{}.pal", std::process::id()));
+        fs::write(&path, "0 0 0 0 255\n10 255 0 0\n20 0 255 0 255\n")
+            .expect("test palette should be writable");
+
+        let palette = Palette::load_palette(path.to_str().expect("valid test path"))
+            .expect("palette should load");
+        let color = palette.get_color(100.0);
+        assert_eq!(color.r, 0);
+        assert_eq!(color.g, 255);
+        assert_eq!(color.a, 255);
+
+        fs::remove_file(path).expect("test palette should be removable");
     }
 }

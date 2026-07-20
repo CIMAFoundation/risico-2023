@@ -24,7 +24,6 @@ build-binary = [
     "dep:hdf5",
     "dep:hdf5-sys",
     "dep:geotiff-reader",
-    "dep:sha2",
 ]
 
 gdal_bindgen = ["gdal", "gdal/bindgen"]
@@ -62,7 +61,6 @@ hdf5-sys = { version = "0.8.1", optional = true }
 netcdf = { version = "0.8.1", optional = true }
 netcdf-sys = { version = "0.5.1", optional = true }
 geotiff-reader = { version = "=0.7.0", default-features = false, features = ["local"], optional = true }
-sha2 = { version = "0.10", optional = true }
 tzf-rs = { version = "0.4.9", default-features = false }
 
 

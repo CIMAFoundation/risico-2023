@@ -1,0 +1,45 @@
+models:
+  - type: RISICO
+    model_name: RISICO2023
+    model_version: v2025
+    static_data:
+      type: geotiff
+      domain_mask: /share/risico/RISICO2023/STATIC/geotiff/domain_mask.tif
+      slope: /share/risico/RISICO2023/STATIC/geotiff/slope.tif
+      aspect: /share/risico/RISICO2023/STATIC/geotiff/aspect.tif
+      vegetation_id: /share/risico/RISICO2023/STATIC/geotiff/vegetation_id.tif
+      vegetation_catalog: /share/risico/RISICO2023/STATIC/p_vegetazione.csv
+      ppf_summer: /share/risico/RISICO2023/STATIC/geotiff/ppf_summer.tif
+      ppf_winter: /share/risico/RISICO2023/STATIC/geotiff/ppf_winter.tif
+    warm_state:
+      type: netcdf
+      directory: /share/risico/RISICO2023/STATE0-NC
+      legacy_fallback: /share/risico/RISICO2023/STATE0/state0RISICO2023_
+      max_age_hours: 120
+      on_missing: error
+    warm_state_hour: 0
+    output_time_resolution: 1
+    output_types:
+      - internal_name: RISICO2023
+        name: RISICO2023-VERIFY
+        path: /share/risico/RISICO2023/VERIFY-OUTPUT-NC
+        grid_path: /share/risico/RISICO2023/GRID/input_1km_GRID.txt
+        format: NETCDF
+        variables:
+          - internal_name: dffm
+            name: UMB
+            cluster_mode: Min
+            precision: -1
+          - internal_name: W
+            name: W
+            cluster_mode: Max
+            precision: -2
+          - internal_name: V
+            name: V
+            cluster_mode: Max
+            precision: 0
+          - internal_name: I
+            name: I
+            cluster_mode: Max
+            precision: 0
+palettes: {}

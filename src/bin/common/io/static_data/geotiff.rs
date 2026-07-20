@@ -1,7 +1,6 @@
 use std::path::Path;
 
 use geotiff_reader::GeoTiffFile;
-use sha2::{Digest, Sha256};
 
 use crate::common::helpers::RISICOError;
 
@@ -62,6 +61,11 @@ impl RasterGrid {
     }
 
     pub fn cell_center(&self, cell_index: u32) -> (f32, f32) {
+        let (x, y) = self.cell_center_f64(cell_index);
+        (x as f32, y as f32)
+    }
+
+    pub fn cell_center_f64(&self, cell_index: u32) -> (f64, f64) {
         let index = cell_index as usize;
         let row = index / self.width;
         let col = index % self.width;
@@ -71,7 +75,33 @@ impl RasterGrid {
         let y = self.transform[3]
             + (col as f64 + 0.5) * self.transform[4]
             + (row as f64 + 0.5) * self.transform[5];
-        (x as f32, y as f32)
+        (x, y)
+    }
+
+    /// Return the row-major cell whose centre is nearest to the coordinate.
+    pub fn nearest_cell_index(&self, x: f64, y: f64) -> Option<usize> {
+        if self.width == 0 || self.height == 0 {
+            return None;
+        }
+        let col = ((x - self.transform[0]) / self.transform[1] - 0.5).round();
+        let row = ((y - self.transform[3]) / self.transform[5] - 0.5).round();
+        if col < 0.0 || row < 0.0 || col >= self.width as f64 || row >= self.height as f64 {
+            None
+        } else {
+            Some(row as usize * self.width + col as usize)
+        }
+    }
+
+    pub fn x_coordinates(&self) -> Vec<f64> {
+        (0..self.width)
+            .map(|col| self.transform[0] + (col as f64 + 0.5) * self.transform[1])
+            .collect()
+    }
+
+    pub fn y_coordinates(&self) -> Vec<f64> {
+        (0..self.height)
+            .map(|row| self.transform[3] + (row as f64 + 0.5) * self.transform[5])
+            .collect()
     }
 
     fn matches(&self, other: &Self) -> bool {
@@ -93,7 +123,6 @@ impl RasterGrid {
 pub struct RasterDomain {
     pub grid: RasterGrid,
     pub cell_indexes: Vec<u32>,
-    pub grid_hash: String,
 }
 
 impl RasterDomain {
@@ -112,11 +141,9 @@ impl RasterDomain {
             return Err(format!("domain mask {} contains no active cells", path.display()).into());
         }
 
-        let grid_hash = grid_hash(&layer.grid, &cell_indexes);
         Ok(Self {
             grid: layer.grid,
             cell_indexes,
-            grid_hash,
         })
     }
 
@@ -238,21 +265,6 @@ fn read_f32_band(file: &GeoTiffFile, path: &Path) -> Result<Vec<f32>, RISICOErro
     .into())
 }
 
-fn grid_hash(grid: &RasterGrid, cell_indexes: &[u32]) -> String {
-    let mut hash = Sha256::new();
-    hash.update(b"risico-grid-v1");
-    hash.update((grid.width as u64).to_le_bytes());
-    hash.update((grid.height as u64).to_le_bytes());
-    hash.update(grid.epsg.to_le_bytes());
-    for value in grid.transform {
-        hash.update(value.to_le_bytes());
-    }
-    for index in cell_indexes {
-        hash.update(index.to_le_bytes());
-    }
-    format!("{:x}", hash.finalize())
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -270,13 +282,15 @@ mod tests {
     }
 
     #[test]
-    fn grid_hash_changes_with_the_mask() {
+    fn nearest_cell_uses_cell_centres() {
         let grid = RasterGrid {
             width: 2,
             height: 2,
             epsg: 4326,
             transform: [10.0, 0.5, 0.0, 45.0, 0.0, -0.5],
         };
-        assert_ne!(grid_hash(&grid, &[0, 1]), grid_hash(&grid, &[0, 2]));
+        assert_eq!(grid.nearest_cell_index(10.1, 44.9), Some(0));
+        assert_eq!(grid.nearest_cell_index(10.9, 44.1), Some(3));
+        assert_eq!(grid.nearest_cell_index(9.0, 44.5), None);
     }
 }
