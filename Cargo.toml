@@ -81,6 +81,11 @@ name = "static-converter"
 path = "src/bin/static-converter.rs"
 required-features = ["build-binary", "gdal"]
 
+[[bin]]
+name = "warm-state-converter"
+path = "src/bin/warm-state-converter.rs"
+required-features = ["build-binary"]
+
 # [[bin]]
 # name = "risico-2023-config-converter"
 # path = "src/bin/converter.rs"
