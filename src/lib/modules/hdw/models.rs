@@ -57,7 +57,7 @@ impl HdwProperties {
 
 
 // STATE
-#[derive(Debug)]
+#[derive(Debug, serde_derive::Serialize, serde_derive::Deserialize)]
 #[allow(non_snake_case)]
 pub struct HdwStateElement {
     pub vpd: f32,  // vapor pressure deificit [hPa]

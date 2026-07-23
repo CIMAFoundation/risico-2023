@@ -88,7 +88,7 @@ impl Default for RISICOWarmState {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, serde_derive::Serialize, serde_derive::Deserialize)]
 #[allow(non_snake_case)]
 pub struct RISICOStateElement {
     pub dffm: f32,

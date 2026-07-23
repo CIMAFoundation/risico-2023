@@ -223,6 +223,8 @@ pub struct BinaryInputFile {
 #[derive(Debug)]
 pub struct BinaryInputHandler {
     pub grid_registry: HashMap<String, Array1<Option<usize>>>,
+    coordinate_registry: Vec<HashMap<String, Array1<Option<usize>>>>,
+    active_coordinates: Option<usize>,
     grids: HashMap<String, Box<dyn Grid>>,
     source_values: Mutex<HashMap<String, Arc<Array1<f32>>>>,
     pub data_map: HashMap<DateTime<Utc>, HashMap<InputVariableName, BinaryInputFile>>,
@@ -281,6 +283,8 @@ impl BinaryInputHandler {
 
         Ok(BinaryInputHandler {
             grid_registry,
+            coordinate_registry: Vec::new(),
+            active_coordinates: None,
             grids: HashMap::new(),
             source_values: Mutex::new(HashMap::new()),
             data_map,
@@ -314,7 +318,9 @@ impl InputHandler for BinaryInputHandler {
         });
 
         let indexes = self
-            .grid_registry
+            .active_coordinates
+            .and_then(|selection| self.coordinate_registry.get(selection))
+            .unwrap_or(&self.grid_registry)
             .get(&file.grid_name)
             .unwrap_or_else(|| panic!("there should be a grid named {}", file.grid_name));
 
@@ -338,6 +344,15 @@ impl InputHandler for BinaryInputHandler {
     }
 
     fn set_coordinates(&mut self, lats: &[f32], lons: &[f32]) -> Result<(), Box<dyn Error>> {
+        let selection = self.register_coordinates(lats, lons)?;
+        self.select_coordinates(selection)
+    }
+
+    fn register_coordinates(
+        &mut self,
+        lats: &[f32],
+        lons: &[f32],
+    ) -> Result<usize, Box<dyn Error>> {
         let grid_files: HashMap<String, String> = self
             .data_map
             .values()
@@ -345,6 +360,7 @@ impl InputHandler for BinaryInputHandler {
             .map(|input| (input.grid_name.clone(), input.path.clone()))
             .collect();
 
+        let mut indexes_by_grid = HashMap::new();
         for (grid_name, input_path) in grid_files {
             if !self.grids.contains_key(&grid_name) {
                 let grid = read_grid_from_file(&input_path)?;
@@ -355,13 +371,32 @@ impl InputHandler for BinaryInputHandler {
                 .get(&grid_name)
                 .expect("input grid was just registered")
                 .indexes(lats, lons);
-            // A handler is shared by models and, in streaming mode, by tiles.
-            // Always replace the current selection instead of retaining the
-            // first model's coordinates for this named source grid.
-            self.grid_registry.insert(grid_name, indexes);
+            indexes_by_grid.insert(grid_name, indexes);
         }
 
+        let selection = self.coordinate_registry.len();
+        self.coordinate_registry.push(indexes_by_grid);
+        Ok(selection)
+    }
+
+    fn select_coordinates(&mut self, selection: usize) -> Result<(), Box<dyn Error>> {
+        if selection >= self.coordinate_registry.len() {
+            return Err(format!("input coordinate selection {selection} is not registered").into());
+        }
+        self.active_coordinates = Some(selection);
         Ok(())
+    }
+
+    fn clear_registered_coordinates(&mut self) {
+        self.coordinate_registry.clear();
+        self.active_coordinates = None;
+    }
+
+    fn clear_cached_values(&mut self) {
+        self.source_values
+            .lock()
+            .expect("binary source cache lock is poisoned")
+            .clear();
     }
 
     fn info_input(&self) -> String {
@@ -373,5 +408,55 @@ impl InputHandler for BinaryInputHandler {
             }
         }
         info
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::common::io::models::grid::RegularGrid;
+
+    #[test]
+    fn registered_tile_coordinates_can_be_selected_without_remapping() {
+        let date = Utc::now();
+        let variable = InputVariableName::T;
+        let mut files = HashMap::new();
+        files.insert(
+            variable,
+            BinaryInputFile {
+                grid_name: "grid".to_owned(),
+                path: "unused".to_owned(),
+            },
+        );
+        let mut grids: HashMap<String, Box<dyn Grid>> = HashMap::new();
+        grids.insert(
+            "grid".to_owned(),
+            Box::new(RegularGrid::new(2, 2, 0.0, 0.0, 1.0, 1.0)),
+        );
+        let mut handler = BinaryInputHandler {
+            grid_registry: HashMap::new(),
+            coordinate_registry: Vec::new(),
+            active_coordinates: None,
+            grids,
+            source_values: Mutex::new(HashMap::new()),
+            data_map: HashMap::from([(date, files)]),
+        };
+
+        let first = handler
+            .register_coordinates(&[0.0], &[0.0])
+            .expect("first tile coordinates should register");
+        let second = handler
+            .register_coordinates(&[1.0], &[1.0])
+            .expect("second tile coordinates should register");
+
+        assert_eq!(handler.coordinate_registry[first]["grid"][0], Some(0));
+        assert_eq!(handler.coordinate_registry[second]["grid"][0], Some(3));
+        handler
+            .select_coordinates(first)
+            .expect("registered coordinates should be selectable");
+        assert_eq!(handler.active_coordinates, Some(first));
+        handler.clear_registered_coordinates();
+        assert!(handler.coordinate_registry.is_empty());
+        assert_eq!(handler.active_coordinates, None);
     }
 }

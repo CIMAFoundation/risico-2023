@@ -77,7 +77,7 @@ impl Default for Mark5WarmState {
 }
 
 // STATE
-#[derive(Debug)]
+#[derive(Debug, serde_derive::Serialize, serde_derive::Deserialize)]
 #[allow(non_snake_case)]
 pub struct Mark5StateElement {
     pub dates: Vec<DateTime<Utc>>,  // dates of the previous time window

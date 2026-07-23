@@ -58,7 +58,7 @@ pub struct FWIWarmState {
 }
 
 // STATE
-#[derive(Debug)]
+#[derive(Debug, serde_derive::Serialize, serde_derive::Deserialize)]
 #[allow(non_snake_case)]
 pub struct FWIStateElement {
     pub dates: Vec<DateTime<Utc>>,

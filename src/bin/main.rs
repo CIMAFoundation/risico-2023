@@ -1,7 +1,6 @@
 mod common;
 
 use std::{
-    collections::BTreeMap,
     env::{set_var, var},
     error::Error,
     fs,
@@ -122,34 +121,39 @@ where
 
     let run_date = timeline.first().copied().unwrap_or_else(Utc::now);
     let scratch = create_run_scratch(execution, model_name, run_date)?;
-    let mut outputs: BTreeMap<DateTime<Utc>, MappedNativeOutputs> = BTreeMap::new();
-    let mut warm_states: BTreeMap<DateTime<Utc>, Vec<Option<C::WarmState>>> = BTreeMap::new();
+    let state_paths: Vec<PathBuf> = tiles
+        .iter()
+        .map(|tile| scratch.join(format!("state-tile-{}.bin", tile.ordinal)))
+        .collect();
+    let mut output_writer = config.output_writer()?;
 
-    for tile in tiles {
-        let properties = config.tile_properties(tile);
-        let mut state = config.tile_state(tile);
-        let tile_lats: Vec<f32> = tile
-            .model_positions
-            .iter()
-            .map(|&position| lats[position])
-            .collect();
-        let tile_lons: Vec<f32> = tile
-            .model_positions
-            .iter()
-            .map(|&position| lons[position])
-            .collect();
-        handler
-            .set_coordinates(&tile_lats, &tile_lons)
-            .map_err(|error| format!("cannot map input coordinates for tile: {error}"))?;
+    for time in &timeline {
+        info!("{model_name}: processing {}", time.format("%Y-%m-%d %H:%M"));
+        let mut mapped_output: Option<(DateTime<Utc>, MappedNativeOutputs, usize)> = None;
+        let mut warm_state: Option<Vec<Option<C::WarmState>>> = None;
 
-        info!(
-            "{model_name}: tile {}/{} ({} active cells)",
-            tile.ordinal + 1,
-            tiles.len(),
-            tile.len()
-        );
+        for (tile_index, tile) in tiles.iter().enumerate() {
+            handler.clear_registered_coordinates();
+            let tile_lats: Vec<f32> = tile
+                .model_positions
+                .iter()
+                .map(|&position| lats[position])
+                .collect();
+            let tile_lons: Vec<f32> = tile
+                .model_positions
+                .iter()
+                .map(|&position| lons[position])
+                .collect();
+            handler
+                .set_coordinates(&tile_lats, &tile_lons)
+                .map_err(|error| format!("cannot map input coordinates for tile: {error}"))?;
 
-        for time in &timeline {
+            let properties = config.tile_properties(tile);
+            let mut state = config.tile_state(tile);
+            let state_path = &state_paths[tile_index];
+            if state_path.exists() {
+                config.restore_tile_state(&mut state, state_path)?;
+            }
             let input = get_input(handler, time, tile.len());
             let step = config.step(&mut state, &properties, &input);
 
@@ -160,20 +164,30 @@ where
                     )
                     .into());
                 }
-                if !outputs.contains_key(&output.time) {
+                if let Some((mapped_time, _, _)) = &mapped_output {
+                    if *mapped_time != output.time {
+                        return Err(format!(
+                            "{model_name} produced output for {time} and {} in the same timestep",
+                            output.time
+                        )
+                        .into());
+                    }
+                } else {
                     let path = scratch.join(format!(
                         "output-{}.native-f32",
                         output.time.format("%Y%m%dT%H%M%SZ")
                     ));
-                    outputs.insert(
+                    mapped_output = Some((
                         output.time,
                         MappedNativeOutputs::create(path, native_variables.clone(), cell_count)?,
-                    );
+                        0,
+                    ));
                 }
-                outputs
-                    .get_mut(&output.time)
-                    .expect("output scratch was just registered")
-                    .write_tile(&tile.model_positions, &output)?;
+                let (_, mapped, completed_tiles) = mapped_output
+                    .as_mut()
+                    .expect("mapped output was just registered");
+                mapped.write_tile(&tile.model_positions, &output)?;
+                *completed_tiles += 1;
             }
 
             if step.write_warm_state {
@@ -186,52 +200,74 @@ where
                     )
                     .into());
                 }
-                let destination = warm_states
-                    .entry(*time)
-                    .or_insert_with(|| vec![None; cell_count]);
+                let destination = warm_state.get_or_insert_with(|| vec![None; cell_count]);
                 for (&position, record) in tile.model_positions.iter().zip(records) {
                     destination[position] = Some(record);
                 }
             }
+
+            config.checkpoint_tile_state(&state, state_path)?;
+            drop(input);
+            drop(state);
+            drop(properties);
         }
-    }
+        handler.clear_registered_coordinates();
+        handler.clear_cached_values();
 
-    let mut output_writer = config.output_writer()?;
-    for (time, output) in outputs {
-        output.sync_all()?;
-        info!(
-            "{model_name}: postprocessing output {}",
-            time.format("%Y-%m-%d %H:%M")
-        );
-        output_writer.write_mapped_output(&lats, &lons, time, &output)?;
-        let path = output.path().to_path_buf();
-        drop(output);
-        fs::remove_file(&path).map_err(|error| {
-            format!(
-                "cannot remove completed output scratch {}: {error}",
-                path.display()
-            )
-        })?;
-    }
-
-    for (time, records) in warm_states {
-        let missing = records.iter().filter(|record| record.is_none()).count();
-        if missing != 0 {
-            return Err(
-                format!("{model_name} warm state at {time} is missing {missing} cells").into(),
+        if let Some((output_time, output, completed_tiles)) = mapped_output {
+            if completed_tiles != tiles.len() {
+                return Err(format!(
+                    "{model_name} produced output for only {completed_tiles} of {} tiles at {time}",
+                    tiles.len()
+                )
+                .into());
+            }
+            output.sync_all()?;
+            info!(
+                "{model_name}: postprocessing output {}",
+                output_time.format("%Y-%m-%d %H:%M")
             );
+            output_writer.write_mapped_output(&lats, &lons, output_time, &output)?;
+            let path = output.path().to_path_buf();
+            drop(output);
+            fs::remove_file(&path).map_err(|error| {
+                format!(
+                    "cannot remove completed output scratch {}: {error}",
+                    path.display()
+                )
+            })?;
         }
-        let records: Vec<C::WarmState> = records
-            .into_iter()
-            .map(|record| record.expect("missing records were checked"))
-            .collect();
-        info!(
-            "{model_name}: writing warm state {}",
-            time.format("%Y-%m-%d %H:%M")
-        );
-        config.write_warm_state_records(&records, time)?;
+
+        if let Some(records) = warm_state {
+            let missing = records.iter().filter(|record| record.is_none()).count();
+            if missing != 0 {
+                return Err(format!(
+                    "{model_name} warm state at {time} is missing {missing} cells"
+                )
+                .into());
+            }
+            let records: Vec<C::WarmState> = records
+                .into_iter()
+                .map(|record| record.expect("missing records were checked"))
+                .collect();
+            info!(
+                "{model_name}: writing warm state {}",
+                time.format("%Y-%m-%d %H:%M")
+            );
+            config.write_warm_state_records(&records, *time)?;
+        }
     }
 
+    for path in state_paths {
+        if path.exists() {
+            fs::remove_file(&path).map_err(|error| {
+                format!(
+                    "cannot remove completed tile state checkpoint {}: {error}",
+                    path.display()
+                )
+            })?;
+        }
+    }
     fs::remove_dir(&scratch).map_err(|error| {
         format!(
             "cannot remove completed scratch directory {}: {error}",

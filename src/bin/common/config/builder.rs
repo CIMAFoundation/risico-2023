@@ -293,15 +293,15 @@ impl ConfigBuilderType {
 }
 
 fn default_tile_height() -> usize {
-    512
+    1024
 }
 
 fn default_tile_width() -> usize {
-    512
+    1024
 }
 
 fn default_cells_per_tile() -> usize {
-    262_144
+    1_048_576
 }
 
 /// Model-independent controls for bounded-memory execution.
@@ -779,9 +779,9 @@ output_types: []
     fn streaming_execution_defaults_and_overrides_are_validated() {
         let defaults: StreamingExecutionConfig =
             serde_yaml::from_str("{}").expect("empty streaming configuration should use defaults");
-        assert_eq!(defaults.tile_height, 512);
-        assert_eq!(defaults.tile_width, 512);
-        assert_eq!(defaults.cells_per_tile, 262_144);
+        assert_eq!(defaults.tile_height, 1024);
+        assert_eq!(defaults.tile_width, 1024);
+        assert_eq!(defaults.cells_per_tile, 1_048_576);
         defaults.validate().unwrap();
 
         let configured: StreamingExecutionConfig = serde_yaml::from_str(

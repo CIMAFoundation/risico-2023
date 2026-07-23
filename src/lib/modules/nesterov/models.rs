@@ -71,7 +71,7 @@ impl Default for NesterovWarmState {
 }
 
 // STATE
-#[derive(Debug)]
+#[derive(Debug, serde_derive::Serialize, serde_derive::Deserialize)]
 #[allow(non_snake_case)]
 pub struct NesterovStateElement {
     pub nesterov: f32,  // Nesterov index

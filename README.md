@@ -217,20 +217,20 @@ Nesterov, Sharples, Orieux, and HDW.
 For each configured model, execution proceeds as follows:
 
 1. Build a spatial tile plan.
-2. For each tile, load its properties and initial state, map the tile
-   coordinates to every meteorological input grid, and process the complete
-   input timeline. Processing a tile through the complete timeline keeps only
-   that tile's live model state resident.
-3. Write each requested native model variable into a plane-oriented,
-   little-endian memory-mapped scratch file. There is one scratch file per
-   output timestamp.
-4. After all tiles are complete, read native variables from mmap on demand,
-   resample them onto each configured output grid, and encode NETCDF, ZBIN,
-   PNGWJSON, or, in a GDAL-enabled build, GEOTIFF output. Independent output
-   variables may be postprocessed in parallel.
-5. Assemble scheduled warm-state records in canonical model-cell order and
-   write the configured legacy or NetCDF snapshot.
-6. Flush and remove completed output scratch files.
+2. Process the input timeline in timestamp order.
+3. Within each timestamp, load one tile's properties and its exact live-state
+   checkpoint, map its input coordinates, and run the model with the existing
+   in-tile parallelism.
+4. Write the tile's requested native variables into the current timestamp's
+   plane-oriented, little-endian memory-mapped output, checkpoint its updated
+   state, and drop all tile-local allocations before loading the next tile.
+5. After all tiles complete that timestamp, flush the mmap, resample its native
+   variables onto each configured output grid, encode NETCDF, ZBIN, PNGWJSON,
+   or, in a GDAL-enabled build, GEOTIFF output, and remove the scratch file.
+   Independent output variables may be postprocessed in parallel.
+6. Assemble any scheduled warm-state records in canonical model-cell order and
+   write the configured legacy or NetCDF snapshot before advancing to the next
+   timestamp.
 
 Raster-backed models use clipped rectangular windows and omit empty windows.
 Models configured with legacy cell files use bounded batches in configured
@@ -243,10 +243,13 @@ then sampled repeatedly for the model tiles.
 
 GeoTIFF static layers and gridded warm-state variables are read using bounded
 source windows. The current configuration objects retain their compact
-active-cell properties and initial warm-state records, while live numerical
-state is tile-local. Scheduled warm-state records are currently assembled in
-memory before the final writer is called; native forecast output is the
-disk-backed portion of the pipeline.
+active-cell properties and initial warm-state records. Live numerical state is
+retained only for the tile currently being processed; exact per-tile state,
+including transient accumulators and history, is checkpointed between timestamps.
+Decoded meteorological fields are retained while all tiles consume the current
+timestamp and then released. Scheduled warm-state
+records for the current timestamp are assembled in memory before the writer is
+called; native forecast output is the disk-backed portion of the pipeline.
 
 ### Configuration
 
@@ -254,13 +257,13 @@ The optional `streaming` section tunes the mandatory tiled runner:
 
 ```yaml
 streaming:
-  tile_height: 512
-  tile_width: 512
-  cells_per_tile: 262144
+  tile_height: 1024
+  tile_width: 1024
+  cells_per_tile: 1048576
   scratch_directory: /var/tmp/risico
 ```
 
-Defaults are `512 × 512` for raster tiles and 262,144 cells for legacy cell
+Defaults are `1024 × 1024` for raster tiles and 1,048,576 cells for legacy cell
 batches. `scratch_directory` defaults to a `risico-streaming` directory below
 the operating system's temporary directory. Tile dimensions and
 `cells_per_tile` must be greater than zero.
@@ -270,9 +273,9 @@ clustering, precision rounding, and encoding happen only during the
 postprocessing stage.
 
 Allow scratch capacity for approximately four bytes multiplied by active model
-cells, configured native variables, and output timestamps, plus filesystem
-overhead. Memory mapping lets the operating system page these planes without
-materializing every output simultaneously in process memory.
+cells and configured native variables, plus the serialized live-state
+checkpoints and filesystem overhead. Only the current output timestamp is
+mapped; it is postprocessed and removed before advancing to the next timestamp.
 
 ### Running
 

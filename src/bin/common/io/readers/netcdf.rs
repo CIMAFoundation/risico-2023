@@ -415,6 +415,8 @@ pub struct NetCdfInputHandler {
     records: Vec<NetCdfFileInputRecord>,
     config: NetCdfInputConfiguration,
     source_values: Mutex<HashMap<(String, String, usize), Arc<Array1<f32>>>>,
+    coordinate_registry: Vec<Vec<Array1<Option<usize>>>>,
+    active_coordinates: Option<usize>,
 }
 
 impl NetCdfInputHandler {
@@ -451,13 +453,15 @@ impl NetCdfInputHandler {
             records,
             config: config.clone(),
             source_values: Mutex::new(HashMap::new()),
+            coordinate_registry: Vec::new(),
+            active_coordinates: None,
         })
     }
 }
 
 impl InputHandler for NetCdfInputHandler {
     fn get_values(&self, var: InputVariableName, date: &DateTime<Utc>) -> Option<Array1<f32>> {
-        for record in &self.records {
+        for (record_index, record) in self.records.iter().enumerate() {
             let time_index = record.timeline.iter().position(|t| t == date);
 
             if time_index.is_none() || !record.variables.contains(&var) {
@@ -494,10 +498,13 @@ impl InputHandler for NetCdfInputHandler {
                         .expect("NetCDF source cache lock is poisoned")
                         .entry(cache_key)
                         .or_insert_with(|| values.clone());
-                    let data: Vec<f32> = record
-                        .indexes
-                        .as_ref()
-                        .expect("indexes should be set")
+                    let indexes = self
+                        .active_coordinates
+                        .and_then(|selection| self.coordinate_registry.get(selection))
+                        .and_then(|selections| selections.get(record_index))
+                        .or(record.indexes.as_ref())
+                        .expect("indexes should be set");
+                    let data: Vec<f32> = indexes
                         .par_iter()
                         .map(|index| index.map(|idx| values[idx]).unwrap_or(NODATAVAL))
                         .collect();
@@ -521,12 +528,43 @@ impl InputHandler for NetCdfInputHandler {
     }
 
     fn set_coordinates(&mut self, lats: &[f32], lons: &[f32]) -> Result<(), Box<dyn Error>> {
-        for record in &mut self.records {
-            let grid = &record.grid;
-            let indexes = grid.indexes(lats, lons);
-            record.indexes = Some(Array1::from(indexes));
+        let selection = self.register_coordinates(lats, lons)?;
+        self.select_coordinates(selection)
+    }
+
+    fn register_coordinates(
+        &mut self,
+        lats: &[f32],
+        lons: &[f32],
+    ) -> Result<usize, Box<dyn Error>> {
+        let indexes = self
+            .records
+            .iter()
+            .map(|record| record.grid.indexes(lats, lons))
+            .collect();
+        let selection = self.coordinate_registry.len();
+        self.coordinate_registry.push(indexes);
+        Ok(selection)
+    }
+
+    fn select_coordinates(&mut self, selection: usize) -> Result<(), Box<dyn Error>> {
+        if selection >= self.coordinate_registry.len() {
+            return Err(format!("input coordinate selection {selection} is not registered").into());
         }
+        self.active_coordinates = Some(selection);
         Ok(())
+    }
+
+    fn clear_registered_coordinates(&mut self) {
+        self.coordinate_registry.clear();
+        self.active_coordinates = None;
+    }
+
+    fn clear_cached_values(&mut self) {
+        self.source_values
+            .lock()
+            .expect("NetCDF source cache lock is poisoned")
+            .clear();
     }
 
     fn info_input(&self) -> String {

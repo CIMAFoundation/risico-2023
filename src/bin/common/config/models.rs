@@ -2,6 +2,7 @@ use std::{
     collections::HashMap,
     fs::File,
     io::{self, BufRead, BufReader, BufWriter, Write},
+    path::Path,
 };
 
 use std::f32::consts::PI;
@@ -15,38 +16,49 @@ use rayon::prelude::*;
 use risico::{
     models::output::{Output, OutputVariableName},
     modules::angstrom::models::{
-        AngstromCellPropertiesContainer, AngstromProperties, AngstromState,
+        AngstromCellPropertiesContainer, AngstromProperties, AngstromState, AngstromStateElement,
     },
-    modules::fosberg::models::{FosbergCellPropertiesContainer, FosbergProperties, FosbergState},
+    modules::fosberg::models::{
+        FosbergCellPropertiesContainer, FosbergProperties, FosbergState, FosbergStateElement,
+    },
     modules::fwi::{
         config::FWIModelConfig,
-        models::{FWICellPropertiesContainer, FWIProperties, FWIState, FWIWarmState},
+        models::{
+            FWICellPropertiesContainer, FWIProperties, FWIState, FWIStateElement, FWIWarmState,
+        },
     },
     //    modules::portuguese::models::{PortugueseCellPropertiesContainer, PortugueseProperties, PortugueseState, PortugueseWarmState},
-    modules::hdw::models::{HdwCellPropertiesContainer, HdwProperties, HdwState},
+    modules::hdw::models::{HdwCellPropertiesContainer, HdwProperties, HdwState, HdwStateElement},
     modules::kbdi::{
         config::KBDIModelConfig,
-        models::{KBDICellPropertiesContainer, KBDIProperties, KBDIState, KBDIWarmState},
+        models::{
+            KBDICellPropertiesContainer, KBDIProperties, KBDIState, KBDIStateElement, KBDIWarmState,
+        },
     },
     modules::mark5::{
         config::Mark5ModelConfig,
-        models::{Mark5CellPropertiesContainer, Mark5Properties, Mark5State, Mark5WarmState},
+        models::{
+            Mark5CellPropertiesContainer, Mark5Properties, Mark5State, Mark5StateElement,
+            Mark5WarmState,
+        },
     },
     modules::nesterov::models::{
-        NesterovCellPropertiesContainer, NesterovProperties, NesterovState, NesterovWarmState,
+        NesterovCellPropertiesContainer, NesterovProperties, NesterovState, NesterovStateElement,
+        NesterovWarmState,
     },
     modules::orieux::models::{
-        OrieuxCellPropertiesContainer, OrieuxProperties, OrieuxState, OrieuxWarmState,
+        OrieuxCellPropertiesContainer, OrieuxProperties, OrieuxState, OrieuxStateElement,
+        OrieuxWarmState,
     },
     modules::risico::{
         config::RISICOModelConfig,
         models::{
-            RISICOCellPropertiesContainer, RISICOProperties, RISICOState, RISICOVegetation,
-            RISICOWarmState,
+            RISICOCellPropertiesContainer, RISICOProperties, RISICOState, RISICOStateElement,
+            RISICOVegetation, RISICOWarmState,
         },
     },
     modules::sharples::models::{
-        SharplesCellPropertiesContainer, SharplesProperties, SharplesState,
+        SharplesCellPropertiesContainer, SharplesProperties, SharplesState, SharplesStateElement,
     },
 };
 
@@ -507,6 +519,117 @@ impl TileModelFactory for OrieuxConfig {
     }
 }
 
+/// Disk-backed persistence for live tile state between time-major steps.
+///
+/// The checkpoint contains the exact model state elements, including transient
+/// daily accumulators and history vectors; warm-state records alone are not
+/// sufficient to resume every model at the next input timestamp.
+pub trait TileStatePersistence: TileModelFactory {
+    fn restore_tile_state(&self, state: &mut Self::State, path: &Path) -> Result<(), RISICOError>;
+    fn checkpoint_tile_state(&self, state: &Self::State, path: &Path) -> Result<(), RISICOError>;
+}
+
+fn write_tile_checkpoint<T: ::serde::Serialize>(
+    path: &Path,
+    time: DateTime<Utc>,
+    data: &[T],
+) -> Result<(), RISICOError> {
+    let file = File::create(path).map_err(|error| {
+        format!(
+            "cannot create tile state checkpoint {}: {error}",
+            path.display()
+        )
+    })?;
+    let mut writer = BufWriter::new(file);
+    bincode::serialize_into(&mut writer, &(time, data)).map_err(|error| {
+        format!(
+            "cannot encode tile state checkpoint {}: {error}",
+            path.display()
+        )
+    })?;
+    writer.flush().map_err(|error| {
+        format!(
+            "cannot flush tile state checkpoint {}: {error}",
+            path.display()
+        )
+        .into()
+    })
+}
+
+fn read_tile_checkpoint<T: ::serde::de::DeserializeOwned>(
+    path: &Path,
+) -> Result<(DateTime<Utc>, Vec<T>), RISICOError> {
+    let file = File::open(path).map_err(|error| {
+        format!(
+            "cannot open tile state checkpoint {}: {error}",
+            path.display()
+        )
+    })?;
+    bincode::deserialize_from(BufReader::new(file)).map_err(|error| {
+        format!(
+            "cannot decode tile state checkpoint {}: {error}",
+            path.display()
+        )
+        .into()
+    })
+}
+
+macro_rules! impl_tile_state_persistence {
+    ($config:ty, $state:ty, $element:ty) => {
+        impl TileStatePersistence for $config {
+            fn restore_tile_state(
+                &self,
+                state: &mut $state,
+                path: &Path,
+            ) -> Result<(), RISICOError> {
+                let expected_len = state.data.len();
+                // Release the freshly constructed initial-state elements
+                // before decoding the checkpoint, avoiding two tile states at
+                // peak during every restore after the first timestamp.
+                state.data = Vec::new().into();
+                let (time, data): (DateTime<Utc>, Vec<$element>) = read_tile_checkpoint(path)?;
+                if data.len() != expected_len {
+                    return Err(format!(
+                        "tile state checkpoint {} has {} cells, expected {expected_len}",
+                        path.display(),
+                        data.len()
+                    )
+                    .into());
+                }
+                state.time = time;
+                state.data = data.into();
+                Ok(())
+            }
+
+            fn checkpoint_tile_state(
+                &self,
+                state: &$state,
+                path: &Path,
+            ) -> Result<(), RISICOError> {
+                write_tile_checkpoint(
+                    path,
+                    state.time,
+                    state
+                        .data
+                        .as_slice()
+                        .expect("model tile state is contiguous"),
+                )
+            }
+        }
+    };
+}
+
+impl_tile_state_persistence!(RISICOConfig, RISICOState, RISICOStateElement);
+impl_tile_state_persistence!(FWIConfig, FWIState, FWIStateElement);
+impl_tile_state_persistence!(Mark5Config, Mark5State, Mark5StateElement);
+impl_tile_state_persistence!(KbdiConfig, KBDIState, KBDIStateElement);
+impl_tile_state_persistence!(AngstromConfig, AngstromState, AngstromStateElement);
+impl_tile_state_persistence!(FosbergConfig, FosbergState, FosbergStateElement);
+impl_tile_state_persistence!(NesterovConfig, NesterovState, NesterovStateElement);
+impl_tile_state_persistence!(SharplesConfig, SharplesState, SharplesStateElement);
+impl_tile_state_persistence!(OrieuxConfig, OrieuxState, OrieuxStateElement);
+impl_tile_state_persistence!(HdwConfig, HdwState, HdwStateElement);
+
 pub struct TileStep {
     pub output: Option<Output>,
     pub write_warm_state: bool,
@@ -516,7 +639,7 @@ pub struct TileStep {
 ///
 /// The runner owns spatial batching and persistence. Implementations retain
 /// only the small differences in each model's store/update/output schedule.
-pub trait TileModelRuntime: TileModelFactory {
+pub trait TileModelRuntime: TileModelFactory + TileStatePersistence {
     type WarmState: Clone;
 
     fn coordinates(&self) -> (Vec<f32>, Vec<f32>);
@@ -1774,6 +1897,45 @@ impl FWIConfig {
 #[cfg(test)]
 mod fwi_warm_state_tests {
     use super::*;
+
+    #[test]
+    fn tile_checkpoint_roundtrips_transient_and_history_state() {
+        let path = std::env::temp_dir().join(format!(
+            "risico-tile-checkpoint-{}-{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .expect("valid system clock")
+                .as_nanos()
+        ));
+        let time = Utc
+            .with_ymd_and_hms(2026, 7, 23, 12, 0, 0)
+            .single()
+            .expect("valid test date");
+        let data = vec![FWIStateElement {
+            dates: vec![time - Duration::hours(1)],
+            ffmc: vec![82.0],
+            dmc: vec![15.0],
+            dc: vec![120.0],
+            rain: vec![1.5],
+            humidity: vec![35.0],
+            temperature: vec![29.0],
+            wind_speed: vec![4.0],
+            rain24h: vec![2.0],
+        }];
+
+        write_tile_checkpoint(&path, time, &data).expect("checkpoint should be written");
+        let (restored_time, restored): (DateTime<Utc>, Vec<FWIStateElement>) =
+            read_tile_checkpoint(&path).expect("checkpoint should be restored");
+
+        assert_eq!(restored_time, time);
+        assert_eq!(restored.len(), 1);
+        assert_eq!(restored[0].dates, data[0].dates);
+        assert_eq!(restored[0].ffmc, data[0].ffmc);
+        assert_eq!(restored[0].humidity, data[0].humidity);
+        assert_eq!(restored[0].rain24h, data[0].rain24h);
+        fs::remove_file(path).expect("checkpoint should be removable");
+    }
 
     #[test]
     fn netcdf_cutoff_uses_the_same_lag_as_legacy_lookup() {
