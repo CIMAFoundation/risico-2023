@@ -13,7 +13,7 @@ use super::{
 
 
 // CELLS PROPERTIES
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct SharplesPropertiesElement {
     pub lon: f32,
     pub lat: f32,

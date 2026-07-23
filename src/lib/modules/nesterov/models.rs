@@ -12,7 +12,7 @@ use super::{
 /// Source: https://wikifire.wsl.ch/tiki-indexfa8e.html?page=Nesterov+ignition+index&structure=Fire
 
 // CELLS PROPERTIES
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct NesterovPropertiesElement {
     pub lon: f32,
     pub lat: f32,

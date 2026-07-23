@@ -1,8 +1,10 @@
-use std::path::Path;
+use std::collections::BTreeMap;
+use std::path::{Path, PathBuf};
 
 use geotiff_reader::GeoTiffFile;
 
 use crate::common::helpers::RISICOError;
+use crate::common::io::streaming::GridWindow;
 
 const GRID_TOLERANCE: f64 = 1.0e-12;
 #[allow(dead_code)]
@@ -128,15 +130,20 @@ pub struct RasterDomain {
 impl RasterDomain {
     pub fn open(path: impl AsRef<Path>) -> Result<Self, RISICOError> {
         let path = path.as_ref();
-        let layer = RasterLayer::open(path)?;
-        let cell_indexes: Vec<u32> = layer
-            .values
-            .iter()
-            .enumerate()
-            .filter_map(|(index, value)| {
-                (!layer.is_nodata(*value) && *value != 0.0).then_some(index as u32)
-            })
-            .collect();
+        let layer = RasterLayerReader::open(path)?;
+        let mut cell_indexes = Vec::new();
+        for window in raster_windows(&layer.grid, 512, 512) {
+            let values = layer.read_window(window)?;
+            for (local_index, value) in values.into_iter().enumerate() {
+                if layer.is_nodata(value) || value == 0.0 {
+                    continue;
+                }
+                let local_row = local_index / window.width;
+                let local_col = local_index % window.width;
+                let index = (window.row + local_row) * layer.grid.width + window.col + local_col;
+                cell_indexes.push(index as u32);
+            }
+        }
         if cell_indexes.is_empty() {
             return Err(format!("domain mask {} contains no active cells", path.display()).into());
         }
@@ -161,7 +168,7 @@ impl RasterDomain {
         name: &str,
     ) -> Result<Vec<f32>, RISICOError> {
         let path = path.as_ref();
-        let layer = RasterLayer::open(path)?;
+        let layer = RasterLayerReader::open(path)?;
         if !self.grid.matches(&layer.grid) {
             return Err(format!(
                 "static layer {name} ({}) is not aligned with the domain mask",
@@ -170,33 +177,32 @@ impl RasterDomain {
             .into());
         }
 
-        self.cell_indexes
-            .iter()
-            .map(|index| {
-                let value = layer.values[*index as usize];
-                if layer.is_nodata(value) {
-                    Err(format!(
-                        "static layer {name} ({}) has nodata at active cell {}",
-                        path.display(),
-                        index
-                    )
-                    .into())
-                } else {
-                    Ok(value)
-                }
-            })
-            .collect()
+        let values = layer.read_cells(&self.cell_indexes, 512, 512)?;
+        for (&index, &value) in self.cell_indexes.iter().zip(&values) {
+            if layer.is_nodata(value) {
+                return Err(format!(
+                    "static layer {name} ({}) has nodata at active cell {}",
+                    path.display(),
+                    index
+                )
+                .into());
+            }
+        }
+        Ok(values)
     }
 }
 
-struct RasterLayer {
-    grid: RasterGrid,
-    values: Vec<f32>,
+/// An open single-band GeoTIFF that can decode bounded pixel windows.
+pub struct RasterLayerReader {
+    path: PathBuf,
+    file: GeoTiffFile,
+    pub grid: RasterGrid,
     nodata: Option<f64>,
 }
 
-impl RasterLayer {
-    fn open(path: &Path) -> Result<Self, RISICOError> {
+impl RasterLayerReader {
+    pub fn open(path: impl AsRef<Path>) -> Result<Self, RISICOError> {
+        let path = path.as_ref();
         let file = GeoTiffFile::open(path)
             .map_err(|error| format!("cannot open GeoTIFF {}: {error}", path.display()))?;
         if file.band_count() != 1 {
@@ -210,25 +216,95 @@ impl RasterLayer {
 
         let grid = RasterGrid::from_file(&file, path)?;
         let nodata = file.nodata().and_then(|value| value.trim().parse().ok());
-        let values = read_f32_band(&file, path)?;
-        let expected_len = grid.width * grid.height;
-        if values.len() != expected_len {
-            return Err(format!(
-                "GeoTIFF {} decoded {} samples, expected {expected_len}",
-                path.display(),
-                values.len()
-            )
-            .into());
-        }
 
         Ok(Self {
+            path: path.to_path_buf(),
+            file,
             grid,
-            values,
             nodata,
         })
     }
 
-    fn is_nodata(&self, value: f32) -> bool {
+    pub fn read_window(&self, window: GridWindow) -> Result<Vec<f32>, RISICOError> {
+        if window.is_empty()
+            || window.end_row() > self.grid.height
+            || window.end_col() > self.grid.width
+        {
+            return Err(format!(
+                "window {:?} is outside GeoTIFF {} ({}x{})",
+                window,
+                self.path.display(),
+                self.grid.width,
+                self.grid.height
+            )
+            .into());
+        }
+        let values = read_f32_band_window(&self.file, &self.path, window)?;
+        if values.len() != window.len() {
+            return Err(format!(
+                "GeoTIFF {} decoded {} window samples, expected {}",
+                self.path.display(),
+                values.len(),
+                window.len()
+            )
+            .into());
+        }
+        Ok(values)
+    }
+
+    pub fn read_cells(
+        &self,
+        cell_indexes: &[u32],
+        tile_height: usize,
+        tile_width: usize,
+    ) -> Result<Vec<f32>, RISICOError> {
+        if tile_height == 0 || tile_width == 0 {
+            return Err("GeoTIFF read tile dimensions must be greater than zero".into());
+        }
+        let grid_len = self
+            .grid
+            .width
+            .checked_mul(self.grid.height)
+            .ok_or("raster dimensions overflow usize")?;
+        let mut groups: BTreeMap<(usize, usize), Vec<(usize, usize)>> = BTreeMap::new();
+        for (position, &cell_index) in cell_indexes.iter().enumerate() {
+            let cell = cell_index as usize;
+            if cell >= grid_len {
+                return Err(format!(
+                    "cell index {cell_index} is outside GeoTIFF {}",
+                    self.path.display()
+                )
+                .into());
+            }
+            let row = cell / self.grid.width;
+            let col = cell % self.grid.width;
+            groups
+                .entry((row / tile_height, col / tile_width))
+                .or_default()
+                .push((position, cell));
+        }
+
+        let mut result = vec![0.0; cell_indexes.len()];
+        for ((tile_row, tile_col), cells) in groups {
+            let row = tile_row * tile_height;
+            let col = tile_col * tile_width;
+            let window = GridWindow {
+                row,
+                col,
+                height: tile_height.min(self.grid.height - row),
+                width: tile_width.min(self.grid.width - col),
+            };
+            let values = self.read_window(window)?;
+            for (position, cell) in cells {
+                let source_row = cell / self.grid.width - window.row;
+                let source_col = cell % self.grid.width - window.col;
+                result[position] = values[source_row * window.width + source_col];
+            }
+        }
+        Ok(result)
+    }
+
+    pub fn is_nodata(&self, value: f32) -> bool {
         value.is_nan()
             || self.nodata.is_some_and(|nodata| {
                 if nodata.is_nan() {
@@ -240,10 +316,39 @@ impl RasterLayer {
     }
 }
 
-fn read_f32_band(file: &GeoTiffFile, path: &Path) -> Result<Vec<f32>, RISICOError> {
+fn raster_windows(
+    grid: &RasterGrid,
+    tile_height: usize,
+    tile_width: usize,
+) -> impl Iterator<Item = GridWindow> {
+    let grid_height = grid.height;
+    let grid_width = grid.width;
+    (0..grid_height).step_by(tile_height).flat_map(move |row| {
+        (0..grid_width)
+            .step_by(tile_width)
+            .map(move |col| GridWindow {
+                row,
+                col,
+                height: tile_height.min(grid_height - row),
+                width: tile_width.min(grid_width - col),
+            })
+    })
+}
+
+fn read_f32_band_window(
+    file: &GeoTiffFile,
+    path: &Path,
+    window: GridWindow,
+) -> Result<Vec<f32>, RISICOError> {
     macro_rules! try_type {
         ($type:ty) => {
-            if let Ok(values) = file.read_band::<$type>(0) {
+            if let Ok(values) = file.read_band_window::<$type>(
+                0,
+                window.row,
+                window.col,
+                window.height,
+                window.width,
+            ) {
                 return Ok(values.iter().map(|value| *value as f32).collect());
             }
         };
@@ -259,8 +364,9 @@ fn read_f32_band(file: &GeoTiffFile, path: &Path) -> Result<Vec<f32>, RISICOErro
     try_type!(i32);
 
     Err(format!(
-        "GeoTIFF {} uses an unsupported sample type or could not be decoded",
-        path.display()
+        "GeoTIFF {} uses an unsupported sample type or window {:?} could not be decoded",
+        path.display(),
+        window
     )
     .into())
 }
@@ -292,5 +398,49 @@ mod tests {
         assert_eq!(grid.nearest_cell_index(10.1, 44.9), Some(0));
         assert_eq!(grid.nearest_cell_index(10.9, 44.1), Some(3));
         assert_eq!(grid.nearest_cell_index(9.0, 44.5), None);
+    }
+
+    #[test]
+    fn raster_windows_cover_edge_fragments() {
+        let windows = raster_windows(
+            &RasterGrid {
+                width: 5,
+                height: 3,
+                epsg: 4326,
+                transform: [10.0, 0.5, 0.0, 45.0, 0.0, -0.5],
+            },
+            2,
+            3,
+        )
+        .collect::<Vec<_>>();
+        assert_eq!(
+            windows,
+            vec![
+                GridWindow {
+                    row: 0,
+                    col: 0,
+                    height: 2,
+                    width: 3,
+                },
+                GridWindow {
+                    row: 0,
+                    col: 3,
+                    height: 2,
+                    width: 2,
+                },
+                GridWindow {
+                    row: 2,
+                    col: 0,
+                    height: 1,
+                    width: 3,
+                },
+                GridWindow {
+                    row: 2,
+                    col: 3,
+                    height: 1,
+                    width: 2,
+                },
+            ]
+        );
     }
 }

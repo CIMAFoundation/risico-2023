@@ -11,7 +11,7 @@ use super::{
 /// Source: https://wikifire.wsl.ch/tiki-index8902.html?page=Angstr%C3%B6m+index&structure=Fire
 
 // CELLS PROPERTIES
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct AngstromPropertiesElement {
     pub lon: f32,
     pub lat: f32,

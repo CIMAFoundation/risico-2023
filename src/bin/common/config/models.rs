@@ -13,7 +13,7 @@ use chrono::{DateTime, Utc};
 use log::{info, warn};
 use rayon::prelude::*;
 use risico::{
-    models::output::Output,
+    models::output::{Output, OutputVariableName},
     modules::angstrom::models::{
         AngstromCellPropertiesContainer, AngstromProperties, AngstromState,
     },
@@ -65,12 +65,17 @@ use super::builder::{
     RISICOConfigBuilder,
     SharplesConfigBuilder,
     StaticDataConfig,
+    StreamingExecutionConfig,
     WarmStateConfig,
 };
 
 use crate::common::helpers::RISICOError;
-use crate::common::io::models::{output::OutputType, palette::Palette};
+use crate::common::io::models::{
+    output::{MappedOutputSource, NativeOutputSource, OutputType},
+    palette::Palette,
+};
 use crate::common::io::static_data::geotiff::{RasterDomain, RasterGrid};
+use crate::common::io::streaming::{MappedNativeOutputs, SpatialTile, TilePlan};
 use crate::common::io::warm_state::legacy::{read_fwi, read_risico};
 use crate::common::io::warm_state::netcdf::{
     load_latest_fwi, load_latest_risico, write_fwi_snapshot, write_risico_snapshot,
@@ -238,6 +243,643 @@ pub struct HdwConfig {
     output_types_defs: Vec<OutputTypeConfig>,
 }
 
+/// Common spatial batching contract used by every enabled model.
+///
+/// Stateful and stateless models differ in their tile adapters, but selecting
+/// the unit of work is independent of the numerical model.
+pub trait TiledModelConfig {
+    fn tile_plan(&self, execution: &StreamingExecutionConfig) -> Result<TilePlan, RISICOError>;
+    fn output_types(&self) -> &[OutputTypeConfig];
+
+    fn native_output_variables(&self) -> Vec<OutputVariableName> {
+        let mut variables = Vec::new();
+        for variable in self
+            .output_types()
+            .iter()
+            .flat_map(|output| output.variables.iter())
+            .map(|variable| variable.internal_name())
+        {
+            if !variables.contains(&variable) {
+                variables.push(variable);
+            }
+        }
+        variables
+    }
+}
+
+impl TiledModelConfig for RISICOConfig {
+    fn tile_plan(&self, execution: &StreamingExecutionConfig) -> Result<TilePlan, RISICOError> {
+        match &self.grid {
+            Some(grid) => TilePlan::raster(
+                grid.clone(),
+                &self.cell_indexes,
+                execution.tile_height,
+                execution.tile_width,
+            ),
+            None => TilePlan::cells(self.properties.len, execution.cells_per_tile),
+        }
+    }
+
+    fn output_types(&self) -> &[OutputTypeConfig] {
+        &self.output_types_defs
+    }
+}
+
+impl TiledModelConfig for FWIConfig {
+    fn tile_plan(&self, execution: &StreamingExecutionConfig) -> Result<TilePlan, RISICOError> {
+        match &self.grid {
+            Some(grid) => TilePlan::raster(
+                grid.clone(),
+                &self.cell_indexes,
+                execution.tile_height,
+                execution.tile_width,
+            ),
+            None => TilePlan::cells(self.properties.len, execution.cells_per_tile),
+        }
+    }
+
+    fn output_types(&self) -> &[OutputTypeConfig] {
+        &self.output_types_defs
+    }
+}
+
+macro_rules! impl_legacy_tiled_model {
+    ($config:ty) => {
+        impl TiledModelConfig for $config {
+            fn tile_plan(
+                &self,
+                execution: &StreamingExecutionConfig,
+            ) -> Result<TilePlan, RISICOError> {
+                TilePlan::cells(self.properties.len, execution.cells_per_tile)
+            }
+
+            fn output_types(&self) -> &[OutputTypeConfig] {
+                &self.output_types_defs
+            }
+        }
+    };
+}
+
+impl_legacy_tiled_model!(Mark5Config);
+impl_legacy_tiled_model!(KbdiConfig);
+impl_legacy_tiled_model!(AngstromConfig);
+impl_legacy_tiled_model!(FosbergConfig);
+impl_legacy_tiled_model!(NesterovConfig);
+impl_legacy_tiled_model!(SharplesConfig);
+impl_legacy_tiled_model!(OrieuxConfig);
+impl_legacy_tiled_model!(HdwConfig);
+
+/// Construct a model's existing in-memory types for one spatial tile.
+///
+/// This keeps numerical code unchanged: adapters only gather immutable
+/// properties and initial state, and every model continues to produce the
+/// shared `Output` representation.
+pub trait TileModelFactory: TiledModelConfig {
+    type Properties;
+    type State;
+
+    fn tile_properties(&self, tile: &SpatialTile) -> Self::Properties;
+    fn tile_state(&self, tile: &SpatialTile) -> Self::State;
+}
+
+fn select_cells<T: Clone>(data: &ndarray::Array1<T>, tile: &SpatialTile) -> ndarray::Array1<T> {
+    tile.model_positions
+        .iter()
+        .map(|&position| data[position].clone())
+        .collect()
+}
+
+fn select_warm_state<T: Clone>(data: &[T], tile: &SpatialTile) -> Vec<T> {
+    tile.model_positions
+        .iter()
+        .map(|&position| data[position].clone())
+        .collect()
+}
+
+impl TileModelFactory for RISICOConfig {
+    type Properties = RISICOProperties;
+    type State = RISICOState;
+
+    fn tile_properties(&self, tile: &SpatialTile) -> Self::Properties {
+        let data = select_cells(&self.properties.data, tile);
+        RISICOProperties {
+            len: data.len(),
+            data,
+            vegetations_dict: self.properties.vegetations_dict.clone(),
+        }
+    }
+
+    fn tile_state(&self, tile: &SpatialTile) -> Self::State {
+        RISICOState::new(
+            &select_warm_state(&self.warm_state, tile),
+            &self.warm_state_time,
+            RISICOModelConfig::new(&self.model_version),
+        )
+    }
+}
+
+impl TileModelFactory for FWIConfig {
+    type Properties = FWIProperties;
+    type State = FWIState;
+
+    fn tile_properties(&self, tile: &SpatialTile) -> Self::Properties {
+        let data = select_cells(&self.properties.data, tile);
+        FWIProperties {
+            len: data.len(),
+            data,
+        }
+    }
+
+    fn tile_state(&self, tile: &SpatialTile) -> Self::State {
+        FWIState::new(
+            &select_warm_state(&self.warm_state, tile),
+            &self.warm_state_time,
+            FWIModelConfig::new(&self.model_version),
+        )
+    }
+}
+
+impl TileModelFactory for Mark5Config {
+    type Properties = Mark5Properties;
+    type State = Mark5State;
+
+    fn tile_properties(&self, tile: &SpatialTile) -> Self::Properties {
+        let data = select_cells(&self.properties.data, tile);
+        Mark5Properties {
+            len: data.len(),
+            data,
+        }
+    }
+
+    fn tile_state(&self, tile: &SpatialTile) -> Self::State {
+        Mark5State::new(
+            &select_warm_state(&self.warm_state, tile),
+            &self.warm_state_time,
+            Mark5ModelConfig::new(&self.model_version),
+        )
+    }
+}
+
+impl TileModelFactory for KbdiConfig {
+    type Properties = KBDIProperties;
+    type State = KBDIState;
+
+    fn tile_properties(&self, tile: &SpatialTile) -> Self::Properties {
+        let data = select_cells(&self.properties.data, tile);
+        KBDIProperties {
+            len: data.len(),
+            data,
+        }
+    }
+
+    fn tile_state(&self, tile: &SpatialTile) -> Self::State {
+        KBDIState::new(
+            &select_warm_state(&self.warm_state, tile),
+            &self.warm_state_time,
+            KBDIModelConfig::new(&self.model_version),
+        )
+    }
+}
+
+macro_rules! impl_stateless_tile_factory {
+    ($config:ident, $properties:ident, $state:ident) => {
+        impl TileModelFactory for $config {
+            type Properties = $properties;
+            type State = $state;
+
+            fn tile_properties(&self, tile: &SpatialTile) -> Self::Properties {
+                let data = select_cells(&self.properties.data, tile);
+                $properties {
+                    len: data.len(),
+                    data,
+                }
+            }
+
+            fn tile_state(&self, tile: &SpatialTile) -> Self::State {
+                $state::new(&self.run_date, tile.len())
+            }
+        }
+    };
+}
+
+impl_stateless_tile_factory!(AngstromConfig, AngstromProperties, AngstromState);
+impl_stateless_tile_factory!(FosbergConfig, FosbergProperties, FosbergState);
+impl_stateless_tile_factory!(SharplesConfig, SharplesProperties, SharplesState);
+impl_stateless_tile_factory!(HdwConfig, HdwProperties, HdwState);
+
+impl TileModelFactory for NesterovConfig {
+    type Properties = NesterovProperties;
+    type State = NesterovState;
+
+    fn tile_properties(&self, tile: &SpatialTile) -> Self::Properties {
+        let data = select_cells(&self.properties.data, tile);
+        NesterovProperties {
+            len: data.len(),
+            data,
+        }
+    }
+
+    fn tile_state(&self, tile: &SpatialTile) -> Self::State {
+        NesterovState::new(
+            &select_warm_state(&self.warm_state, tile),
+            &self.warm_state_time,
+        )
+    }
+}
+
+impl TileModelFactory for OrieuxConfig {
+    type Properties = OrieuxProperties;
+    type State = OrieuxState;
+
+    fn tile_properties(&self, tile: &SpatialTile) -> Self::Properties {
+        let data = select_cells(&self.properties.data, tile);
+        OrieuxProperties {
+            len: data.len(),
+            data,
+        }
+    }
+
+    fn tile_state(&self, tile: &SpatialTile) -> Self::State {
+        OrieuxState::new(
+            &select_warm_state(&self.warm_state, tile),
+            &self.warm_state_time,
+        )
+    }
+}
+
+pub struct TileStep {
+    pub output: Option<Output>,
+    pub write_warm_state: bool,
+}
+
+/// Model-specific operations used by the single production tile runner.
+///
+/// The runner owns spatial batching and persistence. Implementations retain
+/// only the small differences in each model's store/update/output schedule.
+pub trait TileModelRuntime: TileModelFactory {
+    type WarmState: Clone;
+
+    fn coordinates(&self) -> (Vec<f32>, Vec<f32>);
+    fn output_writer(&self) -> Result<OutputWriter, RISICOError>;
+    fn step(
+        &self,
+        state: &mut Self::State,
+        properties: &Self::Properties,
+        input: &risico::models::input::Input,
+    ) -> TileStep;
+    fn tile_warm_state(&self, state: &Self::State) -> Vec<Self::WarmState>;
+    fn write_warm_state_records(
+        &self,
+        records: &[Self::WarmState],
+        time: DateTime<Utc>,
+    ) -> Result<(), RISICOError>;
+}
+
+impl TileModelRuntime for RISICOConfig {
+    type WarmState = RISICOWarmState;
+
+    fn coordinates(&self) -> (Vec<f32>, Vec<f32>) {
+        self.properties.get_coords()
+    }
+
+    fn output_writer(&self) -> Result<OutputWriter, RISICOError> {
+        self.get_output_writer()
+    }
+
+    fn step(
+        &self,
+        state: &mut RISICOState,
+        properties: &RISICOProperties,
+        input: &risico::models::input::Input,
+    ) -> TileStep {
+        state.update(properties, input);
+        TileStep {
+            output: self
+                .should_write_output(&state.time)
+                .then(|| state.output(properties, input)),
+            write_warm_state: self.should_write_warm_state(&state.time),
+        }
+    }
+
+    fn tile_warm_state(&self, state: &RISICOState) -> Vec<Self::WarmState> {
+        state
+            .data
+            .iter()
+            .map(|state| RISICOWarmState {
+                dffm: state.dffm,
+                snow_cover: state.snow_cover,
+                snow_cover_time: state.snow_cover_time,
+                MSI: state.MSI,
+                MSI_TTL: state.MSI_TTL,
+                NDVI: state.NDVI,
+                NDVI_TIME: state.NDVI_TIME,
+                NDWI: state.NDWI,
+                NDWI_TIME: state.NDWI_TIME,
+            })
+            .collect()
+    }
+
+    fn write_warm_state_records(
+        &self,
+        records: &[Self::WarmState],
+        time: DateTime<Utc>,
+    ) -> Result<(), RISICOError> {
+        let state = RISICOState::new(records, &time, RISICOModelConfig::new(&self.model_version));
+        self.write_warm_state(&state, time)
+    }
+}
+
+impl TileModelRuntime for FWIConfig {
+    type WarmState = FWIWarmState;
+
+    fn coordinates(&self) -> (Vec<f32>, Vec<f32>) {
+        self.properties.get_coords()
+    }
+
+    fn output_writer(&self) -> Result<OutputWriter, RISICOError> {
+        self.get_output_writer()
+    }
+
+    fn step(
+        &self,
+        state: &mut FWIState,
+        properties: &FWIProperties,
+        input: &risico::models::input::Input,
+    ) -> TileStep {
+        state.update(properties, input);
+        TileStep {
+            output: self
+                .should_write_output(&state.time)
+                .then(|| state.output(properties)),
+            write_warm_state: self.should_write_warm_state(&state.time),
+        }
+    }
+
+    fn tile_warm_state(&self, state: &FWIState) -> Vec<Self::WarmState> {
+        state
+            .data
+            .iter()
+            .map(|state| FWIWarmState {
+                dates: state.dates.clone(),
+                ffmc: state.ffmc.clone(),
+                dmc: state.dmc.clone(),
+                dc: state.dc.clone(),
+                rain: state.rain.clone(),
+            })
+            .collect()
+    }
+
+    fn write_warm_state_records(
+        &self,
+        records: &[Self::WarmState],
+        time: DateTime<Utc>,
+    ) -> Result<(), RISICOError> {
+        let state = FWIState::new(records, &time, FWIModelConfig::new(&self.model_version));
+        self.write_warm_state(&state, time)
+    }
+}
+
+impl TileModelRuntime for Mark5Config {
+    type WarmState = Mark5WarmState;
+
+    fn coordinates(&self) -> (Vec<f32>, Vec<f32>) {
+        self.properties.get_coords()
+    }
+
+    fn output_writer(&self) -> Result<OutputWriter, RISICOError> {
+        self.get_output_writer()
+    }
+
+    fn step(
+        &self,
+        state: &mut Mark5State,
+        properties: &Mark5Properties,
+        input: &risico::models::input::Input,
+    ) -> TileStep {
+        state.store(input, properties);
+        let write = self.should_write_warm_state(&state.time);
+        TileStep {
+            output: write.then(|| state.output(properties)),
+            write_warm_state: write,
+        }
+    }
+
+    fn tile_warm_state(&self, state: &Mark5State) -> Vec<Self::WarmState> {
+        state
+            .data
+            .iter()
+            .map(|state| Mark5WarmState {
+                dates: state.dates.clone(),
+                daily_rain: state.daily_rain.clone(),
+                smd: state.smd,
+            })
+            .collect()
+    }
+
+    fn write_warm_state_records(
+        &self,
+        records: &[Self::WarmState],
+        time: DateTime<Utc>,
+    ) -> Result<(), RISICOError> {
+        let state = Mark5State::new(records, &time, Mark5ModelConfig::new(&self.model_version));
+        self.write_warm_state(&state, time)
+    }
+}
+
+impl TileModelRuntime for KbdiConfig {
+    type WarmState = KBDIWarmState;
+
+    fn coordinates(&self) -> (Vec<f32>, Vec<f32>) {
+        self.properties.get_coords()
+    }
+
+    fn output_writer(&self) -> Result<OutputWriter, RISICOError> {
+        self.get_output_writer()
+    }
+
+    fn step(
+        &self,
+        state: &mut KBDIState,
+        properties: &KBDIProperties,
+        input: &risico::models::input::Input,
+    ) -> TileStep {
+        state.store(input);
+        let write = self.should_write_warm_state(&state.time);
+        if write {
+            state.update(properties);
+        }
+        TileStep {
+            output: write.then(|| state.output()),
+            write_warm_state: write,
+        }
+    }
+
+    fn tile_warm_state(&self, state: &KBDIState) -> Vec<Self::WarmState> {
+        state
+            .data
+            .iter()
+            .map(|state| KBDIWarmState {
+                dates: state.dates.clone(),
+                daily_rain: state.daily_rain.clone(),
+                kbdi: state.kbdi,
+            })
+            .collect()
+    }
+
+    fn write_warm_state_records(
+        &self,
+        records: &[Self::WarmState],
+        time: DateTime<Utc>,
+    ) -> Result<(), RISICOError> {
+        let state = KBDIState::new(records, &time, KBDIModelConfig::new(&self.model_version));
+        self.write_warm_state(&state, time)
+    }
+}
+
+macro_rules! impl_stateless_tile_runtime {
+    ($config:ty, $state:ty, $properties:ty) => {
+        impl TileModelRuntime for $config {
+            type WarmState = ();
+
+            fn coordinates(&self) -> (Vec<f32>, Vec<f32>) {
+                self.properties.get_coords()
+            }
+
+            fn output_writer(&self) -> Result<OutputWriter, RISICOError> {
+                self.get_output_writer()
+            }
+
+            fn step(
+                &self,
+                state: &mut $state,
+                _properties: &$properties,
+                input: &risico::models::input::Input,
+            ) -> TileStep {
+                state.store(input);
+                TileStep {
+                    output: self
+                        .should_write_output(&state.time)
+                        .then(|| state.output()),
+                    write_warm_state: false,
+                }
+            }
+
+            fn tile_warm_state(&self, _state: &$state) -> Vec<Self::WarmState> {
+                Vec::new()
+            }
+
+            fn write_warm_state_records(
+                &self,
+                _records: &[Self::WarmState],
+                _time: DateTime<Utc>,
+            ) -> Result<(), RISICOError> {
+                Ok(())
+            }
+        }
+    };
+}
+
+impl_stateless_tile_runtime!(AngstromConfig, AngstromState, AngstromProperties);
+impl_stateless_tile_runtime!(FosbergConfig, FosbergState, FosbergProperties);
+impl_stateless_tile_runtime!(SharplesConfig, SharplesState, SharplesProperties);
+impl_stateless_tile_runtime!(HdwConfig, HdwState, HdwProperties);
+
+impl TileModelRuntime for NesterovConfig {
+    type WarmState = NesterovWarmState;
+
+    fn coordinates(&self) -> (Vec<f32>, Vec<f32>) {
+        self.properties.get_coords()
+    }
+
+    fn output_writer(&self) -> Result<OutputWriter, RISICOError> {
+        self.get_output_writer()
+    }
+
+    fn step(
+        &self,
+        state: &mut NesterovState,
+        properties: &NesterovProperties,
+        input: &risico::models::input::Input,
+    ) -> TileStep {
+        state.store(input, properties);
+        let write = self.should_write_warm_state(&state.time);
+        if write {
+            state.update();
+        }
+        TileStep {
+            output: write.then(|| state.output()),
+            write_warm_state: write,
+        }
+    }
+
+    fn tile_warm_state(&self, state: &NesterovState) -> Vec<Self::WarmState> {
+        state
+            .data
+            .iter()
+            .map(|state| NesterovWarmState {
+                nesterov: state.nesterov,
+            })
+            .collect()
+    }
+
+    fn write_warm_state_records(
+        &self,
+        records: &[Self::WarmState],
+        time: DateTime<Utc>,
+    ) -> Result<(), RISICOError> {
+        let state = NesterovState::new(records, &time);
+        self.write_warm_state(&state, time)
+    }
+}
+
+impl TileModelRuntime for OrieuxConfig {
+    type WarmState = OrieuxWarmState;
+
+    fn coordinates(&self) -> (Vec<f32>, Vec<f32>) {
+        self.properties.get_coords()
+    }
+
+    fn output_writer(&self) -> Result<OutputWriter, RISICOError> {
+        self.get_output_writer()
+    }
+
+    fn step(
+        &self,
+        state: &mut OrieuxState,
+        properties: &OrieuxProperties,
+        input: &risico::models::input::Input,
+    ) -> TileStep {
+        state.store(input);
+        let write = self.should_write_warm_state(&state.time);
+        if write {
+            state.update(properties);
+        }
+        TileStep {
+            output: write.then(|| state.output()),
+            write_warm_state: write,
+        }
+    }
+
+    fn tile_warm_state(&self, state: &OrieuxState) -> Vec<Self::WarmState> {
+        state
+            .data
+            .iter()
+            .map(|state| OrieuxWarmState {
+                orieux_wr: state.orieux_wr,
+            })
+            .collect()
+    }
+
+    fn write_warm_state_records(
+        &self,
+        records: &[Self::WarmState],
+        time: DateTime<Utc>,
+    ) -> Result<(), RISICOError> {
+        let state = OrieuxState::new(records, &time);
+        self.write_warm_state(&state, time)
+    }
+}
+
 pub struct OutputWriter {
     outputs: Vec<OutputType>,
 }
@@ -256,11 +898,21 @@ impl OutputWriter {
         }
     }
 
-    pub fn write_output(
+    pub fn write_mapped_output(
         &mut self,
         lats: &[f32],
         lons: &[f32],
-        output: &Output,
+        time: DateTime<Utc>,
+        output: &MappedNativeOutputs,
+    ) -> Result<(), RISICOError> {
+        self.write_source(lats, lons, &MappedOutputSource::new(time, output))
+    }
+
+    fn write_source(
+        &mut self,
+        lats: &[f32],
+        lons: &[f32],
+        output: &dyn NativeOutputSource,
     ) -> Result<(), RISICOError> {
         self.outputs.par_iter_mut().for_each(|output_type| {
             match output_type.write_variables(lats, lons, output) {
@@ -696,16 +1348,6 @@ impl RISICOConfig {
         Ok(ppf)
     }
 
-    pub fn get_properties(&self) -> &RISICOProperties {
-        &self.properties
-    }
-
-    pub fn new_state(&self) -> RISICOState {
-        log::info!("Model version: {}", &self.model_version);
-        let config = RISICOModelConfig::new(&self.model_version);
-        RISICOState::new(&self.warm_state, &self.warm_state_time, config)
-    }
-
     pub fn get_output_writer(&self) -> Result<OutputWriter, RISICOError> {
         Ok(OutputWriter::new(
             self.output_types_defs.as_slice(),
@@ -1003,16 +1645,6 @@ impl FWIConfig {
         Ok(props)
     }
 
-    pub fn get_properties(&self) -> &FWIProperties {
-        &self.properties
-    }
-
-    pub fn new_state(&self) -> FWIState {
-        log::info!("Model version: {}", &self.model_version);
-        let config = FWIModelConfig::new(&self.model_version);
-        FWIState::new(&self.warm_state, &self.warm_state_time, config)
-    }
-
     pub fn get_output_writer(&self) -> Result<OutputWriter, RISICOError> {
         Ok(OutputWriter::new(
             self.output_types_defs.as_slice(),
@@ -1283,16 +1915,6 @@ impl Mark5Config {
         Ok(props)
     }
 
-    pub fn get_properties(&self) -> &Mark5Properties {
-        &self.properties
-    }
-
-    pub fn new_state(&self) -> Mark5State {
-        log::info!("Model version: {}", &self.model_version);
-        let config = Mark5ModelConfig::new(&self.model_version);
-        Mark5State::new(&self.warm_state, &self.warm_state_time, config)
-    }
-
     pub fn get_output_writer(&self) -> Result<OutputWriter, RISICOError> {
         Ok(OutputWriter::new(
             self.output_types_defs.as_slice(),
@@ -1491,16 +2113,6 @@ impl KbdiConfig {
         Ok(props)
     }
 
-    pub fn get_properties(&self) -> &KBDIProperties {
-        &self.properties
-    }
-
-    pub fn new_state(&self) -> KBDIState {
-        log::info!("Model version: {}", &self.model_version);
-        let config = KBDIModelConfig::new(&self.model_version);
-        KBDIState::new(&self.warm_state, &self.warm_state_time, config)
-    }
-
     pub fn get_output_writer(&self) -> Result<OutputWriter, RISICOError> {
         Ok(OutputWriter::new(
             self.output_types_defs.as_slice(),
@@ -1669,14 +2281,6 @@ impl AngstromConfig {
         Ok(props)
     }
 
-    pub fn get_properties(&self) -> &AngstromProperties {
-        &self.properties
-    }
-
-    pub fn new_state(&self) -> AngstromState {
-        AngstromState::new(&self.run_date, self.properties.len)
-    }
-
     pub fn get_output_writer(&self) -> Result<OutputWriter, RISICOError> {
         Ok(OutputWriter::new(
             self.output_types_defs.as_slice(),
@@ -1752,14 +2356,6 @@ impl FosbergConfig {
         }
         let props = FosbergCellPropertiesContainer { lats, lons };
         Ok(props)
-    }
-
-    pub fn get_properties(&self) -> &FosbergProperties {
-        &self.properties
-    }
-
-    pub fn new_state(&self) -> FosbergState {
-        FosbergState::new(&self.run_date, self.properties.len)
     }
 
     pub fn get_output_writer(&self) -> Result<OutputWriter, RISICOError> {
@@ -1855,14 +2451,6 @@ impl NesterovConfig {
 
         let props = NesterovCellPropertiesContainer { lats, lons };
         Ok(props)
-    }
-
-    pub fn get_properties(&self) -> &NesterovProperties {
-        &self.properties
-    }
-
-    pub fn new_state(&self) -> NesterovState {
-        NesterovState::new(&self.warm_state, &self.warm_state_time)
     }
 
     pub fn get_output_writer(&self) -> Result<OutputWriter, RISICOError> {
@@ -2002,14 +2590,6 @@ impl SharplesConfig {
         Ok(props)
     }
 
-    pub fn get_properties(&self) -> &SharplesProperties {
-        &self.properties
-    }
-
-    pub fn new_state(&self) -> SharplesState {
-        SharplesState::new(&self.run_date, self.properties.len)
-    }
-
     pub fn get_output_writer(&self) -> Result<OutputWriter, RISICOError> {
         Ok(OutputWriter::new(
             self.output_types_defs.as_slice(),
@@ -2111,14 +2691,6 @@ impl OrieuxConfig {
             heat_indices,
         };
         Ok(props)
-    }
-
-    pub fn get_properties(&self) -> &OrieuxProperties {
-        &self.properties
-    }
-
-    pub fn new_state(&self) -> OrieuxState {
-        OrieuxState::new(&self.warm_state, &self.warm_state_time)
     }
 
     pub fn get_output_writer(&self) -> Result<OutputWriter, RISICOError> {
@@ -2446,14 +3018,6 @@ impl HdwConfig {
         }
         let props = HdwCellPropertiesContainer { lats, lons };
         Ok(props)
-    }
-
-    pub fn get_properties(&self) -> &HdwProperties {
-        &self.properties
-    }
-
-    pub fn new_state(&self) -> HdwState {
-        HdwState::new(&self.run_date, self.properties.len)
     }
 
     pub fn get_output_writer(&self) -> Result<OutputWriter, RISICOError> {

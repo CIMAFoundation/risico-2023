@@ -1,42 +1,44 @@
 mod common;
-use std::env::{set_var, var};
-use std::error::Error;
-use std::path::Path;
+
+use std::{
+    collections::BTreeMap,
+    env::{set_var, var},
+    error::Error,
+    fs,
+    path::{Path, PathBuf},
+    sync::atomic::{AtomicU64, Ordering},
+};
 
 use chrono::prelude::*;
 use clap::Parser;
-
-use common::config::builder::{
-    AngstromConfigBuilder,
-    ConfigBuilderType,
-    ConfigContainer,
-    FWIConfigBuilder,
-    FosbergConfigBuilder,
-    //    PortugueseConfigBuilder,
-    HdwConfigBuilder,
-    KbdiConfigBuilder,
-    Mark5ConfigBuilder,
-    NesterovConfigBuilder,
-    OrieuxConfigBuilder,
-    PaletteMap,
-    RISICOConfigBuilder,
-    SharplesConfigBuilder,
-};
-use common::helpers::{get_input, RISICOError};
-use common::io::readers::binary::BinaryInputHandler;
-use common::io::readers::netcdf::{NetCdfInputConfiguration, NetCdfInputHandler};
-use common::io::readers::prelude::InputHandler;
-use log::{info, trace, warn};
+use log::{info, warn};
+use rischio_runtime_imports::*;
 use risico::version::LONG_VERSION;
+
+mod rischio_runtime_imports {
+    pub use super::common::{
+        config::{
+            builder::{ConfigBuilderType, ConfigContainer, StreamingExecutionConfig},
+            models::{TileModelRuntime, TiledModelConfig},
+        },
+        helpers::{get_input, RISICOError},
+        io::{
+            readers::{
+                binary::BinaryInputHandler,
+                netcdf::{NetCdfInputConfiguration, NetCdfInputHandler},
+                prelude::InputHandler,
+            },
+            streaming::MappedNativeOutputs,
+        },
+    };
+}
 
 #[derive(Parser, Debug)]
 #[command(
     author="Mirko D'Andrea <mirko.dandrea@cimafoundation.org>, Nicolò Perello <nicolo.perello@cimafoundation.org>",
     version,
     long_version=LONG_VERSION,
-    about="risico-2023 Wildfire Risk Assessment Model by CIMA Research Foundation", 
-    long_about="RISICO  (Rischio Incendi E Coordinamento) is a wildfire risk forecast model written in rust and developed by CIMA Research Foundation. 
-It is designed to predict the likelihood and potential impact of wildfires in a given region, given a set of input parameters."
+    about="risico-2023 Wildfire Risk Assessment Model by CIMA Research Foundation",
 )]
 struct Args {
     #[arg(
@@ -53,663 +55,189 @@ struct Args {
     input_path: String,
 }
 
-fn run_risico(
-    model_config: &RISICOConfigBuilder,
-    date: &DateTime<Utc>,
-    handler: &mut dyn InputHandler,
-    palettes: &PaletteMap,
-) -> Result<(), RISICOError> {
-    // run risico
-    let config = model_config
-        .build(date, palettes)
-        .map_err(|err| format!("Could not configure model {err}"))?;
+static SCRATCH_SEQUENCE: AtomicU64 = AtomicU64::new(0);
 
-    let mut output_writer = config
-        .get_output_writer()
-        .map_err(|_| "Could not configure output writer")?;
+fn create_run_scratch(
+    execution: &StreamingExecutionConfig,
+    model_name: &str,
+    run_date: DateTime<Utc>,
+) -> Result<PathBuf, RISICOError> {
+    let base = execution
+        .scratch_directory
+        .as_ref()
+        .map(PathBuf::from)
+        .unwrap_or_else(|| std::env::temp_dir().join("risico-streaming"));
+    fs::create_dir_all(&base).map_err(|error| {
+        format!(
+            "cannot create streaming scratch directory {}: {error}",
+            base.display()
+        )
+    })?;
 
-    let props = config.get_properties();
-    let mut state = config.new_state();
-
-    let (lats, lons) = config.get_properties().get_coords();
-    let (lats, lons) = (lats.as_slice(), lons.as_slice());
-
-    handler
-        .set_coordinates(lats, lons)
-        .expect("Should set coordinates");
-
-    let current_time = Utc::now();
-    trace!(
-        "Loading input configuration took {} seconds",
-        Utc::now() - current_time
-    );
-
-    let len = state.len();
-    let timeline = handler.get_timeline();
-    for time in timeline {
-        let step_time = Utc::now();
-        info!("Processing {}", time.format("%Y-%m-%d %H:%M"));
-        let input = get_input(handler, &time, len);
-
-        let c = Utc::now();
-        state.update(props, &input);
-        trace!("Updating state took {} seconds", Utc::now() - c);
-
-        if config.should_write_output(&state.time) {
-            let c = Utc::now();
-            let output = state.output(props, &input);
-            trace!("Generating output took {} seconds", Utc::now() - c);
-
-            let c = Utc::now();
-            if let Err(err) = output_writer.write_output(lats, lons, &output) {
-                warn!("Error writing output: {}", err);
-            }
-            trace!("Writing output took {} seconds", Utc::now() - c);
-        }
-        if config.should_write_warm_state(&state.time) {
-            info!("Writing warm state");
-            let c = Utc::now();
-            if let Err(err) = config.write_warm_state(&state, state.time) {
-                warn!("Error writing warm state: {}", err);
-            }
-            trace!("Writing warm state took {} seconds", Utc::now() - c);
-        }
-        trace!("Step took {} seconds", Utc::now() - step_time);
-    }
-    Ok(())
+    let sequence = SCRATCH_SEQUENCE.fetch_add(1, Ordering::Relaxed);
+    let run = base.join(format!(
+        "{}-{}-{}-{}",
+        model_name.to_ascii_lowercase(),
+        run_date.format("%Y%m%dT%H%M%S"),
+        std::process::id(),
+        sequence
+    ));
+    fs::create_dir(&run).map_err(|error| {
+        format!(
+            "cannot create model scratch directory {}: {error}",
+            run.display()
+        )
+    })?;
+    Ok(run)
 }
 
-fn run_fwi(
-    model_config: &FWIConfigBuilder,
-    date: &DateTime<Utc>,
+fn run_tiled_model<C>(
+    model_name: &str,
+    config: &C,
     handler: &mut dyn InputHandler,
-    palettes: &PaletteMap,
-) -> Result<(), RISICOError> {
-    // run risico
-    let config = model_config
-        .build(date, palettes)
-        .map_err(|err| format!("Could not configure model {err}"))?;
+    execution: &StreamingExecutionConfig,
+) -> Result<(), RISICOError>
+where
+    C: TileModelRuntime,
+{
+    let plan = config.tile_plan(execution)?;
+    let cell_count = plan.cell_count();
+    let tiles = plan.tiles();
+    let timeline = handler.get_timeline();
+    let native_variables = config.native_output_variables();
+    let (lats, lons) = config.coordinates();
+    if lats.len() != cell_count || lons.len() != cell_count {
+        return Err(format!(
+            "{model_name} has {cell_count} planned cells but {} latitudes and {} longitudes",
+            lats.len(),
+            lons.len()
+        )
+        .into());
+    }
 
-    let mut output_writer = config
-        .get_output_writer()
-        .map_err(|_| "Could not configure output writer")?;
-
-    let props = config.get_properties();
-    let mut state = config.new_state();
-
-    let (lats, lons) = config.get_properties().get_coords();
-    let (lats, lons) = (lats.as_slice(), lons.as_slice());
-
-    handler
-        .set_coordinates(lats, lons)
-        .expect("Should set coordinates");
-
-    let current_time = Utc::now();
-    trace!(
-        "Loading input configuration took {} seconds",
-        Utc::now() - current_time
+    info!(
+        "{model_name}: processing {cell_count} cells in {} spatial tiles",
+        tiles.len()
     );
 
-    let len = state.len();
-    let timeline = handler.get_timeline();
-    for time in timeline {
-        let step_time = Utc::now();
-        info!("Processing {}", time.format("%Y-%m-%d %H:%M"));
-        let input = get_input(handler, &time, len);
+    let run_date = timeline.first().copied().unwrap_or_else(Utc::now);
+    let scratch = create_run_scratch(execution, model_name, run_date)?;
+    let mut outputs: BTreeMap<DateTime<Utc>, MappedNativeOutputs> = BTreeMap::new();
+    let mut warm_states: BTreeMap<DateTime<Utc>, Vec<Option<C::WarmState>>> = BTreeMap::new();
 
-        let c = Utc::now();
-        state.update(props, &input);
-        trace!("Updating state took {} seconds", Utc::now() - c);
+    for tile in tiles {
+        let properties = config.tile_properties(tile);
+        let mut state = config.tile_state(tile);
+        let tile_lats: Vec<f32> = tile
+            .model_positions
+            .iter()
+            .map(|&position| lats[position])
+            .collect();
+        let tile_lons: Vec<f32> = tile
+            .model_positions
+            .iter()
+            .map(|&position| lons[position])
+            .collect();
+        handler
+            .set_coordinates(&tile_lats, &tile_lons)
+            .map_err(|error| format!("cannot map input coordinates for tile: {error}"))?;
 
-        if config.should_write_output(&state.time) {
-            let c = Utc::now();
-            let output = state.output(&props);
-            trace!("Generating output took {} seconds", Utc::now() - c);
+        info!(
+            "{model_name}: tile {}/{} ({} active cells)",
+            tile.ordinal + 1,
+            tiles.len(),
+            tile.len()
+        );
 
-            let c = Utc::now();
-            if let Err(err) = output_writer.write_output(lats, lons, &output) {
-                warn!("Error writing output: {}", err);
+        for time in &timeline {
+            let input = get_input(handler, time, tile.len());
+            let step = config.step(&mut state, &properties, &input);
+
+            if let Some(output) = step.output {
+                if native_variables.is_empty() {
+                    return Err(format!(
+                        "{model_name} produced output but no output variables are configured"
+                    )
+                    .into());
+                }
+                if !outputs.contains_key(&output.time) {
+                    let path = scratch.join(format!(
+                        "output-{}.native-f32",
+                        output.time.format("%Y%m%dT%H%M%SZ")
+                    ));
+                    outputs.insert(
+                        output.time,
+                        MappedNativeOutputs::create(path, native_variables.clone(), cell_count)?,
+                    );
+                }
+                outputs
+                    .get_mut(&output.time)
+                    .expect("output scratch was just registered")
+                    .write_tile(&tile.model_positions, &output)?;
             }
-            trace!("Writing output took {} seconds", Utc::now() - c);
-        }
 
-        if config.should_write_warm_state(&state.time) {
-            info!("Writing warm state");
-            let c = Utc::now();
-            if let Err(err) = config.write_warm_state(&state, state.time) {
-                warn!("Error writing warm state: {}", err);
+            if step.write_warm_state {
+                let records = config.tile_warm_state(&state);
+                if records.len() != tile.len() {
+                    return Err(format!(
+                        "{model_name} tile warm state has {} cells, expected {}",
+                        records.len(),
+                        tile.len()
+                    )
+                    .into());
+                }
+                let destination = warm_states
+                    .entry(*time)
+                    .or_insert_with(|| vec![None; cell_count]);
+                for (&position, record) in tile.model_positions.iter().zip(records) {
+                    destination[position] = Some(record);
+                }
             }
-            trace!("Writing warm state took {} seconds", Utc::now() - c);
         }
-        trace!("Step took {} seconds", Utc::now() - step_time);
     }
-    Ok(())
-}
 
-fn run_mark5(
-    model_config: &Mark5ConfigBuilder,
-    date: &DateTime<Utc>,
-    handler: &mut dyn InputHandler,
-    palettes: &PaletteMap,
-) -> Result<(), RISICOError> {
-    // run risico
-    let config = model_config
-        .build(date, palettes)
-        .map_err(|err| format!("Could not configure model {err}"))?;
-
-    let mut output_writer = config
-        .get_output_writer()
-        .map_err(|_| "Could not configure output writer")?;
-
-    let props = config.get_properties();
-    let mut state = config.new_state();
-
-    let (lats, lons) = config.get_properties().get_coords();
-    let (lats, lons) = (lats.as_slice(), lons.as_slice());
-
-    handler
-        .set_coordinates(lats, lons)
-        .expect("Should set coordinates");
-
-    let current_time = Utc::now();
-    trace!(
-        "Loading input configuration took {} seconds",
-        Utc::now() - current_time
-    );
-
-    let len = state.len();
-    let timeline = handler.get_timeline();
-    for time in timeline {
-        let step_time = Utc::now();
-        info!("Processing {}", time.format("%Y-%m-%d %H:%M"));
-        let input = get_input(handler, &time, len);
-
-        // store the input of the day
-        state.store(&input, props);
-
-        if config.should_write_warm_state(&state.time) {
-            // update the state with the input of the day and compute output
-            let c = Utc::now();
-            let output = state.output(props);
-            trace!("Generating output took {} seconds", Utc::now() - c);
-
-            let c = Utc::now();
-            if let Err(err) = output_writer.write_output(lats, lons, &output) {
-                warn!("Error writing output: {}", err);
-            }
-            trace!("Writing output took {} seconds", Utc::now() - c);
-
-            info!("Writing warm state");
-            let c = Utc::now();
-            if let Err(err) = config.write_warm_state(&state, state.time) {
-                warn!("Error writing warm state: {}", err);
-            }
-            trace!("Writing warm state took {} seconds", Utc::now() - c);
-        }
-        trace!("Step took {} seconds", Utc::now() - step_time);
+    let mut output_writer = config.output_writer()?;
+    for (time, output) in outputs {
+        output.sync_all()?;
+        info!(
+            "{model_name}: postprocessing output {}",
+            time.format("%Y-%m-%d %H:%M")
+        );
+        output_writer.write_mapped_output(&lats, &lons, time, &output)?;
+        let path = output.path().to_path_buf();
+        drop(output);
+        fs::remove_file(&path).map_err(|error| {
+            format!(
+                "cannot remove completed output scratch {}: {error}",
+                path.display()
+            )
+        })?;
     }
-    Ok(())
-}
 
-fn run_kbdi(
-    model_config: &KbdiConfigBuilder,
-    date: &DateTime<Utc>,
-    handler: &mut dyn InputHandler,
-    palettes: &PaletteMap,
-) -> Result<(), RISICOError> {
-    let current_time = Utc::now();
-    // build configuration
-    let config = model_config
-        .build(date, palettes)
-        .map_err(|err| format!("Could not configure model {err}"))?;
-    let mut output_writer = config
-        .get_output_writer()
-        .map_err(|_| "Could not configure output writer")?;
-    let props = config.get_properties(); // get properties
-    let mut state = config.new_state(); // get state
-                                        // set coordinates for the input handlerq
-    let (lats, lons) = config.get_properties().get_coords();
-    let (lats, lons) = (lats.as_slice(), lons.as_slice());
-    handler
-        .set_coordinates(lats, lons)
-        .expect("Should set coordinates");
-    trace!(
-        "Loading input configuration took {} seconds",
-        Utc::now() - current_time
-    );
-    let len = state.len();
-    let timeline = handler.get_timeline();
-    for time in timeline {
-        let step_time = Utc::now();
-        info!("Processing {}", time.format("%Y-%m-%d %H:%M"));
-        let input = get_input(handler, &time, len);
-        // store the input of the day
-        state.store(&input);
-        // check if we should write the output
-        if config.should_write_warm_state(&state.time) {
-            // update the state with the input of the day
-            let c = Utc::now();
-            state.update(props);
-            trace!("updating state took {} seconds", Utc::now() - c);
-            // compute output
-            let c = Utc::now();
-            let output = state.output();
-            trace!("Generating output took {} seconds", Utc::now() - c);
-            // write the output
-            let c = Utc::now();
-            if let Err(err) = output_writer.write_output(lats, lons, &output) {
-                warn!("Error writing output: {}", err);
-            }
-            trace!("Writing output took {} seconds", Utc::now() - c);
-            // write the warm state
-            info!("Writing warm state");
-            let c = Utc::now();
-            if let Err(err) = config.write_warm_state(&state, state.time) {
-                warn!("Error writing warm state: {}", err);
-            }
-            trace!("Writing warm state took {} seconds", Utc::now() - c);
+    for (time, records) in warm_states {
+        let missing = records.iter().filter(|record| record.is_none()).count();
+        if missing != 0 {
+            return Err(
+                format!("{model_name} warm state at {time} is missing {missing} cells").into(),
+            );
         }
-        trace!("Step took {} seconds", Utc::now() - step_time);
+        let records: Vec<C::WarmState> = records
+            .into_iter()
+            .map(|record| record.expect("missing records were checked"))
+            .collect();
+        info!(
+            "{model_name}: writing warm state {}",
+            time.format("%Y-%m-%d %H:%M")
+        );
+        config.write_warm_state_records(&records, time)?;
     }
-    Ok(())
-}
 
-/// Run Angstrom index
-fn run_angstrom(
-    model_config: &AngstromConfigBuilder,
-    date: &DateTime<Utc>,
-    handler: &mut dyn InputHandler,
-    palettes: &PaletteMap,
-) -> Result<(), RISICOError> {
-    let current_time = Utc::now();
-    // configure the model
-    let config = model_config
-        .build(date, palettes)
-        .map_err(|err| format!("Could not configure model {err}"))?;
-    let mut output_writer = config
-        .get_output_writer()
-        .map_err(|_| "Could not configure output writer")?;
-    let mut state = config.new_state(); // inizialized the state
-                                        // set coordinates for the input handler
-    let (lats, lons) = config.get_properties().get_coords();
-    let (lats, lons) = (lats.as_slice(), lons.as_slice());
-    handler
-        .set_coordinates(lats, lons)
-        .expect("Should set coordinates");
-    trace!(
-        "Loading input configuration took {} seconds",
-        Utc::now() - current_time
-    );
-    // explore the timeline
-    let len = state.len();
-    let timeline = handler.get_timeline();
-    for time in timeline {
-        let step_time = Utc::now();
-        info!("Processing {}", time.format("%Y-%m-%d %H:%M"));
-        let input = get_input(handler, &time, len);
-        // store the input
-        state.store(&input);
-        // check if we should write the output
-        if config.should_write_output(&state.time) {
-            let c = Utc::now();
-            let output = state.output();
-            trace!("Generating output took {} seconds", Utc::now() - c);
-            let c = Utc::now();
-            if let Err(err) = output_writer.write_output(lats, lons, &output) {
-                warn!("Error writing output: {}", err);
-            }
-            trace!("Writing output took {} seconds", Utc::now() - c);
-        }
-        trace!("Step took {} seconds", Utc::now() - step_time);
-    }
-    Ok(())
-}
-
-/// Run Fosberg index
-fn run_fosberg(
-    model_config: &FosbergConfigBuilder,
-    date: &DateTime<Utc>,
-    handler: &mut dyn InputHandler,
-    palettes: &PaletteMap,
-) -> Result<(), RISICOError> {
-    let current_time = Utc::now();
-    // configure the model
-    let config = model_config
-        .build(date, palettes)
-        .map_err(|err| format!("Could not configure model {err}"))?;
-    let mut output_writer = config
-        .get_output_writer()
-        .map_err(|_| "Could not configure output writer")?;
-    let mut state = config.new_state(); // initialize the state
-                                        // set coordinates for the input handler
-    let (lats, lons) = config.get_properties().get_coords();
-    let (lats, lons) = (lats.as_slice(), lons.as_slice());
-    handler
-        .set_coordinates(lats, lons)
-        .expect("Should set coordinates");
-    trace!(
-        "Loading input configuration took {} seconds",
-        Utc::now() - current_time
-    );
-    // explore the timeline
-    let len = state.len();
-    let timeline = handler.get_timeline();
-    for time in timeline {
-        let step_time = Utc::now();
-        info!("Processing {}", time.format("%Y-%m-%d %H:%M"));
-        let input = get_input(handler, &time, len);
-        // store the input data
-        state.store(&input);
-        // check if we should write the output
-        if config.should_write_output(&state.time) {
-            let c = Utc::now();
-            let output = state.output();
-            trace!("Generating output took {} seconds", Utc::now() - c);
-            let c = Utc::now();
-            if let Err(err) = output_writer.write_output(lats, lons, &output) {
-                warn!("Error writing output: {}", err);
-            }
-            trace!("Writing output took {} seconds", Utc::now() - c);
-        }
-        trace!("Step took {} seconds", Utc::now() - step_time);
-    }
-    Ok(())
-}
-
-/// Run Nesterov index
-fn run_nesterov(
-    model_config: &NesterovConfigBuilder,
-    date: &DateTime<Utc>,
-    handler: &mut dyn InputHandler,
-    palettes: &PaletteMap,
-) -> Result<(), RISICOError> {
-    let current_time = Utc::now();
-    // configure the model
-    let config = model_config
-        .build(date, palettes)
-        .map_err(|err| format!("Could not configure model {err}"))?;
-    let mut output_writer = config
-        .get_output_writer()
-        .map_err(|_| "Could not configure output writer")?;
-    let props = config.get_properties(); // get properties
-    let mut state = config.new_state(); // initialize the state
-                                        // set coordinates for the input handler
-    let (lats, lons) = config.get_properties().get_coords();
-    let (lats, lons) = (lats.as_slice(), lons.as_slice());
-    handler
-        .set_coordinates(lats, lons)
-        .expect("Should set coordinates");
-    trace!(
-        "Loading input configuration took {} seconds",
-        Utc::now() - current_time
-    );
-    // explore the timeline
-    let len = state.len();
-    let timeline = handler.get_timeline();
-    for time in timeline {
-        let step_time = Utc::now();
-        info!("Processing {}", time.format("%Y-%m-%d %H:%M"));
-        let input = get_input(handler, &time, len);
-        // store the input of the day
-        state.store(&input, props);
-        // check if we should write the output
-        if config.should_write_warm_state(&state.time) {
-            // update the state with the input of the day
-            let c = Utc::now();
-            state.update();
-            trace!("Generating update took {} seconds", Utc::now() - c);
-            // compute output
-            let c = Utc::now();
-            let output = state.output();
-            trace!("Generating output took {} seconds", Utc::now() - c);
-            // write the output
-            let c = Utc::now();
-            if let Err(err) = output_writer.write_output(lats, lons, &output) {
-                warn!("Error writing output: {}", err);
-            }
-            trace!("Writing output took {} seconds", Utc::now() - c);
-            // write the warm state
-            info!("Writing warm state");
-            let c = Utc::now();
-            if let Err(err) = config.write_warm_state(&state, state.time) {
-                warn!("Error writing warm state: {}", err);
-            }
-            trace!("Writing warm state took {} seconds", Utc::now() - c);
-        }
-        trace!("Step took {} seconds", Utc::now() - step_time);
-    }
-    Ok(())
-}
-
-/// Run Sharples index
-fn run_sharples(
-    model_config: &SharplesConfigBuilder,
-    date: &DateTime<Utc>,
-    handler: &mut dyn InputHandler,
-    palettes: &PaletteMap,
-) -> Result<(), RISICOError> {
-    let current_time = Utc::now();
-    // configure the model
-    let config = model_config
-        .build(date, palettes)
-        .map_err(|err| format!("Could not configure model {err}"))?;
-    let mut output_writer = config
-        .get_output_writer()
-        .map_err(|_| "Could not configure output writer")?;
-    let mut state = config.new_state(); // initialize the state
-                                        // set coordinates for the input handler
-    let (lats, lons) = config.get_properties().get_coords();
-    let (lats, lons) = (lats.as_slice(), lons.as_slice());
-    handler
-        .set_coordinates(lats, lons)
-        .expect("Should set coordinates");
-    trace!(
-        "Loading input configuration took {} seconds",
-        Utc::now() - current_time
-    );
-    // explore the timeline
-    let len = state.len();
-    let timeline = handler.get_timeline();
-    for time in timeline {
-        let step_time = Utc::now();
-        info!("Processing {}", time.format("%Y-%m-%d %H:%M"));
-        // store the input
-        let input = get_input(handler, &time, len);
-        state.store(&input);
-        if config.should_write_output(&state.time) {
-            // compute the output
-            let c = Utc::now();
-            let output = state.output();
-            trace!("Generating output took {} seconds", Utc::now() - c);
-            // write the output
-            let c = Utc::now();
-            if let Err(err) = output_writer.write_output(lats, lons, &output) {
-                warn!("Error writing output: {}", err);
-            }
-            trace!("Writing output took {} seconds", Utc::now() - c);
-        }
-        trace!("Step took {} seconds", Utc::now() - step_time);
-    }
-    Ok(())
-}
-
-// Run Orieux index
-fn run_orieux(
-    model_config: &OrieuxConfigBuilder,
-    date: &DateTime<Utc>,
-    handler: &mut dyn InputHandler,
-    palettes: &PaletteMap,
-) -> Result<(), RISICOError> {
-    let current_time = Utc::now();
-    // configure the model
-    let config = model_config
-        .build(date, palettes)
-        .map_err(|err| format!("Could not configure model {err}"))?;
-    let mut output_writer = config
-        .get_output_writer()
-        .map_err(|_| "Could not configure output writer")?;
-    let props = config.get_properties(); // get properties
-    let mut state = config.new_state(); // initialize the state
-                                        // set coordinates for the input handler
-    let (lats, lons) = config.get_properties().get_coords();
-    let (lats, lons) = (lats.as_slice(), lons.as_slice());
-    handler
-        .set_coordinates(lats, lons)
-        .expect("Should set coordinates");
-    trace!(
-        "Loading input configuration took {} seconds",
-        Utc::now() - current_time
-    );
-    // explore the timeline
-    let len = state.len();
-    let timeline = handler.get_timeline();
-    for time in timeline {
-        let step_time = Utc::now();
-        info!("Processing {}", time.format("%Y-%m-%d %H:%M"));
-        let input = get_input(handler, &time, len);
-        // store the input of the day
-        state.store(&input);
-        if config.should_write_warm_state(&state.time) {
-            // update the state with the input of the day
-            let c = Utc::now();
-            state.update(props);
-            trace!("Generating update took {} seconds", Utc::now() - c);
-            // compute output
-            let c = Utc::now();
-            let output = state.output();
-            trace!("Generating output took {} seconds", Utc::now() - c);
-            // write the output
-            let c = Utc::now();
-            if let Err(err) = output_writer.write_output(lats, lons, &output) {
-                warn!("Error writing output: {}", err);
-            }
-            trace!("Writing output took {} seconds", Utc::now() - c);
-            // write the warm state
-            info!("Writing warm state");
-            let c = Utc::now();
-            if let Err(err) = config.write_warm_state(&state, state.time) {
-                warn!("Error writing warm state: {}", err);
-            }
-            trace!("Writing warm state took {} seconds", Utc::now() - c);
-        }
-        trace!("Step took {} seconds", Utc::now() - step_time);
-    }
-    Ok(())
-}
-
-// Run Portuguese index
-// fn run_portuguese(
-//     model_config: &PortugueseConfigBuilder,
-//     date: &DateTime<Utc>,
-//     handler: &mut dyn InputHandler,
-//     palettes: &PaletteMap,
-// ) -> Result<(), RISICOError> {
-//     let current_time = Utc::now();
-//     // configuration of the model
-//     let config = model_config
-//         .build(date, palettes)
-//         .maerrp_err(|_| format!("Could not configure model {err}"))?;
-//     let mut output_writer = config
-//         .get_output_writer()
-//         .map_err(|_| "Could not configure output writer")?;
-//     let props = config.get_properties();  // get the properties
-//     let mut state = config.new_state();  // initialize the state
-//     // set coordinates for the input handler
-//     let (lats, lons) = config.get_properties().get_coords();
-//     let (lats, lons) = (lats.as_slice(), lons.as_slice());
-//     handler.set_coordinates(lats, lons).expect("Should set coordinates");
-//     trace!(
-//         "Loading input configuration took {} seconds",
-//         Utc::now() - current_time
-//     );
-//     // explore the timeline
-//     let len = state.len();
-//     let timeline = handler.get_timeline();
-//     for time in timeline {
-//         let step_time = Utc::now();
-//         info!("Processing {}", time.format("%Y-%m-%d %H:%M"));
-//         let input = get_input(handler, &time, len);
-//         // store the input of the day
-//         state.store(&input, &props);
-//         // check if we should write the output
-//         let (should_write_warm, warm_state_time) = config.should_write_warm_state(&time);
-//         if  should_write_warm{
-//             // update the state with the input of the day
-//             let c = Utc::now();
-//             state.update();
-//             trace!("Generating update took {} seconds", Utc::now() - c);
-//             // compute output
-//             let c = Utc::now();
-//             let output = state.output();
-//             trace!("Generating output took {} seconds", Utc::now() - c);
-//             // write the outut
-//             let c = Utc::now();
-//             if let Err(err) = output_writer.write_output(lats, lons, &output) {
-//                 warn!("Error writing output: {}", err);
-//             }
-//             trace!("Writing output took {} seconds", Utc::now() - c);
-//             // write the warm state
-//             info!("Writing warm state");
-//             let c = Utc::now();
-//             if let Err(err) = config.write_warm_state(&state, warm_state_time) {
-//                 warn!("Error writing warm state: {}", err);
-//             }
-//             trace!("Writing warm state took {} seconds", Utc::now() - c);
-//         }
-//         trace!("Step took {} seconds", Utc::now() - step_time);
-//     }
-//     Ok(())
-// }
-
-// Run Hot-Dry-Wind index
-fn run_hdw(
-    model_config: &HdwConfigBuilder,
-    date: &DateTime<Utc>,
-    handler: &mut dyn InputHandler,
-    palettes: &PaletteMap,
-) -> Result<(), RISICOError> {
-    let current_time = Utc::now();
-    // configuration of the model
-    let config = model_config
-        .build(date, palettes)
-        .map_err(|err| format!("Could not configure model {err}"))?;
-    let mut output_writer = config
-        .get_output_writer()
-        .map_err(|_| "Could not configure output writer")?;
-    let mut state = config.new_state(); // initialize the state
-                                        // set coordinates for the input handler
-    let (lats, lons) = config.get_properties().get_coords();
-    let (lats, lons) = (lats.as_slice(), lons.as_slice());
-    handler
-        .set_coordinates(lats, lons)
-        .expect("Should set coordinates");
-    trace!(
-        "Loading input configuration took {} seconds",
-        Utc::now() - current_time
-    );
-    // explore the timeline
-    let len = state.len();
-    let timeline = handler.get_timeline();
-    for time in timeline {
-        let step_time = Utc::now();
-        info!("Processing {}", time.format("%Y-%m-%d %H:%M"));
-        let input = get_input(handler, &time, len);
-        // store the input
-        state.store(&input);
-        if config.should_write_output(&state.time) {
-            // compute the output
-            let c = Utc::now();
-            let output = state.output();
-            trace!("Generating output took {} seconds", Utc::now() - c);
-            // write the output
-            let c = Utc::now();
-            if let Err(err) = output_writer.write_output(lats, lons, &output) {
-                warn!("Error writing output: {}", err);
-            }
-            trace!("Writing output took {} seconds", Utc::now() - c);
-        }
-        trace!("Step took {} seconds", Utc::now() - step_time);
-    }
+    fs::remove_dir(&scratch).map_err(|error| {
+        format!(
+            "cannot remove completed scratch directory {}: {error}",
+            scratch.display()
+        )
+    })?;
     Ok(())
 }
 
@@ -717,145 +245,165 @@ fn get_input_handler(
     input_path_str: &str,
     configs: &ConfigContainer,
 ) -> Result<Box<dyn InputHandler>, Box<dyn Error>> {
-    // check if input_path is a file or a directory
-    let input_path = Path::new(&input_path_str);
-    let handler: Box<dyn InputHandler> = if input_path.is_file() {
+    let input_path = Path::new(input_path_str);
+    if input_path.is_file() {
         info!(
             "Loading input data from {} using BinaryInputHandler",
             input_path_str
         );
-        // if it is a file, we are loading the legacy input.txt file and binary inputs
-        Box::new(BinaryInputHandler::new(input_path_str).map_err(|_| "Could not load input data")?)
-    } else if input_path.is_dir() {
+        return Ok(Box::new(
+            BinaryInputHandler::new(input_path_str).map_err(|_| "Could not load input data")?,
+        ));
+    }
+    if input_path.is_dir() {
         info!(
             "Loading input data from {} using NetCdfInputHandler",
             input_path_str
         );
-        // we should load the netcdfs using the netcdfinputhandler
-        let nc_config = if let Some(nc_config) = configs.get_netcdf_input_config() {
-            nc_config.clone()
-        } else {
-            NetCdfInputConfiguration::default()
-        };
-
-        Box::new(
+        let nc_config = configs
+            .get_netcdf_input_config()
+            .clone()
+            .unwrap_or_else(NetCdfInputConfiguration::default);
+        return Ok(Box::new(
             NetCdfInputHandler::new(input_path_str, &nc_config)
                 .map_err(|_| "Could not load input data")?,
-        )
-    } else {
-        return Err(format!("Input path {} is not valid", input_path_str).into());
-    };
-
-    Ok(handler)
+        ));
+    }
+    Err(format!("Input path {} is not valid", input_path_str).into())
 }
 
-/// main function
 fn main() -> Result<(), Box<dyn Error>> {
     let args = Args::parse();
-    let date_str = args.date;
-    let config_path_str = args.config_path;
-    let input_path_str = args.input_path;
 
     if var("RUST_LOG").is_err() {
         set_var("RUST_LOG", "info")
     }
     pretty_env_logger::init();
 
-    if !Path::new(&config_path_str).is_file() {
-        return Err(format!("Config file {} is not a file", config_path_str).into());
+    if !Path::new(&args.config_path).is_file() {
+        return Err(format!("Config file {} is not a file", args.config_path).into());
     }
-
-    let date = NaiveDateTime::parse_from_str(&date_str, "%Y%m%d%H%M")
-        .map_err(|_| format!("Could not parse run date '{}'", date_str))?;
-
+    let date = NaiveDateTime::parse_from_str(&args.date, "%Y%m%d%H%M")
+        .map_err(|_| format!("Could not parse run date '{}'", args.date))?;
     let date = DateTime::from_naive_utc_and_offset(date, Utc);
-
-    let configs = ConfigContainer::from_file(&config_path_str)
-        .map_err(|err| format!("Failed to load config: {}", err))?;
-
-    // check if input_path is a file or a directory
-    let mut input_handler = get_input_handler(&input_path_str, &configs)?;
+    let configs = ConfigContainer::from_file(&args.config_path)
+        .map_err(|error| format!("Failed to load config: {error}"))?;
+    let mut input_handler = get_input_handler(&args.input_path, &configs)?;
     info!("Input files:\n{}", input_handler.info_input());
 
     for model_config in &configs.models {
-        info!("Running model: {:?}", model_config.get_model_name());
-        let start_time = Utc::now();
-
-        let model_run = match model_config {
-            ConfigBuilderType::FWI(model_config) => run_fwi(
-                model_config,
-                &date,
-                input_handler.as_mut(),
-                &configs.palettes,
-            ),
-            ConfigBuilderType::RISICO(model_config) => run_risico(
-                model_config,
-                &date,
-                input_handler.as_mut(),
-                &configs.palettes,
-            ),
-            ConfigBuilderType::Mark5(model_config) => run_mark5(
-                model_config,
-                &date,
-                input_handler.as_mut(),
-                &configs.palettes,
-            ),
-            ConfigBuilderType::KBDI(model_config) => run_kbdi(
-                model_config,
-                &date,
-                input_handler.as_mut(),
-                &configs.palettes,
-            ),
-            ConfigBuilderType::Angstrom(model_config) => run_angstrom(
-                model_config,
-                &date,
-                input_handler.as_mut(),
-                &configs.palettes,
-            ),
-            ConfigBuilderType::Fosberg(model_config) => run_fosberg(
-                model_config,
-                &date,
-                input_handler.as_mut(),
-                &configs.palettes,
-            ),
-            ConfigBuilderType::Nesterov(model_config) => run_nesterov(
-                model_config,
-                &date,
-                input_handler.as_mut(),
-                &configs.palettes,
-            ),
-            ConfigBuilderType::Sharples(model_config) => run_sharples(
-                model_config,
-                &date,
-                input_handler.as_mut(),
-                &configs.palettes,
-            ),
-            ConfigBuilderType::Orieux(model_config) => run_orieux(
-                model_config,
-                &date,
-                input_handler.as_mut(),
-                &configs.palettes,
-            ),
-            // ConfigBuilderType::Portuguese(model_config) => run_portuguese(
-            //     model_config,
-            //     &date,
-            //     input_handler.as_mut(),
-            //     &configs.palettes,
-            // ),
-            ConfigBuilderType::Hdw(model_config) => run_hdw(
-                model_config,
-                &date,
-                input_handler.as_mut(),
-                &configs.palettes,
-            ),
+        let model_name = model_config.get_model_name();
+        info!("Running model: {model_name}");
+        let start = Utc::now();
+        let result = match model_config {
+            ConfigBuilderType::RISICO(builder) => {
+                builder.build(&date, &configs.palettes).and_then(|config| {
+                    run_tiled_model(
+                        model_name,
+                        &config,
+                        input_handler.as_mut(),
+                        &configs.streaming,
+                    )
+                })
+            }
+            ConfigBuilderType::FWI(builder) => {
+                builder.build(&date, &configs.palettes).and_then(|config| {
+                    run_tiled_model(
+                        model_name,
+                        &config,
+                        input_handler.as_mut(),
+                        &configs.streaming,
+                    )
+                })
+            }
+            ConfigBuilderType::Mark5(builder) => {
+                builder.build(&date, &configs.palettes).and_then(|config| {
+                    run_tiled_model(
+                        model_name,
+                        &config,
+                        input_handler.as_mut(),
+                        &configs.streaming,
+                    )
+                })
+            }
+            ConfigBuilderType::KBDI(builder) => {
+                builder.build(&date, &configs.palettes).and_then(|config| {
+                    run_tiled_model(
+                        model_name,
+                        &config,
+                        input_handler.as_mut(),
+                        &configs.streaming,
+                    )
+                })
+            }
+            ConfigBuilderType::Angstrom(builder) => {
+                builder.build(&date, &configs.palettes).and_then(|config| {
+                    run_tiled_model(
+                        model_name,
+                        &config,
+                        input_handler.as_mut(),
+                        &configs.streaming,
+                    )
+                })
+            }
+            ConfigBuilderType::Fosberg(builder) => {
+                builder.build(&date, &configs.palettes).and_then(|config| {
+                    run_tiled_model(
+                        model_name,
+                        &config,
+                        input_handler.as_mut(),
+                        &configs.streaming,
+                    )
+                })
+            }
+            ConfigBuilderType::Nesterov(builder) => {
+                builder.build(&date, &configs.palettes).and_then(|config| {
+                    run_tiled_model(
+                        model_name,
+                        &config,
+                        input_handler.as_mut(),
+                        &configs.streaming,
+                    )
+                })
+            }
+            ConfigBuilderType::Sharples(builder) => {
+                builder.build(&date, &configs.palettes).and_then(|config| {
+                    run_tiled_model(
+                        model_name,
+                        &config,
+                        input_handler.as_mut(),
+                        &configs.streaming,
+                    )
+                })
+            }
+            ConfigBuilderType::Orieux(builder) => {
+                builder.build(&date, &configs.palettes).and_then(|config| {
+                    run_tiled_model(
+                        model_name,
+                        &config,
+                        input_handler.as_mut(),
+                        &configs.streaming,
+                    )
+                })
+            }
+            ConfigBuilderType::Hdw(builder) => {
+                builder.build(&date, &configs.palettes).and_then(|config| {
+                    run_tiled_model(
+                        model_name,
+                        &config,
+                        input_handler.as_mut(),
+                        &configs.streaming,
+                    )
+                })
+            }
         };
-
-        if let Err(err) = model_run {
-            warn!("Error running model: {}", err);
+        if let Err(error) = result {
+            warn!("Error running model {model_name}: {error}");
         }
-
-        let elapsed_time = Utc::now() - start_time;
-        info!("Elapsed time: {} seconds", elapsed_time.num_seconds());
+        info!(
+            "{model_name} elapsed time: {} seconds",
+            (Utc::now() - start).num_seconds()
+        );
     }
 
     Ok(())

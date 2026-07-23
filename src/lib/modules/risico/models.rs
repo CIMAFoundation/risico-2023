@@ -15,7 +15,7 @@ use super::{
     functions::{get_output_fn, update_moisture_fn},
 };
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct RISICOPropertiesElement {
     pub lon: f32,
     pub lat: f32,

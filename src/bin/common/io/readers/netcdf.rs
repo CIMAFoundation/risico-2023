@@ -1,4 +1,9 @@
-use std::{collections::HashMap, error::Error, str::FromStr};
+use std::{
+    collections::HashMap,
+    error::Error,
+    str::FromStr,
+    sync::{Arc, Mutex},
+};
 
 use cftime_rs::{calendars::Calendar, parser::Unit, utils::get_datetime_and_unit_from_units};
 use chrono::{DateTime, TimeZone, Utc};
@@ -409,6 +414,7 @@ fn read_variable_from_file(
 pub struct NetCdfInputHandler {
     records: Vec<NetCdfFileInputRecord>,
     config: NetCdfInputConfiguration,
+    source_values: Mutex<HashMap<(String, String, usize), Arc<Array1<f32>>>>,
 }
 
 impl NetCdfInputHandler {
@@ -444,6 +450,7 @@ impl NetCdfInputHandler {
         Ok(NetCdfInputHandler {
             records,
             config: config.clone(),
+            source_values: Mutex::new(HashMap::new()),
         })
     }
 }
@@ -463,7 +470,17 @@ impl InputHandler for NetCdfInputHandler {
 
             let variable = &variable_info.name;
 
-            let values = read_variable_from_file(&record.file, variable, time_index);
+            let cache_key = (record.file.clone(), variable.clone(), time_index);
+            let values = self
+                .source_values
+                .lock()
+                .expect("NetCDF source cache lock is poisoned")
+                .get(&cache_key)
+                .cloned();
+            let values = match values {
+                Some(values) => Ok(values),
+                None => read_variable_from_file(&record.file, variable, time_index).map(Arc::new),
+            };
 
             match values {
                 Err(err) => {
@@ -472,12 +489,17 @@ impl InputHandler for NetCdfInputHandler {
                     continue;
                 }
                 Ok(values) => {
+                    self.source_values
+                        .lock()
+                        .expect("NetCDF source cache lock is poisoned")
+                        .entry(cache_key)
+                        .or_insert_with(|| values.clone());
                     let data: Vec<f32> = record
                         .indexes
                         .as_ref()
                         .expect("indexes should be set")
                         .par_iter()
-                        .map(|index| index.and_then(|idx| Some(values[idx])).unwrap_or(NODATAVAL))
+                        .map(|index| index.map(|idx| values[idx]).unwrap_or(NODATAVAL))
                         .collect();
 
                     let data = Array1::from(data);
@@ -500,7 +522,7 @@ impl InputHandler for NetCdfInputHandler {
 
     fn set_coordinates(&mut self, lats: &[f32], lons: &[f32]) -> Result<(), Box<dyn Error>> {
         for record in &mut self.records {
-            let grid = &mut record.grid;
+            let grid = &record.grid;
             let indexes = grid.indexes(lats, lons);
             record.indexes = Some(Array1::from(indexes));
         }

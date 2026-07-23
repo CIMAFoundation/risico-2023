@@ -21,7 +21,7 @@ pub enum ClusterMode {
 pub trait Grid {
     fn index(&self, lat: &f32, lon: &f32) -> Option<usize>;
     fn shape(&self) -> (usize, usize);
-    fn indexes(&mut self, lats: &[f32], lons: &[f32]) -> Array1<Option<usize>>;
+    fn indexes(&self, lats: &[f32], lons: &[f32]) -> Array1<Option<usize>>;
 }
 
 impl Debug for dyn Grid {
@@ -159,7 +159,7 @@ impl Grid for RegularGrid {
         (self.nrows, self.ncols)
     }
 
-    fn indexes(&mut self, lats: &[f32], lons: &[f32]) -> Array1<Option<usize>> {
+    fn indexes(&self, lats: &[f32], lons: &[f32]) -> Array1<Option<usize>> {
         izip!(lats, lons)
             .map(|(lat, lon)| self.index(lat, lon))
             .collect::<Array1<_>>()
@@ -204,7 +204,7 @@ impl Grid for IrregularGrid {
         (self.nrows, self.ncols)
     }
 
-    fn indexes(&mut self, lats: &[f32], lons: &[f32]) -> Array1<Option<usize>> {
+    fn indexes(&self, lats: &[f32], lons: &[f32]) -> Array1<Option<usize>> {
         izip!(lats, lons)
             .map(|(lat, lon)| self.index(lat, lon))
             .collect::<Array1<_>>()

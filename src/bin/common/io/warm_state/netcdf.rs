@@ -1,3 +1,4 @@
+use std::collections::BTreeMap;
 use std::fs;
 use std::path::{Path, PathBuf};
 
@@ -249,8 +250,8 @@ fn read_fwi_snapshot(
     let source_grid = grid_from_file(&file)?;
     let source_indexes = sampling_indexes(&source_grid, target_grid, target_cell_indexes)?;
     validate_active_samples(&file, &source_grid, &source_indexes)?;
-    let counts = read_variable::<u32>(&file, "history_count")?;
-    validate_grid_len("history_count", counts.len(), &source_grid)?;
+    let counts =
+        sample_grid_variable::<u32>(&file, "history_count", &source_grid, &source_indexes)?;
     let history_len = file
         .dimension("history")
         .ok_or("missing NetCDF dimension history")?
@@ -281,7 +282,7 @@ fn read_fwi_snapshot(
         .into_iter()
         .enumerate()
         .map(|(target, source)| {
-            let count = counts[source] as usize;
+            let count = counts[target] as usize;
             if count > history_len {
                 return Err(format!(
                     "FWI history count {count} exceeds {history_len} at target cell {target}"
@@ -573,13 +574,8 @@ fn validate_active_samples(
     source_grid: &RasterGrid,
     source_indexes: &[usize],
 ) -> Result<(), RISICOError> {
-    let active = read_variable::<u8>(file, "active")?;
-    validate_grid_len("active", active.len(), source_grid)?;
-    if let Some((target, _)) = source_indexes
-        .iter()
-        .enumerate()
-        .find(|(_, source)| active[**source] == 0)
-    {
+    let active = sample_grid_variable::<u8>(file, "active", source_grid, source_indexes)?;
+    if let Some((target, _)) = active.iter().enumerate().find(|(_, value)| **value == 0) {
         Err(format!("target cell {target} maps to an inactive warm-state pixel").into())
     } else {
         Ok(())
@@ -592,12 +588,89 @@ fn sample_float_grid(
     source_grid: &RasterGrid,
     source_indexes: &[usize],
 ) -> Result<Vec<f32>, RISICOError> {
-    let values = read_variable::<f32>(file, name)?;
-    validate_grid_len(name, values.len(), source_grid)?;
-    Ok(source_indexes
-        .iter()
-        .map(|&source| values[source])
-        .collect())
+    sample_grid_variable(file, name, source_grid, source_indexes)
+}
+
+/// Sample a two-dimensional NetCDF grid through bounded source windows.
+///
+/// Target indexes may be arbitrarily ordered and may repeat after
+/// nearest-neighbour remapping. Grouping them by source window preserves those
+/// semantics without decoding the complete source grid.
+fn sample_grid_variable<T>(
+    file: &File,
+    name: &str,
+    source_grid: &RasterGrid,
+    source_indexes: &[usize],
+) -> Result<Vec<T>, RISICOError>
+where
+    T: netcdf::NcPutGet + Copy,
+{
+    const READ_TILE: usize = 256;
+
+    let variable = file
+        .variable(name)
+        .ok_or_else(|| RISICOError::from(format!("missing NetCDF variable {name}")))?;
+    let dimensions = variable.dimensions();
+    if dimensions.len() != 2
+        || dimensions[0].len() != source_grid.height
+        || dimensions[1].len() != source_grid.width
+    {
+        return Err(format!(
+            "snapshot variable {name} is not aligned with the {}x{} source grid",
+            source_grid.width, source_grid.height
+        )
+        .into());
+    }
+
+    let mut groups: BTreeMap<(usize, usize), Vec<(usize, usize)>> = BTreeMap::new();
+    for (target, &source) in source_indexes.iter().enumerate() {
+        if source >= source_grid.width * source_grid.height {
+            return Err(format!("source index {source} is outside the warm-state grid").into());
+        }
+        let row = source / source_grid.width;
+        let col = source % source_grid.width;
+        groups
+            .entry((row / READ_TILE, col / READ_TILE))
+            .or_default()
+            .push((target, source));
+    }
+
+    let mut sampled = vec![None; source_indexes.len()];
+    for ((tile_row, tile_col), indexes) in groups {
+        let row = tile_row * READ_TILE;
+        let col = tile_col * READ_TILE;
+        let height = READ_TILE.min(source_grid.height - row);
+        let width = READ_TILE.min(source_grid.width - col);
+        let extents: Extents = (&[row, col], &[height, width])
+            .try_into()
+            .map_err(|error| format!("cannot create NetCDF window for {name}: {error}"))?;
+        let values = variable.values::<T, _>(extents).map_err(netcdf_error)?;
+        if values.len() != height * width {
+            return Err(format!(
+                "snapshot variable {name} returned {} window values, expected {}",
+                values.len(),
+                height * width
+            )
+            .into());
+        }
+        for (target, source) in indexes {
+            let source_row = source / source_grid.width - row;
+            let source_col = source % source_grid.width - col;
+            sampled[target] = Some(values[source_row * width + source_col]);
+        }
+    }
+
+    sampled
+        .into_iter()
+        .enumerate()
+        .map(|(target, value)| {
+            value.ok_or_else(|| {
+                RISICOError::from(format!(
+                    "snapshot variable {name} did not sample target cell {target}"
+                ))
+            })
+        })
+        .collect()
 }
 
 fn validate_state_cells(

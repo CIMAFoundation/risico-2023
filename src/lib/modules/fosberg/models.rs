@@ -11,7 +11,7 @@ use super::{
 /// Source: https://wikifire.wsl.ch/tiki-indexb1d5.html?page=Fosberg+fire+weather+index&structure=Fire
 
 // CELLS PROPERTIES
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct FosbergPropertiesElement {
     pub lon: f32,
     pub lat: f32,

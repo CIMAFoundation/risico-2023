@@ -15,7 +15,7 @@ use super::{
 
 
 // CELLS PROPERTIES
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct KBDIPropertiesElement {
     pub lon: f32,
     pub lat: f32,

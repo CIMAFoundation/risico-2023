@@ -6,18 +6,26 @@ It is designed to predict the likelihood and potential impact of wildfires in a 
 ### Project Status
 This project is ongoing. We welcome contributions and feedback.
 
-### Compiling and Running the Model
-To compile and run the model, you will need to have rust installed on your machine.
+### Compiling and running the model
 
+Compile the production binary using Cargo:
 
-Compile the project using cargo:
 ```bash
-cargo build
+cargo build --release --bin risico-2023
 ```
-Run the model using cargo:
+
+The executable takes a run date, a configuration file, and an input source:
+
 ```bash
-cargo run
+./target/release/risico-2023 \
+  YYYYMMDDHHMM \
+  /path/to/configuration.yml \
+  /path/to/input
 ```
+
+The input source is either a text file listing legacy `.zbin` inputs or a
+directory containing NetCDF inputs. The tiled streaming pipeline described
+below is the only execution mode.
 
 ## Using risico-2023 as library
 The risico-2023 model can be used as a library in your rust project, it is published on
@@ -197,11 +205,115 @@ cargo run --bin warm-state-converter -- fwi \
   --latest-only
 ```
 
-`--legacy-prefix` may also name a directory when its files are bare
-`YYYYMMDDHHMM` timestamps. Every written snapshot is read back and validated
-before the conversion is reported as successful. A cell-count mismatch or a
-malformed legacy file is reported without preventing other discovered snapshots
-from being checked.
+## Tiled streaming execution
+
+Tiled streaming is the only production execution path. The former
+whole-domain `run_*` loops and the runtime `enabled` switch have been removed.
+The same runner is used by RISICO, FWI, Mark5, KBDI, Angstrom, Fosberg,
+Nesterov, Sharples, Orieux, and HDW.
+
+### Pipeline
+
+For each configured model, execution proceeds as follows:
+
+1. Build a spatial tile plan.
+2. For each tile, load its properties and initial state, map the tile
+   coordinates to every meteorological input grid, and process the complete
+   input timeline. Processing a tile through the complete timeline keeps only
+   that tile's live model state resident.
+3. Write each requested native model variable into a plane-oriented,
+   little-endian memory-mapped scratch file. There is one scratch file per
+   output timestamp.
+4. After all tiles are complete, read native variables from mmap on demand,
+   resample them onto each configured output grid, and encode NETCDF, ZBIN,
+   PNGWJSON, or, in a GDAL-enabled build, GEOTIFF output. Independent output
+   variables may be postprocessed in parallel.
+5. Assemble scheduled warm-state records in canonical model-cell order and
+   write the configured legacy or NetCDF snapshot.
+6. Flush and remove completed output scratch files.
+
+Raster-backed models use clipped rectangular windows and omit empty windows.
+Models configured with legacy cell files use bounded batches in configured
+cell order. Both enter the same runner and model-adapter interface.
+
+Meteorological input grids may be regular or curvilinear. Curvilinear grids
+retain nearest-neighbour R-tree lookup. Because source meteorological fields
+are normally low resolution, each decoded source field is cached whole and
+then sampled repeatedly for the model tiles.
+
+GeoTIFF static layers and gridded warm-state variables are read using bounded
+source windows. The current configuration objects retain their compact
+active-cell properties and initial warm-state records, while live numerical
+state is tile-local. Scheduled warm-state records are currently assembled in
+memory before the final writer is called; native forecast output is the
+disk-backed portion of the pipeline.
+
+### Configuration
+
+The optional `streaming` section tunes the mandatory tiled runner:
+
+```yaml
+streaming:
+  tile_height: 512
+  tile_width: 512
+  cells_per_tile: 262144
+  scratch_directory: /var/tmp/risico
+```
+
+Defaults are `512 × 512` for raster tiles and 262,144 cells for legacy cell
+batches. `scratch_directory` defaults to a `risico-streaming` directory below
+the operating system's temporary directory. Tile dimensions and
+`cells_per_tile` must be greater than zero.
+
+Output resolution does not affect numerical model execution: interpolation,
+clustering, precision rounding, and encoding happen only during the
+postprocessing stage.
+
+Allow scratch capacity for approximately four bytes multiplied by active model
+cells, configured native variables, and output timestamps, plus filesystem
+overhead. Memory mapping lets the operating system page these planes without
+materializing every output simultaneously in process memory.
+
+### Running
+
+Run a configuration directly with:
+
+```console
+./target/release/risico-2023 \
+  202607230000 \
+  /share/risico/RISICO2023/configuration.yml \
+  /path/to/generated-input-list.txt
+```
+
+The configured output and warm-state paths are live destinations. For
+development tests, copy the configuration and redirect those paths, plus
+`streaming.scratch_directory`, to a temporary directory.
+
+### Inspecting a configuration
+
+`streaming-inspect` builds each model, creates its tile plan, and instantiates
+the first tile's property/state adapters without running meteorological input
+or writing forecast output:
+
+```console
+cargo run --bin streaming-inspect -- \
+  202607240000 /opt/risico/configuration.yml \
+  --tile-height 256 --tile-width 256
+```
+
+The inspector still performs normal configuration and warm-state validation,
+so the referenced static layers, palettes, and required warm snapshot must
+exist.
+
+### Failure and scratch behavior
+
+Model failures are logged independently so another configured model may
+continue. Completed mmap files are flushed and removed after successful
+postprocessing. If execution is interrupted or fails before cleanup, the
+run-specific scratch directory may remain for diagnosis and can be removed
+after confirming that no process is using it.
+
+## Static and warm-state conversion
 
 Convert existing regular-grid static files with the offline GDAL-based utility.
 Runtime reading remains pure Rust and does not require GDAL. The converter
@@ -226,6 +338,12 @@ GDAL version is newer than the bindings bundled by `gdal-sys`.
 The converter checks that cells are unique and in the canonical north-to-south,
 west-to-east order. This keeps legacy state rows aligned during a progressive
 migration.
+
+For `warm-state-converter`, `--legacy-prefix` may name a prefix or a directory
+whose files are bare `YYYYMMDDHHMM` timestamps. Every written snapshot is read
+back and validated before conversion is reported as successful. A malformed
+legacy file is reported without preventing other discovered snapshots from
+being checked.
 
 
 

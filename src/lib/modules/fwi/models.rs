@@ -9,7 +9,7 @@ use super::{
 };
 
 // CELLS PROPERTIES
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct FWIPropertiesElement {
     pub lon: f32,
     pub lat: f32,

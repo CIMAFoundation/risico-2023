@@ -335,3 +335,5 @@ impl Display for RISICOError {
         write!(f, "{}", self.msg)
     }
 }
+
+impl std::error::Error for RISICOError {}

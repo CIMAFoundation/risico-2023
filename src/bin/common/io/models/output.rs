@@ -18,7 +18,10 @@ use crate::common::io::writers::write_to_geotiff;
 use crate::common::{
     config::{builder::OutputTypeConfig, models::PaletteMap},
     helpers::RISICOError,
-    io::writers::{create_nc_file, write_to_pngwjson, write_to_zbin_file},
+    io::{
+        streaming::MappedNativeOutputs,
+        writers::{create_nc_file, write_to_pngwjson, write_to_zbin_file},
+    },
 };
 
 use super::grid::{ClusterMode, Grid, RegularGrid};
@@ -70,16 +73,21 @@ impl OutputVariable {
         }
     }
 
-    pub fn get_variable_on_grid(
+    pub fn internal_name(&self) -> OutputVariableName {
+        self.internal_name
+    }
+
+    pub fn output_name(&self) -> &str {
+        &self.name
+    }
+
+    pub fn get_values_on_grid(
         &self,
-        output: &Output,
+        values: &Array1<f32>,
         lats: &[f32],
         lons: &[f32],
         grid: &RegularGrid,
-    ) -> Option<Array1<f32>> {
-        let values = output.get(&self.internal_name);
-
-        let values = values?;
+    ) -> Array1<f32> {
         let cutval = f32::powi(10.0, self.precision);
 
         let n_pixels = grid.nrows * grid.ncols;
@@ -87,7 +95,7 @@ impl OutputVariable {
 
         let indexes_and_values: Vec<(usize, f32)> = Zip::from(lats)
             .and(lons)
-            .and(&values)
+            .and(values)
             .into_par_iter()
             .filter_map(|(lat, lon, value)| {
                 if *value == NODATAVAL {
@@ -99,7 +107,7 @@ impl OutputVariable {
             .collect();
 
         if indexes_and_values.is_empty() {
-            return Some(grid_values);
+            return grid_values;
         }
 
         indexes_and_values.iter().for_each(|(idx, value)| {
@@ -129,16 +137,66 @@ impl OutputVariable {
             grid_values = grid_values / grid_count;
         }
 
-        // apply cutval
-        let grid_values = grid_values.mapv(|v| {
+        grid_values.mapv(|v| {
             if v == NODATAVAL {
                 NODATAVAL
             } else {
                 (v / cutval).round() * cutval
             }
-        });
+        })
+    }
 
-        Some(grid_values)
+    pub fn get_variable_on_grid(
+        &self,
+        output: &dyn NativeOutputSource,
+        lats: &[f32],
+        lons: &[f32],
+        grid: &RegularGrid,
+    ) -> Result<Option<Array1<f32>>, RISICOError> {
+        let Some(values) = output.values(self.internal_name)? else {
+            return Ok(None);
+        };
+        Ok(Some(self.get_values_on_grid(&values, lats, lons, grid)))
+    }
+}
+
+/// Native-grid values consumed by the output postprocessor.
+///
+/// Model tiles and the former whole-domain `Output` both implement this
+/// boundary, but production execution writes through `MappedNativeOutputs`.
+pub trait NativeOutputSource: Sync {
+    fn time(&self) -> DateTime<Utc>;
+    fn values(&self, variable: OutputVariableName) -> Result<Option<Array1<f32>>, RISICOError>;
+}
+
+impl NativeOutputSource for Output {
+    fn time(&self) -> DateTime<Utc> {
+        self.time
+    }
+
+    fn values(&self, variable: OutputVariableName) -> Result<Option<Array1<f32>>, RISICOError> {
+        Ok(self.get(&variable))
+    }
+}
+
+pub struct MappedOutputSource<'a> {
+    time: DateTime<Utc>,
+    output: &'a MappedNativeOutputs,
+}
+
+impl<'a> MappedOutputSource<'a> {
+    pub fn new(time: DateTime<Utc>, output: &'a MappedNativeOutputs) -> Self {
+        Self { time, output }
+    }
+}
+
+impl NativeOutputSource for MappedOutputSource<'_> {
+    fn time(&self) -> DateTime<Utc> {
+        self.time
+    }
+
+    fn values(&self, variable: OutputVariableName) -> Result<Option<Array1<f32>>, RISICOError> {
+        Ok(Some(self.output.read_variable_all(variable)?))
     }
 }
 
@@ -213,7 +271,7 @@ impl OutputType {
         &mut self,
         lats: &[f32],
         lons: &[f32],
-        output: &Output,
+        output: &dyn NativeOutputSource,
     ) -> Result<(), RISICOError> {
         debug!("Writing variables for {}, {}", self.name, self.format);
         let res = self
@@ -280,7 +338,7 @@ impl PngWriter {
 trait Writer {
     fn write(
         &mut self,
-        output: &Output,
+        output: &dyn NativeOutputSource,
         lats: &[f32],
         lons: &[f32],
         grid: &RegularGrid,
@@ -291,7 +349,7 @@ trait Writer {
 impl Writer for NetcdfWriter {
     fn write(
         &mut self,
-        output: &Output,
+        output: &dyn NativeOutputSource,
         lats: &[f32],
         lons: &[f32],
         grid: &RegularGrid,
@@ -330,7 +388,7 @@ impl Writer for NetcdfWriter {
                 let mut time_var = file
                     .variable_mut("time")
                     .ok_or_else(|| "variable not found: time".to_string())?;
-                let time: i64 = output.time.timestamp();
+                let time: i64 = output.time().timestamp();
                 let len = time_var.len();
                 let extents: Extents = (&[len], &[1]).try_into().expect("Should convert");
 
@@ -342,7 +400,7 @@ impl Writer for NetcdfWriter {
                     .variable_mut(&variable.name)
                     .ok_or_else(|| format!("variable not found: {}", variable.name))?;
 
-                let values = variable.get_variable_on_grid(output, lats, lons, grid);
+                let values = variable.get_variable_on_grid(output, lats, lons, grid)?;
                 let extents: Extents = (&[len, 0, 0], &[1, n_lats, n_lons])
                     .try_into()
                     .expect("Should convert");
@@ -368,7 +426,7 @@ impl Writer for NetcdfWriter {
 impl Writer for ZBinWriter {
     fn write(
         &mut self,
-        output: &Output,
+        output: &dyn NativeOutputSource,
         lats: &[f32],
         lons: &[f32],
         grid: &RegularGrid,
@@ -383,7 +441,7 @@ impl Writer for ZBinWriter {
         let results: Vec<Result<(), RISICOError>> = variables
             .par_iter()
             .map(|variable| {
-                let date_string = output.time.format("%Y%m%d%H%M").to_string();
+                let date_string = output.time().format("%Y%m%d%H%M").to_string();
                 //todo!("get run date from config");
                 let run_date = &self.run_date.format("%Y%m%d%H%M").to_string();
                 let file = format!(
@@ -392,7 +450,7 @@ impl Writer for ZBinWriter {
                 );
 
                 debug!("[ZBIN] Writing variable {} to {:?}", variable.name, file);
-                let values = variable.get_variable_on_grid(output, lats, lons, grid);
+                let values = variable.get_variable_on_grid(output, lats, lons, grid)?;
 
                 if let Some(values) = values {
                     write_to_zbin_file(&file, grid, values.as_slice().expect("Should unwrap"))
@@ -413,7 +471,7 @@ impl Writer for ZBinWriter {
 impl Writer for PngWriter {
     fn write(
         &mut self,
-        output: &Output,
+        output: &dyn NativeOutputSource,
         lats: &[f32],
         lons: &[f32],
         grid: &RegularGrid,
@@ -428,7 +486,7 @@ impl Writer for PngWriter {
         let results: Vec<Result<(), RISICOError>> = variables
             .par_iter()
             .map(|variable| {
-                let date_string = output.time.format("%Y%m%d%H%M").to_string();
+                let date_string = output.time().format("%Y%m%d%H%M").to_string();
                 //todo!("get run date from config");
                 let run_date = &self.run_date.format("%Y%m%d%H%M").to_string();
                 let file = format!(
@@ -438,7 +496,7 @@ impl Writer for PngWriter {
 
                 debug!("[PNG] Writing variable {} to {:?}", variable.name, file);
 
-                let values = variable.get_variable_on_grid(output, lats, lons, grid);
+                let values = variable.get_variable_on_grid(output, lats, lons, grid)?;
                 let palette = self
                     .palettes
                     .get(&variable.name)
@@ -486,7 +544,7 @@ impl GeotiffWriter {
 impl Writer for GeotiffWriter {
     fn write(
         &mut self,
-        output: &Output,
+        output: &dyn NativeOutputSource,
         lats: &[f32],
         lons: &[f32],
         grid: &RegularGrid,
@@ -501,7 +559,7 @@ impl Writer for GeotiffWriter {
         let results: Vec<Result<(), RISICOError>> = variables
             .par_iter()
             .map(|variable| {
-                let date_string = output.time.format("%Y%m%d%H%M").to_string();
+                let date_string = output.time().format("%Y%m%d%H%M").to_string();
                 //todo!("get run date from config");
                 let run_date = &self.run_date.format("%Y%m%d%H%M").to_string();
                 let file = format!(
@@ -510,7 +568,7 @@ impl Writer for GeotiffWriter {
                 );
 
                 debug!("[GEOTIFF] Writing variable {} to {:?}", variable.name, file);
-                let values = variable.get_variable_on_grid(&output, lats, lons, grid);
+                let values = variable.get_variable_on_grid(output, lats, lons, grid)?;
 
                 if let Some(values) = values {
                     write_to_geotiff(&file, &grid, values.as_slice().expect("Should unwrap"))

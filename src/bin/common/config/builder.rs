@@ -292,11 +292,63 @@ impl ConfigBuilderType {
     }
 }
 
+fn default_tile_height() -> usize {
+    512
+}
+
+fn default_tile_width() -> usize {
+    512
+}
+
+fn default_cells_per_tile() -> usize {
+    262_144
+}
+
+/// Model-independent controls for bounded-memory execution.
+///
+/// Raster-backed models use two-dimensional windows. Legacy point models use
+/// batches in their configured cell order but enter the same tile runner.
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct StreamingExecutionConfig {
+    #[serde(default = "default_tile_height")]
+    pub tile_height: usize,
+    #[serde(default = "default_tile_width")]
+    pub tile_width: usize,
+    #[serde(default = "default_cells_per_tile")]
+    pub cells_per_tile: usize,
+    pub scratch_directory: Option<String>,
+}
+
+impl Default for StreamingExecutionConfig {
+    fn default() -> Self {
+        Self {
+            tile_height: default_tile_height(),
+            tile_width: default_tile_width(),
+            cells_per_tile: default_cells_per_tile(),
+            scratch_directory: None,
+        }
+    }
+}
+
+impl StreamingExecutionConfig {
+    pub fn validate(&self) -> Result<(), RISICOError> {
+        if self.tile_height == 0 || self.tile_width == 0 {
+            return Err("streaming tile dimensions must be greater than zero".into());
+        }
+        if self.cells_per_tile == 0 {
+            return Err("streaming cells_per_tile must be greater than zero".into());
+        }
+        Ok(())
+    }
+}
+
 #[derive(Debug, Serialize, Deserialize)]
 pub struct ConfigContainer {
     pub models: Vec<ConfigBuilderType>,
     pub palettes: PaletteMap,
     pub netcdf_input_configuration: Option<NetCdfInputConfiguration>,
+    #[serde(default)]
+    pub streaming: StreamingExecutionConfig,
 }
 
 impl ConfigContainer {
@@ -322,8 +374,9 @@ impl ConfigContainer {
         file.read_to_string(&mut contents)
             .map_err(|err| format!("Cannot read config file {}: {}", config_file, err))?;
 
-        let conf = serde_yaml::from_str(&contents)
+        let conf: Self = serde_yaml::from_str(&contents)
             .map_err(|err| format!("Cannot parse config file {}: {}", config_file, err))?;
+        conf.streaming.validate()?;
         Ok(conf)
     }
 
@@ -479,6 +532,7 @@ impl ConfigContainer {
             models: vec![ConfigBuilderType::RISICO(Box::new(config))],
             palettes,
             netcdf_input_configuration,
+            streaming: StreamingExecutionConfig::default(),
         };
 
         Ok(config_container)
@@ -719,5 +773,34 @@ output_types: []
             config.warm_state,
             Some(WarmStateConfig::NetCdf { .. })
         ));
+    }
+
+    #[test]
+    fn streaming_execution_defaults_and_overrides_are_validated() {
+        let defaults: StreamingExecutionConfig =
+            serde_yaml::from_str("{}").expect("empty streaming configuration should use defaults");
+        assert_eq!(defaults.tile_height, 512);
+        assert_eq!(defaults.tile_width, 512);
+        assert_eq!(defaults.cells_per_tile, 262_144);
+        defaults.validate().unwrap();
+
+        let configured: StreamingExecutionConfig = serde_yaml::from_str(
+            r#"
+tile_height: 128
+tile_width: 256
+cells_per_tile: 10000
+scratch_directory: /scratch/risico
+"#,
+        )
+        .unwrap();
+        assert_eq!(configured.tile_height, 128);
+        assert_eq!(configured.tile_width, 256);
+        assert_eq!(
+            configured.scratch_directory.as_deref(),
+            Some("/scratch/risico")
+        );
+
+        let invalid: StreamingExecutionConfig = serde_yaml::from_str("tile_height: 0").unwrap();
+        assert!(invalid.validate().is_err());
     }
 }

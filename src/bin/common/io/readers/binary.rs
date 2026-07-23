@@ -11,6 +11,7 @@ use std::{
     fs::File,
     io::{self, BufRead, Read},
     path::Path,
+    sync::{Arc, Mutex},
 };
 
 use crate::common::io::models::grid::Grid;
@@ -222,6 +223,8 @@ pub struct BinaryInputFile {
 #[derive(Debug)]
 pub struct BinaryInputHandler {
     pub grid_registry: HashMap<String, Array1<Option<usize>>>,
+    grids: HashMap<String, Box<dyn Grid>>,
+    source_values: Mutex<HashMap<String, Arc<Array1<f32>>>>,
     pub data_map: HashMap<DateTime<Utc>, HashMap<InputVariableName, BinaryInputFile>>,
 }
 
@@ -278,6 +281,8 @@ impl BinaryInputHandler {
 
         Ok(BinaryInputHandler {
             grid_registry,
+            grids: HashMap::new(),
+            source_values: Mutex::new(HashMap::new()),
             data_map,
         })
     }
@@ -290,8 +295,23 @@ impl InputHandler for BinaryInputHandler {
 
         let file = data_map.get(&var)?;
 
-        let data = read_values_from_file(file.path.as_str())
-            .unwrap_or_else(|_| panic!("Error reading file {}", file.path));
+        let cached = self
+            .source_values
+            .lock()
+            .expect("binary source cache lock is poisoned")
+            .get(&file.path)
+            .cloned();
+        let data = cached.unwrap_or_else(|| {
+            let values = Arc::new(
+                read_values_from_file(file.path.as_str())
+                    .unwrap_or_else(|_| panic!("Error reading file {}", file.path)),
+            );
+            self.source_values
+                .lock()
+                .expect("binary source cache lock is poisoned")
+                .insert(file.path.clone(), values.clone());
+            values
+        });
 
         let indexes = self
             .grid_registry
@@ -300,7 +320,7 @@ impl InputHandler for BinaryInputHandler {
 
         let data: Vec<f32> = indexes
             .par_iter()
-            .map(|index| index.and_then(|idx| Some(data[idx])).unwrap_or(NODATAVAL))
+            .map(|index| index.map(|idx| data[idx]).unwrap_or(NODATAVAL))
             .collect();
         let data = Array1::from(data);
         Some(data)
@@ -318,19 +338,27 @@ impl InputHandler for BinaryInputHandler {
     }
 
     fn set_coordinates(&mut self, lats: &[f32], lons: &[f32]) -> Result<(), Box<dyn Error>> {
-        for (_, input_files) in self.data_map.iter() {
-            for (_, input_file) in input_files.iter() {
-                if !self.grid_registry.contains_key(&input_file.grid_name) {
-                    let mut grid = match read_grid_from_file(input_file.path.as_str()) {
-                        Ok(grid) => grid,
-                        Err(e) => return Err(e.into()),
-                    };
+        let grid_files: HashMap<String, String> = self
+            .data_map
+            .values()
+            .flat_map(HashMap::values)
+            .map(|input| (input.grid_name.clone(), input.path.clone()))
+            .collect();
 
-                    let indexes = grid.indexes(lats, lons);
-                    self.grid_registry
-                        .insert(input_file.grid_name.clone(), indexes);
-                }
+        for (grid_name, input_path) in grid_files {
+            if !self.grids.contains_key(&grid_name) {
+                let grid = read_grid_from_file(&input_path)?;
+                self.grids.insert(grid_name.clone(), grid);
             }
+            let indexes = self
+                .grids
+                .get(&grid_name)
+                .expect("input grid was just registered")
+                .indexes(lats, lons);
+            // A handler is shared by models and, in streaming mode, by tiles.
+            // Always replace the current selection instead of retaining the
+            // first model's coordinates for this named source grid.
+            self.grid_registry.insert(grid_name, indexes);
         }
 
         Ok(())
