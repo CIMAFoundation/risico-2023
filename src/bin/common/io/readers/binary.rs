@@ -2,7 +2,7 @@ use chrono::{DateTime, NaiveDateTime, Utc};
 use libflate::gzip::{self, Decoder};
 use log::warn;
 use ndarray::Array1;
-use risico::{constants::NODATAVAL, models::input::InputVariableName};
+use risico::models::input::InputVariableName;
 
 use std::{
     collections::HashMap,
@@ -15,9 +15,9 @@ use std::{
 };
 
 use crate::common::io::models::grid::Grid;
-
-use crate::common::io::models::grid::{IrregularGrid, RegularGrid};
 use rayon::prelude::*;
+
+use crate::common::io::models::grid::{CellIndexes, IrregularGrid, RegularGrid};
 
 use super::prelude::InputHandler;
 
@@ -222,9 +222,8 @@ pub struct BinaryInputFile {
 
 #[derive(Debug)]
 pub struct BinaryInputHandler {
-    pub grid_registry: HashMap<String, Array1<Option<usize>>>,
-    coordinate_registry: Vec<HashMap<String, Array1<Option<usize>>>>,
-    active_coordinates: Option<usize>,
+    pub grid_registry: HashMap<String, CellIndexes>,
+    coordinate_registry: Vec<HashMap<String, CellIndexes>>,
     grids: HashMap<String, Box<dyn Grid>>,
     source_values: Mutex<HashMap<String, Arc<Array1<f32>>>>,
     pub data_map: HashMap<DateTime<Utc>, HashMap<InputVariableName, BinaryInputFile>>,
@@ -284,7 +283,6 @@ impl BinaryInputHandler {
         Ok(BinaryInputHandler {
             grid_registry,
             coordinate_registry: Vec::new(),
-            active_coordinates: None,
             grids: HashMap::new(),
             source_values: Mutex::new(HashMap::new()),
             data_map,
@@ -293,8 +291,48 @@ impl BinaryInputHandler {
 }
 
 impl InputHandler for BinaryInputHandler {
+    /// Decode every file this timestamp refers to, in parallel.
+    fn preload(&mut self, date: &DateTime<Utc>) {
+        let Some(data_map) = self.data_map.get(date) else {
+            return;
+        };
+        let pending: Vec<String> = {
+            let cache = self
+                .source_values
+                .lock()
+                .expect("binary source cache lock is poisoned");
+            data_map
+                .values()
+                .map(|file| file.path.clone())
+                .filter(|path| !cache.contains_key(path))
+                .collect()
+        };
+
+        let decoded: Vec<(String, Arc<Array1<f32>>)> = pending
+            .into_par_iter()
+            .filter_map(|path| match read_values_from_file(path.as_str()) {
+                Ok(values) => Some((path, Arc::new(values))),
+                Err(error) => {
+                    warn!("Error reading file {path}: {error}");
+                    None
+                }
+            })
+            .collect();
+
+        let mut cache = self
+            .source_values
+            .lock()
+            .expect("binary source cache lock is poisoned");
+        cache.extend(decoded);
+    }
+
     /// Returns the data for the given date and variable on the selected coordinates
-    fn get_values(&self, var: InputVariableName, date: &DateTime<Utc>) -> Option<Array1<f32>> {
+    fn get_values(
+        &self,
+        selection: usize,
+        var: InputVariableName,
+        date: &DateTime<Utc>,
+    ) -> Option<Array1<f32>> {
         let data_map = self.data_map.get(date)?;
 
         let file = data_map.get(&var)?;
@@ -318,18 +356,13 @@ impl InputHandler for BinaryInputHandler {
         });
 
         let indexes = self
-            .active_coordinates
-            .and_then(|selection| self.coordinate_registry.get(selection))
+            .coordinate_registry
+            .get(selection)
             .unwrap_or(&self.grid_registry)
             .get(&file.grid_name)
             .unwrap_or_else(|| panic!("there should be a grid named {}", file.grid_name));
 
-        let data: Vec<f32> = indexes
-            .par_iter()
-            .map(|index| index.map(|idx| data[idx]).unwrap_or(NODATAVAL))
-            .collect();
-        let data = Array1::from(data);
-        Some(data)
+        Some(indexes.gather(data.as_slice().expect("source values are contiguous")))
     }
 
     /// Returns the timeline
@@ -341,11 +374,6 @@ impl InputHandler for BinaryInputHandler {
         // sort the timeline
         timeline.sort();
         timeline
-    }
-
-    fn set_coordinates(&mut self, lats: &[f32], lons: &[f32]) -> Result<(), Box<dyn Error>> {
-        let selection = self.register_coordinates(lats, lons)?;
-        self.select_coordinates(selection)
     }
 
     fn register_coordinates(
@@ -379,17 +407,8 @@ impl InputHandler for BinaryInputHandler {
         Ok(selection)
     }
 
-    fn select_coordinates(&mut self, selection: usize) -> Result<(), Box<dyn Error>> {
-        if selection >= self.coordinate_registry.len() {
-            return Err(format!("input coordinate selection {selection} is not registered").into());
-        }
-        self.active_coordinates = Some(selection);
-        Ok(())
-    }
-
     fn clear_registered_coordinates(&mut self) {
         self.coordinate_registry.clear();
-        self.active_coordinates = None;
     }
 
     fn clear_cached_values(&mut self) {
@@ -436,7 +455,6 @@ mod tests {
         let mut handler = BinaryInputHandler {
             grid_registry: HashMap::new(),
             coordinate_registry: Vec::new(),
-            active_coordinates: None,
             grids,
             source_values: Mutex::new(HashMap::new()),
             data_map: HashMap::from([(date, files)]),
@@ -449,14 +467,9 @@ mod tests {
             .register_coordinates(&[1.0], &[1.0])
             .expect("second tile coordinates should register");
 
-        assert_eq!(handler.coordinate_registry[first]["grid"][0], Some(0));
-        assert_eq!(handler.coordinate_registry[second]["grid"][0], Some(3));
-        handler
-            .select_coordinates(first)
-            .expect("registered coordinates should be selectable");
-        assert_eq!(handler.active_coordinates, Some(first));
+        assert_eq!(handler.coordinate_registry[first]["grid"].get(0), Some(0));
+        assert_eq!(handler.coordinate_registry[second]["grid"].get(0), Some(3));
         handler.clear_registered_coordinates();
         assert!(handler.coordinate_registry.is_empty());
-        assert_eq!(handler.active_coordinates, None);
     }
 }

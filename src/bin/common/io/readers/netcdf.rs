@@ -11,15 +11,15 @@ use itertools::Itertools;
 use log::{debug, warn};
 use ndarray::Array1;
 use netcdf::{extent::Extents, AttrValue, Variable};
-use rayon::prelude::*;
 
-use risico::{constants::NODATAVAL, models::input::InputVariableName};
+use risico::models::input::InputVariableName;
 use serde;
 use serde_derive::{Deserialize, Serialize};
 use std::fs;
 use strum::IntoEnumIterator;
 
-use crate::common::io::models::grid::{Grid, IrregularGrid};
+use crate::common::io::models::grid::{CellIndexes, Grid, IrregularGrid};
+use rayon::prelude::*;
 
 use super::prelude::InputHandler;
 
@@ -205,7 +205,7 @@ pub struct NetCdfFileInputRecord {
     timeline: Array1<DateTime<Utc>>,
     variables: Vec<InputVariableName>,
     grid: IrregularGrid,
-    indexes: Option<Array1<Option<usize>>>,
+    indexes: Option<CellIndexes>,
 }
 
 /// extract the time from a netcdf file using the given attribute
@@ -415,8 +415,7 @@ pub struct NetCdfInputHandler {
     records: Vec<NetCdfFileInputRecord>,
     config: NetCdfInputConfiguration,
     source_values: Mutex<HashMap<(String, String, usize), Arc<Array1<f32>>>>,
-    coordinate_registry: Vec<Vec<Array1<Option<usize>>>>,
-    active_coordinates: Option<usize>,
+    coordinate_registry: Vec<Vec<CellIndexes>>,
 }
 
 impl NetCdfInputHandler {
@@ -454,13 +453,63 @@ impl NetCdfInputHandler {
             config: config.clone(),
             source_values: Mutex::new(HashMap::new()),
             coordinate_registry: Vec::new(),
-            active_coordinates: None,
         })
     }
 }
 
 impl InputHandler for NetCdfInputHandler {
-    fn get_values(&self, var: InputVariableName, date: &DateTime<Utc>) -> Option<Array1<f32>> {
+    /// Decode every variable this timestamp refers to, in parallel.
+    fn preload(&mut self, date: &DateTime<Utc>) {
+        let mut pending: Vec<(String, String, usize)> = Vec::new();
+        for record in &self.records {
+            let Some(time_index) = record.timeline.iter().position(|t| t == date) else {
+                continue;
+            };
+            for var in &record.variables {
+                let Some(variable_info) = self.config.variable_map.get(var) else {
+                    continue;
+                };
+                pending.push((record.file.clone(), variable_info.name.clone(), time_index));
+            }
+        }
+
+        {
+            let cache = self
+                .source_values
+                .lock()
+                .expect("NetCDF source cache lock is poisoned");
+            pending.retain(|key| !cache.contains_key(key));
+        }
+        pending.sort();
+        pending.dedup();
+
+        let decoded: Vec<((String, String, usize), Arc<Array1<f32>>)> = pending
+            .into_par_iter()
+            .filter_map(|key| {
+                let (file, variable, time_index) = &key;
+                match read_variable_from_file(file, variable, *time_index) {
+                    Ok(values) => Some((key.clone(), Arc::new(values))),
+                    Err(error) => {
+                        warn!("Error reading variable {variable} from file {file}: {error}");
+                        None
+                    }
+                }
+            })
+            .collect();
+
+        let mut cache = self
+            .source_values
+            .lock()
+            .expect("NetCDF source cache lock is poisoned");
+        cache.extend(decoded);
+    }
+
+    fn get_values(
+        &self,
+        selection: usize,
+        var: InputVariableName,
+        date: &DateTime<Utc>,
+    ) -> Option<Array1<f32>> {
         for (record_index, record) in self.records.iter().enumerate() {
             let time_index = record.timeline.iter().position(|t| t == date);
 
@@ -499,17 +548,13 @@ impl InputHandler for NetCdfInputHandler {
                         .entry(cache_key)
                         .or_insert_with(|| values.clone());
                     let indexes = self
-                        .active_coordinates
-                        .and_then(|selection| self.coordinate_registry.get(selection))
+                        .coordinate_registry
+                        .get(selection)
                         .and_then(|selections| selections.get(record_index))
                         .or(record.indexes.as_ref())
                         .expect("indexes should be set");
-                    let data: Vec<f32> = indexes
-                        .par_iter()
-                        .map(|index| index.map(|idx| values[idx]).unwrap_or(NODATAVAL))
-                        .collect();
-
-                    let data = Array1::from(data);
+                    let data =
+                        indexes.gather(values.as_slice().expect("source values are contiguous"));
                     return Some(data);
                 }
             }
@@ -527,11 +572,6 @@ impl InputHandler for NetCdfInputHandler {
             .collect()
     }
 
-    fn set_coordinates(&mut self, lats: &[f32], lons: &[f32]) -> Result<(), Box<dyn Error>> {
-        let selection = self.register_coordinates(lats, lons)?;
-        self.select_coordinates(selection)
-    }
-
     fn register_coordinates(
         &mut self,
         lats: &[f32],
@@ -547,17 +587,8 @@ impl InputHandler for NetCdfInputHandler {
         Ok(selection)
     }
 
-    fn select_coordinates(&mut self, selection: usize) -> Result<(), Box<dyn Error>> {
-        if selection >= self.coordinate_registry.len() {
-            return Err(format!("input coordinate selection {selection} is not registered").into());
-        }
-        self.active_coordinates = Some(selection);
-        Ok(())
-    }
-
     fn clear_registered_coordinates(&mut self) {
         self.coordinate_registry.clear();
-        self.active_coordinates = None;
     }
 
     fn clear_cached_values(&mut self) {

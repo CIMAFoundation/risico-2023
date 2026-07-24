@@ -293,11 +293,11 @@ impl ConfigBuilderType {
 }
 
 fn default_tile_height() -> usize {
-    1024
+    512
 }
 
 fn default_tile_width() -> usize {
-    1024
+    512
 }
 
 fn default_cells_per_tile() -> usize {
@@ -316,6 +316,12 @@ pub struct StreamingExecutionConfig {
     pub tile_width: usize,
     #[serde(default = "default_cells_per_tile")]
     pub cells_per_tile: usize,
+    /// How many tiles may be processed at once.
+    ///
+    /// Memory in flight scales with this times the tile size, so it is the
+    /// dial to turn when a run has to fit a smaller budget. Defaults to one
+    /// tile per available core.
+    pub tile_concurrency: Option<usize>,
     pub scratch_directory: Option<String>,
 }
 
@@ -325,6 +331,7 @@ impl Default for StreamingExecutionConfig {
             tile_height: default_tile_height(),
             tile_width: default_tile_width(),
             cells_per_tile: default_cells_per_tile(),
+            tile_concurrency: None,
             scratch_directory: None,
         }
     }
@@ -337,6 +344,9 @@ impl StreamingExecutionConfig {
         }
         if self.cells_per_tile == 0 {
             return Err("streaming cells_per_tile must be greater than zero".into());
+        }
+        if self.tile_concurrency == Some(0) {
+            return Err("streaming tile_concurrency must be greater than zero".into());
         }
         Ok(())
     }
@@ -779,9 +789,10 @@ output_types: []
     fn streaming_execution_defaults_and_overrides_are_validated() {
         let defaults: StreamingExecutionConfig =
             serde_yaml::from_str("{}").expect("empty streaming configuration should use defaults");
-        assert_eq!(defaults.tile_height, 1024);
-        assert_eq!(defaults.tile_width, 1024);
+        assert_eq!(defaults.tile_height, 512);
+        assert_eq!(defaults.tile_width, 512);
         assert_eq!(defaults.cells_per_tile, 1_048_576);
+        assert_eq!(defaults.tile_concurrency, None);
         defaults.validate().unwrap();
 
         let configured: StreamingExecutionConfig = serde_yaml::from_str(
@@ -789,18 +800,24 @@ output_types: []
 tile_height: 128
 tile_width: 256
 cells_per_tile: 10000
+tile_concurrency: 4
 scratch_directory: /scratch/risico
 "#,
         )
         .unwrap();
         assert_eq!(configured.tile_height, 128);
         assert_eq!(configured.tile_width, 256);
+        assert_eq!(configured.tile_concurrency, Some(4));
         assert_eq!(
             configured.scratch_directory.as_deref(),
             Some("/scratch/risico")
         );
 
         let invalid: StreamingExecutionConfig = serde_yaml::from_str("tile_height: 0").unwrap();
+        assert!(invalid.validate().is_err());
+
+        let invalid: StreamingExecutionConfig =
+            serde_yaml::from_str("tile_concurrency: 0").unwrap();
         assert!(invalid.validate().is_err());
     }
 }

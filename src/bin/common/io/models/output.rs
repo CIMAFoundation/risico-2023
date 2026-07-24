@@ -19,7 +19,7 @@ use crate::common::{
     config::{builder::OutputTypeConfig, models::PaletteMap},
     helpers::RISICOError,
     io::{
-        streaming::MappedNativeOutputs,
+        streaming::TiledNativeOutputs,
         writers::{create_nc_file, write_to_pngwjson, write_to_zbin_file},
     },
 };
@@ -163,7 +163,7 @@ impl OutputVariable {
 /// Native-grid values consumed by the output postprocessor.
 ///
 /// Model tiles and the former whole-domain `Output` both implement this
-/// boundary, but production execution writes through `MappedNativeOutputs`.
+/// boundary, but production execution writes through `TiledNativeOutputs`.
 pub trait NativeOutputSource: Sync {
     fn time(&self) -> DateTime<Utc>;
     fn values(&self, variable: OutputVariableName) -> Result<Option<Array1<f32>>, RISICOError>;
@@ -179,24 +179,25 @@ impl NativeOutputSource for Output {
     }
 }
 
-pub struct MappedOutputSource<'a> {
+/// Presents per-tile output scratches to the writers as one domain array.
+pub struct TiledOutputSource<'a> {
     time: DateTime<Utc>,
-    output: &'a MappedNativeOutputs,
+    output: &'a TiledNativeOutputs<'a>,
 }
 
-impl<'a> MappedOutputSource<'a> {
-    pub fn new(time: DateTime<Utc>, output: &'a MappedNativeOutputs) -> Self {
+impl<'a> TiledOutputSource<'a> {
+    pub fn new(time: DateTime<Utc>, output: &'a TiledNativeOutputs<'a>) -> Self {
         Self { time, output }
     }
 }
 
-impl NativeOutputSource for MappedOutputSource<'_> {
+impl NativeOutputSource for TiledOutputSource<'_> {
     fn time(&self) -> DateTime<Utc> {
         self.time
     }
 
     fn values(&self, variable: OutputVariableName) -> Result<Option<Array1<f32>>, RISICOError> {
-        Ok(Some(self.output.read_variable_all(variable)?))
+        Ok(Some(self.output.join_variable(variable)?))
     }
 }
 

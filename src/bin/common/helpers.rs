@@ -17,7 +17,7 @@ fn replace<'a>(
     src: &Array1<f32>,
     fun: fn(&'a mut InputElement) -> &'a mut f32,
 ) {
-    Zip::from(dst).and(src).par_for_each(|d, s| {
+    Zip::from(dst).and(src).for_each(|d, s| {
         let result = fun(d);
         if *result <= (NODATAVAL + 1.0) {
             *result = *s;
@@ -37,11 +37,16 @@ fn maybe_replace<'a>(
 
 /// Get the input data from the input handler and dave in the Input struct
 /// If the input data are not in the expected units, the function will convert them
-pub fn get_input(handler: &dyn InputHandler, time: &DateTime<Utc>, len: usize) -> Input {
+pub fn get_input(
+    handler: &dyn InputHandler,
+    selection: usize,
+    time: &DateTime<Utc>,
+    len: usize,
+) -> Input {
     let mut data: Array1<InputElement> = Array1::default(len);
 
     // Observed temperature
-    let temperature_obs = handler.get_values(K, time); // supposed in K or °C
+    let temperature_obs = handler.get_values(selection, K, time); // supposed in K or °C
     if let Some(mut t) = temperature_obs {
         t.mapv_inplace(|_t| {
             if _t <= (NODATAVAL + 1.0) {
@@ -56,15 +61,15 @@ pub fn get_input(handler: &dyn InputHandler, time: &DateTime<Utc>, len: usize) -
     }
 
     // Observed relative humidity
-    let humidity_obs = handler.get_values(F, time); // supposed in %
+    let humidity_obs = handler.get_values(selection, F, time); // supposed in %
     maybe_replace(&mut data, &humidity_obs, |i| &mut i.humidity); // save observed relative humidity if any [%]
 
     // Forecasted relative humidity
-    let humidity = handler.get_values(H, time); // supposed in %
+    let humidity = handler.get_values(selection, H, time); // supposed in %
     maybe_replace(&mut data, &humidity, |i| &mut i.humidity); // save forecasted relative humidity if any [%]
 
     // Forecasted temperature
-    let temperature = handler.get_values(T, time); // supposed in K or °C
+    let temperature = handler.get_values(selection, T, time); // supposed in K or °C
     if let Some(mut t) = temperature {
         t.mapv_inplace(|_t| {
             if _t <= (NODATAVAL + 1.0) {
@@ -78,7 +83,7 @@ pub fn get_input(handler: &dyn InputHandler, time: &DateTime<Utc>, len: usize) -
         replace(&mut data, &t, |i| &mut i.temperature); // save forecasted temperature [°C]
 
         // Forecasted dew point temperature
-        let temp_dew = handler.get_values(R, time); // supposed in K or °C
+        let temp_dew = handler.get_values(selection, R, time); // supposed in K or °C
         if let Some(mut td) = temp_dew {
             // if the dew point temperature is available
             td.mapv_inplace(|_t| {
@@ -161,9 +166,9 @@ pub fn get_input(handler: &dyn InputHandler, time: &DateTime<Utc>, len: usize) -
                 // compute the relative humidity from specific humidity and surface pressure forecasted surface pressure
 
                 // forecasted surface pressure
-                let psfc = handler.get_values(PSFC, time); // supposed in Pa
-                                                           // forecasted specific humidity
-                let q = handler.get_values(Q, time); // supposed in kg/kg
+                let psfc = handler.get_values(selection, PSFC, time); // supposed in Pa
+                                                                      // forecasted specific humidity
+                let q = handler.get_values(selection, Q, time); // supposed in kg/kg
 
                 if let (Some(psfc), Some(q)) = (psfc, q) {
                     // compute the relative humidity from the forecasted temperature, surface pressure and specific humidity
@@ -221,8 +226,8 @@ pub fn get_input(handler: &dyn InputHandler, time: &DateTime<Utc>, len: usize) -
     }
 
     // wind speed and wind direction
-    let ws = handler.get_values(W, time); // supposed in m/s
-    let wd = handler.get_values(D, time); // supposed in degree with meteorological convenction (wind from, 0=from North)
+    let ws = handler.get_values(selection, W, time); // supposed in m/s
+    let wd = handler.get_values(selection, D, time); // supposed in degree with meteorological convenction (wind from, 0=from North)
     if let Some(ws) = ws {
         let ws = ws.mapv(|_ws| {
             if _ws <= (NODATAVAL + 1.0) {
@@ -247,8 +252,8 @@ pub fn get_input(handler: &dyn InputHandler, time: &DateTime<Utc>, len: usize) -
     }
 
     // U and V components of the wind
-    let u = handler.get_values(U, time); // supposed in m/s
-    let v = handler.get_values(V, time); // supposed in m/s
+    let u = handler.get_values(selection, U, time); // supposed in m/s
+    let v = handler.get_values(selection, V, time); // supposed in m/s
     if let (Some(u), Some(v)) = (u, v) {
         // compute wind speed
         let ws = izip!(&u, &v)
@@ -276,29 +281,29 @@ pub fn get_input(handler: &dyn InputHandler, time: &DateTime<Utc>, len: usize) -
     }
 
     // Observed precipitation
-    let op = handler.get_values(O, time); // supposed in mm
+    let op = handler.get_values(selection, O, time); // supposed in mm
     maybe_replace(&mut data, &op, |i| &mut i.rain);
 
     // Forecast precipitation
-    let fp = handler.get_values(P, time); // supposed in mm
+    let fp = handler.get_values(selection, P, time); // supposed in mm
     maybe_replace(&mut data, &fp, |i| &mut i.rain);
 
     // Forecasted snow cover depth
-    let snow = handler.get_values(SNOW, time); // supposed in cm
+    let snow = handler.get_values(selection, SNOW, time); // supposed in cm
     maybe_replace(&mut data, &snow, |i| &mut i.snow_cover);
 
     // SATELLITE VARIABLES
 
-    let swi = handler.get_values(SWI, time);
+    let swi = handler.get_values(selection, SWI, time);
     maybe_replace(&mut data, &swi, |i| &mut i.swi);
 
-    let ndvi = handler.get_values(NDVI, time);
+    let ndvi = handler.get_values(selection, NDVI, time);
     maybe_replace(&mut data, &ndvi, |i| &mut i.ndvi);
 
-    let ndwi = handler.get_values(NDWI, time);
+    let ndwi = handler.get_values(selection, NDWI, time);
     maybe_replace(&mut data, &ndwi, |i| &mut i.ndwi);
 
-    let msi = handler.get_values(M, time);
+    let msi = handler.get_values(selection, M, time);
     maybe_replace(&mut data, &msi, |i| &mut i.msi);
 
     Input {

@@ -5,12 +5,16 @@ use std::{
     error::Error,
     fs,
     path::{Path, PathBuf},
-    sync::atomic::{AtomicU64, Ordering},
+    sync::{
+        atomic::{AtomicU64, AtomicUsize, Ordering},
+        Mutex,
+    },
 };
 
 use chrono::prelude::*;
 use clap::Parser;
 use log::{info, warn};
+use rayon::prelude::*;
 use rischio_runtime_imports::*;
 use risico::version::LONG_VERSION;
 
@@ -27,7 +31,7 @@ mod rischio_runtime_imports {
                 netcdf::{NetCdfInputConfiguration, NetCdfInputHandler},
                 prelude::InputHandler,
             },
-            streaming::MappedNativeOutputs,
+            streaming::{MappedNativeOutputs, TileNativeOutput, TiledNativeOutputs},
         },
     };
 }
@@ -55,6 +59,11 @@ struct Args {
 }
 
 static SCRATCH_SEQUENCE: AtomicU64 = AtomicU64::new(0);
+
+/// What one tile produced in a timestep, carried back in plan order.
+struct TileOutcome {
+    output: Option<(DateTime<Utc>, MappedNativeOutputs)>,
+}
 
 fn create_run_scratch(
     execution: &StreamingExecutionConfig,
@@ -97,7 +106,8 @@ fn run_tiled_model<C>(
     execution: &StreamingExecutionConfig,
 ) -> Result<(), RISICOError>
 where
-    C: TileModelRuntime,
+    C: TileModelRuntime + Sync,
+    C::WarmState: Send,
 {
     let plan = config.tile_plan(execution)?;
     let cell_count = plan.cell_count();
@@ -127,129 +137,186 @@ where
         .collect();
     let mut output_writer = config.output_writer()?;
 
+    // Tiles run concurrently, so memory in flight scales with how many are
+    // allowed at once. An explicit pool keeps that bounded and independent of
+    // any other rayon use in the process.
+    let tile_pool = match execution.tile_concurrency {
+        None => None,
+        Some(threads) => Some(
+            rayon::ThreadPoolBuilder::new()
+                .num_threads(threads)
+                .build()
+                .map_err(|error| format!("cannot build the tile thread pool: {error}"))?,
+        ),
+    };
+
+    // Mapping a tile onto the input grid does not depend on time, so register
+    // every tile once and only re-select it as the timeline advances.
+    handler.clear_registered_coordinates();
+    let mut tile_selections = Vec::with_capacity(tiles.len());
+    for tile in tiles {
+        let tile_lats: Vec<f32> = tile
+            .model_positions
+            .iter()
+            .map(|&position| lats[position])
+            .collect();
+        let tile_lons: Vec<f32> = tile
+            .model_positions
+            .iter()
+            .map(|&position| lons[position])
+            .collect();
+        let selection = handler
+            .register_coordinates(&tile_lats, &tile_lons)
+            .map_err(|error| format!("cannot map input coordinates for tile: {error}"))?;
+        tile_selections.push(selection);
+    }
+
     for time in &timeline {
         info!("{model_name}: processing {}", time.format("%Y-%m-%d %H:%M"));
-        let mut mapped_output: Option<(DateTime<Utc>, MappedNativeOutputs, usize)> = None;
-        let mut warm_state: Option<Vec<Option<C::WarmState>>> = None;
+        // Decode this timestamp once so concurrent tiles only read the cache.
+        handler.preload(time);
 
-        for (tile_index, tile) in tiles.iter().enumerate() {
-            handler.clear_registered_coordinates();
-            let tile_lats: Vec<f32> = tile
-                .model_positions
-                .iter()
-                .map(|&position| lats[position])
-                .collect();
-            let tile_lons: Vec<f32> = tile
-                .model_positions
-                .iter()
-                .map(|&position| lons[position])
-                .collect();
-            handler
-                .set_coordinates(&tile_lats, &tile_lons)
-                .map_err(|error| format!("cannot map input coordinates for tile: {error}"))?;
+        // The whole domain's warm state is filled in place. Tiles own disjoint
+        // positions, so the lock only orders the scatters and is held for a
+        // small fraction of a tile's work.
+        let warm_state_sink: Mutex<Option<Vec<C::WarmState>>> = Mutex::new(None);
+        let warm_state_cells = AtomicUsize::new(0);
+        let handler_ref: &dyn InputHandler = handler;
 
-            let properties = config.tile_properties(tile);
-            let mut state = config.tile_state(tile);
-            let state_path = &state_paths[tile_index];
-            if state_path.exists() {
-                config.restore_tile_state(&mut state, state_path)?;
-            }
-            let input = get_input(handler, time, tile.len());
-            let step = config.step(&mut state, &properties, &input);
-
-            if let Some(output) = step.output {
-                if native_variables.is_empty() {
-                    return Err(format!(
-                        "{model_name} produced output but no output variables are configured"
-                    )
-                    .into());
+        // Tiles are independent: disjoint cells, disjoint state checkpoints and
+        // one output scratch each. `collect` restores plan order afterwards.
+        let run_tiles = || -> Result<Vec<TileOutcome>, RISICOError> {
+            tiles
+            .par_iter()
+            .enumerate()
+            .map(|(tile_index, tile)| -> Result<TileOutcome, RISICOError> {
+                let selection = tile_selections[tile_index];
+                let properties = config.tile_properties(tile);
+                let mut state = config.tile_state(tile);
+                let state_path = &state_paths[tile_index];
+                if state_path.exists() {
+                    config.restore_tile_state(&mut state, state_path)?;
                 }
-                if let Some((mapped_time, _, _)) = &mapped_output {
-                    if *mapped_time != output.time {
+                let input = get_input(handler_ref, selection, time, tile.len());
+                let step = config.step(&mut state, &properties, &input);
+
+                let output = match step.output {
+                    None => None,
+                    Some(output) => {
+                        if native_variables.is_empty() {
+                            return Err(format!(
+                                "{model_name} produced output but no output variables are configured"
+                            )
+                            .into());
+                        }
+                        let path = scratch.join(format!(
+                            "output-{}-tile-{}.native-f32",
+                            output.time.format("%Y%m%dT%H%M%SZ"),
+                            tile.ordinal
+                        ));
+                        let mut mapped =
+                            MappedNativeOutputs::create(path, native_variables.clone(), tile.len())?;
+                        mapped.write_output(&output)?;
+                        Some((output.time, mapped))
+                    }
+                };
+
+                if step.write_warm_state {
+                    let records = config.tile_warm_state(&state);
+                    if records.len() != tile.len() {
                         return Err(format!(
-                            "{model_name} produced output for {time} and {} in the same timestep",
-                            output.time
+                            "{model_name} tile warm state has {} cells, expected {}",
+                            records.len(),
+                            tile.len()
                         )
                         .into());
                     }
-                } else {
-                    let path = scratch.join(format!(
-                        "output-{}.native-f32",
-                        output.time.format("%Y%m%dT%H%M%SZ")
-                    ));
-                    mapped_output = Some((
-                        output.time,
-                        MappedNativeOutputs::create(path, native_variables.clone(), cell_count)?,
-                        0,
-                    ));
+                    let mut sink = warm_state_sink
+                        .lock()
+                        .expect("warm state sink lock is poisoned");
+                    let destination = sink
+                        .get_or_insert_with(|| vec![C::WarmState::default(); cell_count]);
+                    for (&position, record) in tile.model_positions.iter().zip(records) {
+                        destination[position] = record;
+                    }
+                    warm_state_cells.fetch_add(tile.len(), Ordering::Relaxed);
                 }
-                let (_, mapped, completed_tiles) = mapped_output
-                    .as_mut()
-                    .expect("mapped output was just registered");
-                mapped.write_tile(&tile.model_positions, &output)?;
-                *completed_tiles += 1;
-            }
 
-            if step.write_warm_state {
-                let records = config.tile_warm_state(&state);
-                if records.len() != tile.len() {
+                config.checkpoint_tile_state(&state, state_path)?;
+                Ok(TileOutcome { output })
+            })
+            .collect::<Result<Vec<_>, RISICOError>>()
+        };
+        let tile_results = match &tile_pool {
+            Some(pool) => pool.install(run_tiles)?,
+            None => run_tiles()?,
+        };
+
+        handler.clear_cached_values();
+
+        let mut output_time: Option<DateTime<Utc>> = None;
+        let mut tile_outputs: Vec<TileNativeOutput> = Vec::new();
+        for (outcome, tile) in tile_results.into_iter().zip(tiles) {
+            let Some((produced_time, mapped)) = outcome.output else {
+                continue;
+            };
+            match output_time {
+                Some(expected) if expected != produced_time => {
                     return Err(format!(
-                        "{model_name} tile warm state has {} cells, expected {}",
-                        records.len(),
-                        tile.len()
+                        "{model_name} produced output for {time} and {produced_time} in the same timestep"
                     )
                     .into());
                 }
-                let destination = warm_state.get_or_insert_with(|| vec![None; cell_count]);
-                for (&position, record) in tile.model_positions.iter().zip(records) {
-                    destination[position] = Some(record);
-                }
+                Some(_) => {}
+                None => output_time = Some(produced_time),
             }
-
-            config.checkpoint_tile_state(&state, state_path)?;
-            drop(input);
-            drop(state);
-            drop(properties);
+            tile_outputs.push(TileNativeOutput::new(mapped, &tile.model_positions));
         }
-        handler.clear_registered_coordinates();
-        handler.clear_cached_values();
+        let warm_state = warm_state_sink
+            .into_inner()
+            .expect("warm state sink lock is poisoned");
+        let warm_state_cells = warm_state_cells.load(Ordering::Relaxed);
 
-        if let Some((output_time, output, completed_tiles)) = mapped_output {
-            if completed_tiles != tiles.len() {
+        if let Some(output_time) = output_time {
+            if tile_outputs.len() != tiles.len() {
                 return Err(format!(
-                    "{model_name} produced output for only {completed_tiles} of {} tiles at {time}",
+                    "{model_name} produced output for only {} of {} tiles at {time}",
+                    tile_outputs.len(),
                     tiles.len()
                 )
                 .into());
             }
-            output.sync_all()?;
+            let scratch_paths: Vec<PathBuf> = tile_outputs
+                .iter()
+                .map(|tile| tile.path().to_path_buf())
+                .collect();
+            let joined = TiledNativeOutputs::new(cell_count, tile_outputs)?;
+            joined.sync_all()?;
             info!(
                 "{model_name}: postprocessing output {}",
                 output_time.format("%Y-%m-%d %H:%M")
             );
-            output_writer.write_mapped_output(&lats, &lons, output_time, &output)?;
-            let path = output.path().to_path_buf();
-            drop(output);
-            fs::remove_file(&path).map_err(|error| {
-                format!(
-                    "cannot remove completed output scratch {}: {error}",
-                    path.display()
-                )
-            })?;
+            output_writer.write_tiled_output(&lats, &lons, output_time, &joined)?;
+            drop(joined);
+            for path in scratch_paths {
+                fs::remove_file(&path).map_err(|error| {
+                    format!(
+                        "cannot remove completed output scratch {}: {error}",
+                        path.display()
+                    )
+                })?;
+            }
+        } else {
+            tile_outputs.clear();
         }
 
         if let Some(records) = warm_state {
-            let missing = records.iter().filter(|record| record.is_none()).count();
-            if missing != 0 {
+            if warm_state_cells != cell_count {
                 return Err(format!(
-                    "{model_name} warm state at {time} is missing {missing} cells"
+                    "{model_name} warm state at {time} covers {warm_state_cells} of {cell_count} cells"
                 )
                 .into());
             }
-            let records: Vec<C::WarmState> = records
-                .into_iter()
-                .map(|record| record.expect("missing records were checked"))
-                .collect();
             info!(
                 "{model_name}: writing warm state {}",
                 time.format("%Y-%m-%d %H:%M")
@@ -257,6 +324,8 @@ where
             config.write_warm_state_records(&records, *time)?;
         }
     }
+
+    handler.clear_registered_coordinates();
 
     for path in state_paths {
         if path.exists() {

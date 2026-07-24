@@ -218,41 +218,38 @@ impl MappedNativeOutputs {
         Ok(Self { variables, planes })
     }
 
-    pub fn variables(&self) -> &[OutputVariableName] {
-        &self.variables
-    }
-
-    pub fn write_tile(
-        &mut self,
-        model_positions: &[usize],
-        output: &Output,
-    ) -> Result<(), RISICOError> {
-        if output.data.len() != model_positions.len() {
+    /// Store a whole tile's output, one dense plane per variable.
+    ///
+    /// The scratch covers exactly this tile, so every plane is a contiguous
+    /// copy rather than a scatter across the whole domain.
+    pub fn write_output(&mut self, output: &Output) -> Result<(), RISICOError> {
+        if output.data.len() != self.planes.cell_count() {
             return Err(format!(
-                "tile output has {} cells for {} model positions",
+                "tile output has {} cells for a {} cell scratch",
                 output.data.len(),
-                model_positions.len()
+                self.planes.cell_count()
             )
             .into());
         }
-        for (plane, variable) in self.variables.iter().enumerate() {
-            let values = output.get(variable).ok_or_else(|| {
+        for plane in 0..self.variables.len() {
+            let variable = self.variables[plane];
+            let values = output.get(&variable).ok_or_else(|| {
                 RISICOError::from(format!("model output does not expose variable {variable}"))
             })?;
-            self.planes.write_indexed(
+            self.planes.write_plane(
                 plane,
-                model_positions,
                 values.as_slice().expect("model output is contiguous"),
             )?;
         }
         Ok(())
     }
 
-    pub fn read_variable(
+    fn scatter_plane(
         &self,
         variable: OutputVariableName,
-        model_positions: &[usize],
-    ) -> Result<Vec<f32>, RISICOError> {
+        positions: &[usize],
+        destination: &mut [f32],
+    ) -> Result<(), RISICOError> {
         let plane = self
             .variables
             .iter()
@@ -262,23 +259,7 @@ impl MappedNativeOutputs {
                     "native output scratch does not contain variable {variable}"
                 ))
             })?;
-        self.planes.read_indexed(plane, model_positions)
-    }
-
-    pub fn read_variable_all(
-        &self,
-        variable: OutputVariableName,
-    ) -> Result<Array1<f32>, RISICOError> {
-        let plane = self
-            .variables
-            .iter()
-            .position(|candidate| *candidate == variable)
-            .ok_or_else(|| {
-                RISICOError::from(format!(
-                    "native output scratch does not contain variable {variable}"
-                ))
-            })?;
-        Ok(Array1::from(self.planes.read_plane(plane)?))
+        self.planes.scatter_plane(plane, positions, destination)
     }
 
     pub fn sync_all(&self) -> Result<(), RISICOError> {
@@ -287,6 +268,62 @@ impl MappedNativeOutputs {
 
     pub fn path(&self) -> &Path {
         self.planes.path()
+    }
+}
+
+/// One tile's output scratch together with the domain positions it covers.
+pub struct TileNativeOutput<'a> {
+    outputs: MappedNativeOutputs,
+    positions: &'a [usize],
+}
+
+impl<'a> TileNativeOutput<'a> {
+    pub fn new(outputs: MappedNativeOutputs, positions: &'a [usize]) -> Self {
+        Self { outputs, positions }
+    }
+
+    pub fn path(&self) -> &Path {
+        self.outputs.path()
+    }
+}
+
+/// The whole domain's output for one timestep, held as one scratch per tile.
+///
+/// Keeping tiles separate lets each one write its own mapping densely and
+/// without sharing a mapping with its neighbours. The domain is reassembled a
+/// single variable at a time, so only one plane is ever materialized.
+pub struct TiledNativeOutputs<'a> {
+    cell_count: usize,
+    tiles: Vec<TileNativeOutput<'a>>,
+}
+
+impl<'a> TiledNativeOutputs<'a> {
+    pub fn new(cell_count: usize, tiles: Vec<TileNativeOutput<'a>>) -> Result<Self, RISICOError> {
+        let covered: usize = tiles.iter().map(|tile| tile.positions.len()).sum();
+        if covered != cell_count {
+            return Err(format!(
+                "tile outputs cover {covered} cells but the domain has {cell_count}"
+            )
+            .into());
+        }
+        Ok(Self { cell_count, tiles })
+    }
+
+    /// Reassemble one variable across every tile into a domain-ordered array.
+    pub fn join_variable(&self, variable: OutputVariableName) -> Result<Array1<f32>, RISICOError> {
+        let mut joined = vec![0.0_f32; self.cell_count];
+        for tile in &self.tiles {
+            tile.outputs
+                .scatter_plane(variable, tile.positions, &mut joined)?;
+        }
+        Ok(Array1::from(joined))
+    }
+
+    pub fn sync_all(&self) -> Result<(), RISICOError> {
+        for tile in &self.tiles {
+            tile.outputs.sync_all()?;
+        }
+        Ok(())
     }
 }
 
@@ -350,69 +387,89 @@ impl MappedF32Planes {
         &self.path
     }
 
-    pub fn plane_count(&self) -> usize {
-        self.plane_count
-    }
-
     pub fn cell_count(&self) -> usize {
         self.cell_count
     }
 
-    pub fn fill_plane(&mut self, plane: usize, value: f32) -> Result<(), RISICOError> {
+    /// Overwrite a whole plane with one contiguous copy.
+    pub fn write_plane(&mut self, plane: usize, values: &[f32]) -> Result<(), RISICOError> {
         self.validate_plane(plane)?;
-        let bytes = value.to_le_bytes();
-        let range = self.plane_byte_range(plane)?;
-        self.map[range]
-            .chunks_exact_mut(FLOAT_BYTES)
-            .for_each(|destination| destination.copy_from_slice(&bytes));
-        Ok(())
-    }
-
-    pub fn write_indexed(
-        &mut self,
-        plane: usize,
-        indexes: &[usize],
-        values: &[f32],
-    ) -> Result<(), RISICOError> {
-        self.validate_plane(plane)?;
-        if indexes.len() != values.len() {
+        if values.len() != self.cell_count {
             return Err(format!(
-                "cannot write {} indexes with {} values",
-                indexes.len(),
-                values.len()
+                "cannot write {} values into a {} cell plane",
+                values.len(),
+                self.cell_count
             )
             .into());
         }
-        for (&index, &value) in indexes.iter().zip(values) {
-            let offset = self.value_byte_offset(plane, index)?;
-            self.map[offset..offset + FLOAT_BYTES].copy_from_slice(&value.to_le_bytes());
+        let range = self.plane_byte_range(plane)?;
+        let destination = &mut self.map[range];
+        if cfg!(target_endian = "little") {
+            // SAFETY: `f32` has no padding and no invalid bit patterns, so a
+            // slice of them can always be read as bytes. On a little-endian
+            // target those bytes are already the stored encoding, making the
+            // whole plane a single copy. Lengths were checked above.
+            let source = unsafe {
+                std::slice::from_raw_parts(values.as_ptr().cast::<u8>(), values.len() * FLOAT_BYTES)
+            };
+            destination.copy_from_slice(source);
+        } else {
+            for (slot, value) in destination.chunks_exact_mut(FLOAT_BYTES).zip(values) {
+                slot.copy_from_slice(&value.to_le_bytes());
+            }
         }
         Ok(())
     }
 
-    pub fn read_indexed(&self, plane: usize, indexes: &[usize]) -> Result<Vec<f32>, RISICOError> {
+    /// Scatter a plane into `destination` at the given positions.
+    ///
+    /// Reads the plane in storage order and needs no intermediate buffer, so
+    /// joining many tile scratches into one domain array stays allocation-free.
+    pub fn scatter_plane(
+        &self,
+        plane: usize,
+        positions: &[usize],
+        destination: &mut [f32],
+    ) -> Result<(), RISICOError> {
         self.validate_plane(plane)?;
-        indexes
-            .iter()
-            .map(|&index| {
-                let offset = self.value_byte_offset(plane, index)?;
-                let bytes: [u8; FLOAT_BYTES] = self.map[offset..offset + FLOAT_BYTES]
-                    .try_into()
-                    .expect("f32 byte range has a fixed length");
-                Ok(f32::from_le_bytes(bytes))
-            })
-            .collect()
-    }
-
-    pub fn read_plane(&self, plane: usize) -> Result<Vec<f32>, RISICOError> {
-        self.validate_plane(plane)?;
+        if positions.len() != self.cell_count {
+            return Err(format!(
+                "cannot scatter a {} cell plane through {} positions",
+                self.cell_count,
+                positions.len()
+            )
+            .into());
+        }
+        let domain_len = destination.len();
         let range = self.plane_byte_range(plane)?;
-        Ok(self.map[range]
-            .chunks_exact(FLOAT_BYTES)
-            .map(|bytes| {
-                f32::from_le_bytes(bytes.try_into().expect("f32 byte range has a fixed length"))
-            })
-            .collect())
+        let stored = &self.map[range];
+
+        // SAFETY: the plane starts at a multiple of four bytes inside a
+        // page-aligned mapping, so it is `f32` aligned; `align_to` still
+        // reports any mismatch and the byte-wise path below covers it.
+        let (prefix, floats, suffix) = unsafe { stored.align_to::<f32>() };
+        if cfg!(target_endian = "little") && prefix.is_empty() && suffix.is_empty() {
+            for (&value, &position) in floats.iter().zip(positions) {
+                let slot = destination.get_mut(position).ok_or_else(|| {
+                    RISICOError::from(format!(
+                        "scatter position {position} is outside a {domain_len} cell domain"
+                    ))
+                })?;
+                *slot = value;
+            }
+            return Ok(());
+        }
+
+        for (bytes, &position) in stored.chunks_exact(FLOAT_BYTES).zip(positions) {
+            let slot = destination.get_mut(position).ok_or_else(|| {
+                RISICOError::from(format!(
+                    "scatter position {position} is outside a {domain_len} cell domain"
+                ))
+            })?;
+            *slot =
+                f32::from_le_bytes(bytes.try_into().expect("f32 byte range has a fixed length"));
+        }
+        Ok(())
     }
 
     pub fn flush(&self) -> Result<(), RISICOError> {
@@ -582,68 +639,119 @@ mod tests {
     }
 
     #[test]
-    fn mapped_planes_roundtrip_disjoint_tiles() {
+    fn mapped_planes_roundtrip_dense_writes_through_a_scatter() {
         let path = scratch_path("planes");
-        let mut planes = MappedF32Planes::create(&path, 2, 8).unwrap();
-        planes.fill_plane(0, -9999.0).unwrap();
-        planes
-            .write_indexed(0, &[1, 4, 7], &[10.0, 40.0, 70.0])
-            .unwrap();
-        planes
-            .write_indexed(1, &[0, 2, 6], &[1.5, 2.5, 6.5])
-            .unwrap();
-        assert_eq!(
-            planes.read_indexed(0, &[0, 1, 4, 7]).unwrap(),
-            vec![-9999.0, 10.0, 40.0, 70.0]
-        );
-        assert_eq!(
-            planes.read_indexed(1, &[0, 2, 6]).unwrap(),
-            vec![1.5, 2.5, 6.5]
-        );
+        let mut planes = MappedF32Planes::create(&path, 2, 3).unwrap();
+        planes.write_plane(0, &[10.0, 40.0, 70.0]).unwrap();
+        planes.write_plane(1, &[1.5, 2.5, 6.5]).unwrap();
+
+        // Planes stay independent and land at the requested domain positions.
+        let mut domain = vec![0.0_f32; 8];
+        planes.scatter_plane(0, &[1, 4, 7], &mut domain).unwrap();
+        assert_eq!(domain, vec![0.0, 10.0, 0.0, 0.0, 40.0, 0.0, 0.0, 70.0]);
+
+        let mut domain = vec![0.0_f32; 8];
+        planes.scatter_plane(1, &[0, 2, 6], &mut domain).unwrap();
+        assert_eq!(domain, vec![1.5, 0.0, 2.5, 0.0, 0.0, 0.0, 6.5, 0.0]);
+
         planes.sync_all().unwrap();
         drop(planes);
         remove_scratch_file(path).unwrap();
     }
 
     #[test]
-    fn native_output_store_accepts_the_common_output_of_any_model_tile() {
-        let path = scratch_path("native-output");
-        let mut store = MappedNativeOutputs::create(
-            &path,
-            vec![OutputVariableName::temperature, OutputVariableName::rain],
-            6,
-        )
-        .unwrap();
-        let output = Output::new(
-            Utc.with_ymd_and_hms(2026, 7, 23, 12, 0, 0).unwrap(),
-            Array1::from_vec(vec![
-                OutputElement {
-                    temperature: 10.0,
-                    rain: 1.0,
-                    ..OutputElement::default()
-                },
-                OutputElement {
-                    temperature: 20.0,
-                    rain: 2.0,
-                    ..OutputElement::default()
-                },
-            ]),
-        );
-        store.write_tile(&[1, 4], &output).unwrap();
-        assert_eq!(
+    fn dense_plane_writes_reject_a_length_mismatch() {
+        let path = scratch_path("planes-mismatch");
+        let mut planes = MappedF32Planes::create(&path, 1, 3).unwrap();
+        assert!(planes.write_plane(0, &[1.0, 2.0]).is_err());
+        drop(planes);
+        remove_scratch_file(path).unwrap();
+    }
+
+    #[test]
+    fn per_tile_scratches_rejoin_into_domain_order() {
+        let variables = vec![OutputVariableName::temperature, OutputVariableName::rain];
+        let element = |temperature: f32, rain: f32| OutputElement {
+            temperature,
+            rain,
+            ..OutputElement::default()
+        };
+        let time = Utc.with_ymd_and_hms(2026, 7, 23, 12, 0, 0).unwrap();
+
+        // Two tiles interleaved across a six cell domain, as a raster tiling
+        // produces: each tile owns increasing but non-contiguous positions.
+        let layout: [(&str, Vec<usize>, Vec<(f32, f32)>); 2] = [
+            (
+                "a",
+                vec![0, 2, 4],
+                vec![(1.0, 10.0), (3.0, 30.0), (5.0, 50.0)],
+            ),
+            (
+                "b",
+                vec![1, 3, 5],
+                vec![(2.0, 20.0), (4.0, 40.0), (6.0, 60.0)],
+            ),
+        ];
+
+        let mut paths = Vec::new();
+        let mut stores = Vec::new();
+        for (name, _, values) in &layout {
+            let path = scratch_path(&format!("join-{name}"));
+            let mut store = MappedNativeOutputs::create(&path, variables.clone(), 3).unwrap();
             store
-                .read_variable(OutputVariableName::temperature, &[1, 4])
-                .unwrap(),
-            vec![10.0, 20.0]
+                .write_output(&Output::new(
+                    time,
+                    Array1::from_vec(
+                        values
+                            .iter()
+                            .map(|(temperature, rain)| element(*temperature, *rain))
+                            .collect::<Vec<_>>(),
+                    ),
+                ))
+                .unwrap();
+            paths.push(path);
+            stores.push(store);
+        }
+
+        let tile_views: Vec<TileNativeOutput> = stores
+            .into_iter()
+            .zip(&layout)
+            .map(|(store, (_, positions, _))| TileNativeOutput::new(store, positions.as_slice()))
+            .collect();
+
+        let joined = TiledNativeOutputs::new(6, tile_views).unwrap();
+        assert_eq!(
+            joined
+                .join_variable(OutputVariableName::temperature)
+                .unwrap()
+                .to_vec(),
+            vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0]
         );
         assert_eq!(
-            store
-                .read_variable(OutputVariableName::rain, &[1, 4])
-                .unwrap(),
-            vec![1.0, 2.0]
+            joined
+                .join_variable(OutputVariableName::rain)
+                .unwrap()
+                .to_vec(),
+            vec![10.0, 20.0, 30.0, 40.0, 50.0, 60.0]
         );
-        store.sync_all().unwrap();
-        drop(store);
+
+        drop(joined);
+        for path in paths {
+            remove_scratch_file(path).unwrap();
+        }
+    }
+
+    #[test]
+    fn joining_rejects_tiles_that_do_not_cover_the_domain() {
+        let path = scratch_path("join-partial");
+        let store =
+            MappedNativeOutputs::create(&path, vec![OutputVariableName::temperature], 2).unwrap();
+        let positions = vec![0_usize, 1];
+        let tile = TileNativeOutput::new(store, &positions);
+
+        let error = TiledNativeOutputs::new(5, vec![tile]);
+        assert!(error.is_err(), "a partial cover must not be joinable");
+
         remove_scratch_file(path).unwrap();
     }
 }

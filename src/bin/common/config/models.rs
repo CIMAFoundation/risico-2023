@@ -83,11 +83,11 @@ use super::builder::{
 
 use crate::common::helpers::RISICOError;
 use crate::common::io::models::{
-    output::{MappedOutputSource, NativeOutputSource, OutputType},
+    output::{NativeOutputSource, OutputType, TiledOutputSource},
     palette::Palette,
 };
 use crate::common::io::static_data::geotiff::{RasterDomain, RasterGrid};
-use crate::common::io::streaming::{MappedNativeOutputs, SpatialTile, TilePlan};
+use crate::common::io::streaming::{SpatialTile, TilePlan, TiledNativeOutputs};
 use crate::common::io::warm_state::legacy::{read_fwi, read_risico};
 use crate::common::io::warm_state::netcdf::{
     load_latest_fwi, load_latest_risico, write_fwi_snapshot, write_risico_snapshot,
@@ -640,7 +640,7 @@ pub struct TileStep {
 /// The runner owns spatial batching and persistence. Implementations retain
 /// only the small differences in each model's store/update/output schedule.
 pub trait TileModelRuntime: TileModelFactory + TileStatePersistence {
-    type WarmState: Clone;
+    type WarmState: Clone + Default;
 
     fn coordinates(&self) -> (Vec<f32>, Vec<f32>);
     fn output_writer(&self) -> Result<OutputWriter, RISICOError>;
@@ -1021,14 +1021,15 @@ impl OutputWriter {
         }
     }
 
-    pub fn write_mapped_output(
+    /// Write a timestep whose native output is held as one scratch per tile.
+    pub fn write_tiled_output(
         &mut self,
         lats: &[f32],
         lons: &[f32],
         time: DateTime<Utc>,
-        output: &MappedNativeOutputs,
+        output: &TiledNativeOutputs,
     ) -> Result<(), RISICOError> {
-        self.write_source(lats, lons, &MappedOutputSource::new(time, output))
+        self.write_source(lats, lons, &TiledOutputSource::new(time, output))
     }
 
     fn write_source(
@@ -1114,44 +1115,66 @@ impl RISICOConfig {
                     let vegetation_catalog = vegetation_catalog
                         .clone()
                         .ok_or("RISICO GeoTIFF static data requires vegetation_catalog")?;
-                    let slopes = domain
-                        .read_required_layer(slope, "slope")?
-                        .into_iter()
+                    let ppf_layers = match (ppf_summer, ppf_winter) {
+                        (None, None) => None,
+                        (Some(summer), Some(winter)) => Some((summer.as_str(), winter.as_str())),
+                        _ => {
+                            return Err(
+                                "ppf_summer and ppf_winter must either both be configured or both omitted"
+                                    .into(),
+                            )
+                        }
+                    };
+
+                    // Decoding a full-domain layer dominates configuration time and
+                    // each layer opens its own file handle, so read them concurrently.
+                    let mut requests = vec![
+                        (slope, "slope"),
+                        (aspect, "aspect"),
+                        (vegetation_id, "vegetation_id"),
+                    ];
+                    if let Some((summer, winter)) = ppf_layers {
+                        requests.push((summer, "ppf_summer"));
+                        requests.push((winter, "ppf_winter"));
+                    }
+                    let layers = requests
+                        .into_par_iter()
+                        .map(|(path, name)| domain.read_required_layer(path, name))
+                        .collect::<Result<Vec<_>, RISICOError>>()?;
+                    let mut layers = layers.into_iter();
+                    let slope_values = layers.next().expect("slope layer was requested");
+                    let aspect_values = layers.next().expect("aspect layer was requested");
+                    let vegetation_values =
+                        layers.next().expect("vegetation_id layer was requested");
+
+                    let slopes = slope_values
+                        .into_par_iter()
                         .map(|value| value * PI / 180.0)
                         .collect();
-                    let aspects = domain
-                        .read_required_layer(aspect, "aspect")?
-                        .into_iter()
+                    let aspects = aspect_values
+                        .into_par_iter()
                         .map(|value| value * PI / 180.0)
                         .collect();
-                    let vegetations = domain
-                        .read_required_layer(vegetation_id, "vegetation_id")?
-                        .into_iter()
+                    let vegetations = vegetation_values
+                        .into_par_iter()
                         .map(|value| {
                             let rounded = value.round();
                             if !value.is_finite() || (value - rounded).abs() > 1.0e-4 {
-                                Err(format!(
+                                Err(RISICOError::from(format!(
                                     "vegetation_id must contain finite integer values, found {value}"
-                                )
-                                .into())
+                                )))
                             } else {
                                 Ok((rounded as i64).to_string())
                             }
                         })
                         .collect::<Result<Vec<_>, RISICOError>>()?;
 
-                    let ppf = match (ppf_summer, ppf_winter) {
-                        (None, None) => vec![(1.0, 1.0); domain.cell_indexes.len()],
-                        (Some(summer), Some(winter)) => domain
-                            .read_required_layer(summer, "ppf_summer")?
-                            .into_iter()
-                            .zip(domain.read_required_layer(winter, "ppf_winter")?)
-                            .collect(),
-                        _ => {
-                            return Err(
-                                "ppf_summer and ppf_winter must either both be configured or both omitted"
-                                    .into(),
-                            )
+                    let ppf = match ppf_layers {
+                        None => vec![(1.0, 1.0); domain.cell_indexes.len()],
+                        Some(_) => {
+                            let summer = layers.next().expect("ppf_summer layer was requested");
+                            let winter = layers.next().expect("ppf_winter layer was requested");
+                            summer.into_iter().zip(winter).collect()
                         }
                     };
                     let props = RISICOCellPropertiesContainer {
