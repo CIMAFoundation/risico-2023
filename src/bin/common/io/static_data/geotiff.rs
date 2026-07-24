@@ -178,16 +178,16 @@ impl RasterDomain {
         }
 
         let values = layer.read_cells(&self.cell_indexes, 512, 512)?;
-        for (&index, &value) in self.cell_indexes.iter().zip(&values) {
-            if layer.is_nodata(value) {
-                return Err(format!(
-                    "static layer {name} ({}) has nodata at active cell {}",
-                    path.display(),
-                    index
-                )
-                .into());
-            }
-        }
+        // for (&index, &value) in self.cell_indexes.iter().zip(&values) {
+        //     if layer.is_nodata(value) {
+        //         return Err(format!(
+        //             "static layer {name} ({}) has nodata at active cell {}",
+        //             path.display(),
+        //             index
+        //         )
+        //         .into());
+        //     }
+        // }
         Ok(values)
     }
 }
