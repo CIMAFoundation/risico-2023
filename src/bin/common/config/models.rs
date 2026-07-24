@@ -16,49 +16,58 @@ use rayon::prelude::*;
 use risico::{
     models::output::{Output, OutputVariableName},
     modules::angstrom::models::{
-        AngstromCellPropertiesContainer, AngstromProperties, AngstromState, AngstromStateElement,
+        AngstromCellPropertiesContainer, AngstromProperties, AngstromPropertiesElement, AngstromState,
+        AngstromStateElement,
     },
     modules::fosberg::models::{
-        FosbergCellPropertiesContainer, FosbergProperties, FosbergState, FosbergStateElement,
+        FosbergCellPropertiesContainer, FosbergProperties, FosbergPropertiesElement, FosbergState,
+        FosbergStateElement,
     },
     modules::fwi::{
         config::FWIModelConfig,
         models::{
-            FWICellPropertiesContainer, FWIProperties, FWIState, FWIStateElement, FWIWarmState,
+            FWICellPropertiesContainer, FWIProperties, FWIPropertiesElement, FWIState, FWIStateElement,
+            FWIWarmState,
         },
     },
     //    modules::portuguese::models::{PortugueseCellPropertiesContainer, PortugueseProperties, PortugueseState, PortugueseWarmState},
-    modules::hdw::models::{HdwCellPropertiesContainer, HdwProperties, HdwState, HdwStateElement},
+    modules::hdw::models::{HdwCellPropertiesContainer, HdwProperties, HdwPropertiesElement, HdwState, HdwStateElement},
     modules::kbdi::{
         config::KBDIModelConfig,
         models::{
-            KBDICellPropertiesContainer, KBDIProperties, KBDIState, KBDIStateElement, KBDIWarmState,
+            KBDICellPropertiesContainer, KBDIProperties, KBDIPropertiesElement, KBDIState,
+            KBDIStateElement, KBDIWarmState,
         },
     },
     modules::mark5::{
         config::Mark5ModelConfig,
         models::{
-            Mark5CellPropertiesContainer, Mark5Properties, Mark5State, Mark5StateElement,
+            Mark5CellPropertiesContainer, Mark5Properties, Mark5PropertiesElement, Mark5State,
+            Mark5StateElement,
             Mark5WarmState,
         },
     },
     modules::nesterov::models::{
-        NesterovCellPropertiesContainer, NesterovProperties, NesterovState, NesterovStateElement,
+        NesterovCellPropertiesContainer, NesterovProperties, NesterovPropertiesElement, NesterovState,
+        NesterovStateElement,
         NesterovWarmState,
     },
     modules::orieux::models::{
-        OrieuxCellPropertiesContainer, OrieuxProperties, OrieuxState, OrieuxStateElement,
+        OrieuxCellPropertiesContainer, OrieuxProperties, OrieuxPropertiesElement, OrieuxState,
+        OrieuxStateElement,
         OrieuxWarmState,
     },
     modules::risico::{
         config::RISICOModelConfig,
         models::{
-            RISICOCellPropertiesContainer, RISICOProperties, RISICOState, RISICOStateElement,
+            RISICOCellPropertiesContainer, RISICOProperties, RISICOPropertiesElement, RISICOState,
+            RISICOStateElement,
             RISICOVegetation, RISICOWarmState,
         },
     },
     modules::sharples::models::{
-        SharplesCellPropertiesContainer, SharplesProperties, SharplesState, SharplesStateElement,
+        SharplesCellPropertiesContainer, SharplesProperties, SharplesPropertiesElement, SharplesState,
+        SharplesStateElement,
     },
 };
 
@@ -630,6 +639,126 @@ impl_tile_state_persistence!(SharplesConfig, SharplesState, SharplesStateElement
 impl_tile_state_persistence!(OrieuxConfig, OrieuxState, OrieuxStateElement);
 impl_tile_state_persistence!(HdwConfig, HdwState, HdwStateElement);
 
+/// What one model costs in memory, per cell, so a budget can be turned into a
+/// tile concurrency.
+///
+/// Both figures are of the model's own arrays. Input decoding, the output
+/// writer and the source-grid caches sit outside them, so a run always needs
+/// some headroom above what this predicts.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct TileMemoryModel {
+    /// Held for every domain cell for the whole run, whatever the tiling is.
+    pub resident_per_cell: usize,
+    /// Held per tile cell only while that tile is in flight.
+    pub in_flight_per_cell: usize,
+}
+
+/// Per-cell memory cost of a model, used to derive tile concurrency.
+pub trait TileMemoryFootprint {
+    fn memory_model(&self) -> TileMemoryModel;
+}
+
+/// What the counted arrays miss for whole-domain data: the per-cell vegetation
+/// strings, the handler's source-grid index caches and the writer's buffers.
+///
+/// Calibrated against measured runs rather than derived, so it is deliberately
+/// on the generous side: overestimating costs some parallelism, underestimating
+/// overshoots the budget the operator asked for.
+const RESIDENT_OVERHEAD: f64 = 1.75;
+
+/// What the counted arrays miss for a tile in flight: the checkpoint
+/// serialization buffers, the per-variable gather temporaries, the domain-sized
+/// planes built when tile outputs are joined, and allocator retention.
+///
+/// Calibrated the same way and for the same reason.
+const IN_FLIGHT_OVERHEAD: f64 = 2.5;
+
+macro_rules! impl_tile_memory_footprint {
+    ($config:ty, $properties:ty, $state:ty, $warm:ty) => {
+        impl TileMemoryFootprint for $config {
+            fn memory_model(&self) -> TileMemoryModel {
+                use std::mem::size_of;
+
+                // Whole-domain arrays: the model's properties and warm state,
+                // plus the coordinates and the plan's cell bookkeeping.
+                let resident_per_cell = size_of::<$properties>()
+                    + size_of::<$warm>()
+                    + 2 * size_of::<f32>()
+                    + size_of::<usize>()
+                    + size_of::<u32>();
+
+                // A tile in flight holds its own slice of the properties, its
+                // working state, the decoded input row, the warm state records
+                // it hands back, the model's output elements, and one f32 plane
+                // per output variable in the scratch it is written to.
+                let outputs = self.native_output_variables().len();
+                let in_flight_per_cell = size_of::<$properties>()
+                    + size_of::<$state>()
+                    + size_of::<risico::models::input::InputElement>()
+                    + size_of::<$warm>()
+                    + size_of::<risico::models::output::OutputElement>()
+                    + outputs * size_of::<f32>();
+
+                TileMemoryModel {
+                    resident_per_cell: (resident_per_cell as f64 * RESIDENT_OVERHEAD) as usize,
+                    in_flight_per_cell: (in_flight_per_cell as f64 * IN_FLIGHT_OVERHEAD) as usize,
+                }
+            }
+        }
+    };
+}
+
+impl_tile_memory_footprint!(
+    RISICOConfig,
+    RISICOPropertiesElement,
+    RISICOStateElement,
+    RISICOWarmState
+);
+impl_tile_memory_footprint!(FWIConfig, FWIPropertiesElement, FWIStateElement, FWIWarmState);
+impl_tile_memory_footprint!(
+    Mark5Config,
+    Mark5PropertiesElement,
+    Mark5StateElement,
+    Mark5WarmState
+);
+impl_tile_memory_footprint!(
+    KbdiConfig,
+    KBDIPropertiesElement,
+    KBDIStateElement,
+    KBDIWarmState
+);
+impl_tile_memory_footprint!(
+    NesterovConfig,
+    NesterovPropertiesElement,
+    NesterovStateElement,
+    NesterovWarmState
+);
+impl_tile_memory_footprint!(
+    OrieuxConfig,
+    OrieuxPropertiesElement,
+    OrieuxStateElement,
+    OrieuxWarmState
+);
+impl_tile_memory_footprint!(
+    AngstromConfig,
+    AngstromPropertiesElement,
+    AngstromStateElement,
+    ()
+);
+impl_tile_memory_footprint!(
+    FosbergConfig,
+    FosbergPropertiesElement,
+    FosbergStateElement,
+    ()
+);
+impl_tile_memory_footprint!(
+    SharplesConfig,
+    SharplesPropertiesElement,
+    SharplesStateElement,
+    ()
+);
+impl_tile_memory_footprint!(HdwConfig, HdwPropertiesElement, HdwStateElement, ());
+
 pub struct TileStep {
     pub output: Option<Output>,
     pub write_warm_state: bool,
@@ -639,7 +768,7 @@ pub struct TileStep {
 ///
 /// The runner owns spatial batching and persistence. Implementations retain
 /// only the small differences in each model's store/update/output schedule.
-pub trait TileModelRuntime: TileModelFactory + TileStatePersistence {
+pub trait TileModelRuntime: TileModelFactory + TileStatePersistence + TileMemoryFootprint {
     type WarmState: Clone + Default;
 
     fn coordinates(&self) -> (Vec<f32>, Vec<f32>);

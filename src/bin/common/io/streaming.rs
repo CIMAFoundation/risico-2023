@@ -1,6 +1,7 @@
 use std::fs::{File, OpenOptions};
 use std::io;
 use std::ops::Range;
+use std::os::unix::fs::FileExt;
 use std::path::{Path, PathBuf};
 
 use memmap2::{MmapMut, MmapOptions};
@@ -191,7 +192,9 @@ impl TilePlan {
 pub struct MappedF32Planes {
     path: PathBuf,
     file: File,
-    map: MmapMut,
+    /// `None` once the scratch has been released; planes are then read back
+    /// from the file on demand.
+    map: Option<MmapMut>,
     plane_count: usize,
     cell_count: usize,
 }
@@ -264,6 +267,11 @@ impl MappedNativeOutputs {
 
     pub fn sync_all(&self) -> Result<(), RISICOError> {
         self.planes.sync_all()
+    }
+
+    /// Write this tile's output back to disk and drop it from memory.
+    pub fn release_pages(&mut self) -> Result<(), RISICOError> {
+        self.planes.release_pages()
     }
 
     pub fn path(&self) -> &Path {
@@ -377,7 +385,7 @@ impl MappedF32Planes {
         Ok(Self {
             path,
             file,
-            map,
+            map: Some(map),
             plane_count,
             cell_count,
         })
@@ -403,7 +411,11 @@ impl MappedF32Planes {
             .into());
         }
         let range = self.plane_byte_range(plane)?;
-        let destination = &mut self.map[range];
+        let map = self
+            .map
+            .as_mut()
+            .ok_or_else(|| RISICOError::from("cannot write to a released scratch"))?;
+        let destination = &mut map[range];
         if cfg!(target_endian = "little") {
             // SAFETY: `f32` has no padding and no invalid bit patterns, so a
             // slice of them can always be read as bytes. On a little-endian
@@ -441,39 +453,43 @@ impl MappedF32Planes {
             .into());
         }
         let domain_len = destination.len();
-        let range = self.plane_byte_range(plane)?;
-        let stored = &self.map[range];
+        self.with_plane_bytes(plane, |stored| {
+            // SAFETY: the plane starts at a multiple of four bytes inside a
+            // page-aligned mapping, so it is `f32` aligned; `align_to` still
+            // reports any mismatch and the byte-wise path below covers it.
+            let (prefix, floats, suffix) = unsafe { stored.align_to::<f32>() };
+            if cfg!(target_endian = "little") && prefix.is_empty() && suffix.is_empty() {
+                for (&value, &position) in floats.iter().zip(positions) {
+                    let slot = destination.get_mut(position).ok_or_else(|| {
+                        RISICOError::from(format!(
+                            "scatter position {position} is outside a {domain_len} cell domain"
+                        ))
+                    })?;
+                    *slot = value;
+                }
+                return Ok(());
+            }
 
-        // SAFETY: the plane starts at a multiple of four bytes inside a
-        // page-aligned mapping, so it is `f32` aligned; `align_to` still
-        // reports any mismatch and the byte-wise path below covers it.
-        let (prefix, floats, suffix) = unsafe { stored.align_to::<f32>() };
-        if cfg!(target_endian = "little") && prefix.is_empty() && suffix.is_empty() {
-            for (&value, &position) in floats.iter().zip(positions) {
+            for (bytes, &position) in stored.chunks_exact(FLOAT_BYTES).zip(positions) {
                 let slot = destination.get_mut(position).ok_or_else(|| {
                     RISICOError::from(format!(
                         "scatter position {position} is outside a {domain_len} cell domain"
                     ))
                 })?;
-                *slot = value;
+                *slot = f32::from_le_bytes(
+                    bytes.try_into().expect("f32 byte range has a fixed length"),
+                );
             }
-            return Ok(());
-        }
-
-        for (bytes, &position) in stored.chunks_exact(FLOAT_BYTES).zip(positions) {
-            let slot = destination.get_mut(position).ok_or_else(|| {
-                RISICOError::from(format!(
-                    "scatter position {position} is outside a {domain_len} cell domain"
-                ))
-            })?;
-            *slot =
-                f32::from_le_bytes(bytes.try_into().expect("f32 byte range has a fixed length"));
-        }
-        Ok(())
+            Ok(())
+        })
     }
 
     pub fn flush(&self) -> Result<(), RISICOError> {
-        self.map.flush().map_err(|error| {
+        // A released scratch is already on disk, so there is nothing to flush.
+        let Some(map) = self.map.as_ref() else {
+            return Ok(());
+        };
+        map.flush().map_err(|error| {
             format!(
                 "cannot flush mapped scratch file {}: {error}",
                 self.path.display()
@@ -491,6 +507,64 @@ impl MappedF32Planes {
             )
             .into()
         })
+    }
+
+    /// Write the scratch back to disk and unmap it.
+    ///
+    /// Every tile's scratch stays alive until the whole timestep is joined, so
+    /// without this the resident set grows by the size of the entire domain's
+    /// output over a timestep however few tiles run at once. Unmapping trades
+    /// that for reading the plane back from the file at join time.
+    ///
+    /// This unmaps rather than advising the pages away because `MADV_DONTNEED`
+    /// is honoured on Linux but is close to a no-op for shared file mappings on
+    /// macOS, where it measurably freed nothing.
+    pub fn release_pages(&mut self) -> Result<(), RISICOError> {
+        let Some(map) = self.map.as_ref() else {
+            return Ok(());
+        };
+        // Flushing first is what makes the unmap lossless: it forces the dirty
+        // pages out to the file that the join will read them back from.
+        map.flush().map_err(|error| {
+            format!(
+                "cannot flush mapped scratch file {}: {error}",
+                self.path.display()
+            )
+        })?;
+        self.map = None;
+        Ok(())
+    }
+
+    /// Read one plane's bytes, whether or not the scratch is still mapped.
+    fn with_plane_bytes<T>(
+        &self,
+        plane: usize,
+        read: impl FnOnce(&[u8]) -> Result<T, RISICOError>,
+    ) -> Result<T, RISICOError> {
+        let range = self.plane_byte_range(plane)?;
+        match self.map.as_ref() {
+            Some(map) => read(&map[range]),
+            None => {
+                // Released scratches are read back a plane at a time, which is
+                // the point: one tile-sized buffer instead of the whole domain.
+                //
+                // Planes are joined in parallel, so this reads at an absolute
+                // offset rather than seeking: a positioned read leaves the
+                // shared file offset untouched and is safe for concurrent
+                // readers on the one handle. A cloned handle would not be, since
+                // the clone shares that offset.
+                let mut buffer = vec![0_u8; range.end - range.start];
+                self.file
+                    .read_exact_at(&mut buffer, range.start as u64)
+                    .map_err(|error| {
+                        format!(
+                            "cannot read released scratch file {}: {error}",
+                            self.path.display()
+                        )
+                    })?;
+                read(&buffer)
+            }
+        }
     }
 
     fn validate_plane(&self, plane: usize) -> Result<(), RISICOError> {
@@ -550,6 +624,7 @@ pub fn remove_scratch_file(path: impl AsRef<Path>) -> io::Result<()> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use rayon::prelude::*;
     use chrono::{TimeZone, Utc};
     use ndarray::Array1;
     use risico::models::output::OutputElement;
@@ -655,6 +730,72 @@ mod tests {
         assert_eq!(domain, vec![1.5, 0.0, 2.5, 0.0, 0.0, 0.0, 6.5, 0.0]);
 
         planes.sync_all().unwrap();
+        drop(planes);
+        remove_scratch_file(path).unwrap();
+    }
+
+    #[test]
+    fn releasing_pages_keeps_the_written_values_readable() {
+        let path = scratch_path("planes-released");
+        let mut planes = MappedF32Planes::create(&path, 2, 4).unwrap();
+        planes.write_plane(0, &[1.0, -2.5, 3.25, f32::MAX]).unwrap();
+        planes.write_plane(1, &[0.0, 0.125, -7.5, 1e-8]).unwrap();
+
+        // Dropping the pages must cost nothing but a page fault on the way back.
+        planes.release_pages().unwrap();
+
+        let mut domain = vec![0.0_f32; 4];
+        planes.scatter_plane(0, &[0, 1, 2, 3], &mut domain).unwrap();
+        assert_eq!(domain, vec![1.0, -2.5, 3.25, f32::MAX]);
+
+        let mut domain = vec![0.0_f32; 4];
+        planes.scatter_plane(1, &[0, 1, 2, 3], &mut domain).unwrap();
+        assert_eq!(domain, vec![0.0, 0.125, -7.5, 1e-8]);
+
+        // Releasing twice, and after reading back, stays harmless.
+        planes.release_pages().unwrap();
+        planes.release_pages().unwrap();
+        let mut domain = vec![0.0_f32; 4];
+        planes.scatter_plane(0, &[0, 1, 2, 3], &mut domain).unwrap();
+        assert_eq!(domain, vec![1.0, -2.5, 3.25, f32::MAX]);
+
+        drop(planes);
+        remove_scratch_file(path).unwrap();
+    }
+
+    #[test]
+    fn released_planes_read_back_correctly_under_concurrent_scatter() {
+        // Output variables are joined in parallel, so many planes of one
+        // released scratch are read at once. A seek-based read would race on
+        // the shared file offset; the positioned read must not. Enough planes
+        // and cells that a mistaken offset would corrupt the result.
+        let plane_count = 16;
+        let cell_count = 4096;
+        let path = scratch_path("planes-concurrent");
+        let mut planes = MappedF32Planes::create(&path, plane_count, cell_count).unwrap();
+        for plane in 0..plane_count {
+            let values: Vec<f32> = (0..cell_count)
+                .map(|cell| (plane * cell_count + cell) as f32)
+                .collect();
+            planes.write_plane(plane, &values).unwrap();
+        }
+        planes.release_pages().unwrap();
+
+        let positions: Vec<usize> = (0..cell_count).collect();
+        let mismatches: usize = (0..plane_count)
+            .into_par_iter()
+            .map(|plane| {
+                let mut domain = vec![f32::NAN; cell_count];
+                planes.scatter_plane(plane, &positions, &mut domain).unwrap();
+                domain
+                    .iter()
+                    .enumerate()
+                    .filter(|(cell, &value)| value != (plane * cell_count + cell) as f32)
+                    .count()
+            })
+            .sum();
+        assert_eq!(mismatches, 0, "a concurrent read landed on the wrong plane");
+
         drop(planes);
         remove_scratch_file(path).unwrap();
     }

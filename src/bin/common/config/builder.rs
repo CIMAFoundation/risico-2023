@@ -322,6 +322,15 @@ pub struct StreamingExecutionConfig {
     /// dial to turn when a run has to fit a smaller budget. Defaults to one
     /// tile per available core.
     pub tile_concurrency: Option<usize>,
+    /// Target peak resident size, as a human size such as `6GB` or `768 MiB`.
+    ///
+    /// Tile concurrency is derived from what is left of this budget once the
+    /// whole-domain arrays are accounted for, so the run adapts to the model
+    /// and the domain instead of needing a hand-tuned thread count. This is a
+    /// target rather than a limit: nothing enforces it against the allocator,
+    /// and a budget below the domain's fixed cost still runs, one tile at a
+    /// time. An explicit `tile_concurrency` wins over this.
+    pub max_memory: Option<String>,
     pub scratch_directory: Option<String>,
 }
 
@@ -332,6 +341,7 @@ impl Default for StreamingExecutionConfig {
             tile_width: default_tile_width(),
             cells_per_tile: default_cells_per_tile(),
             tile_concurrency: None,
+            max_memory: None,
             scratch_directory: None,
         }
     }
@@ -348,8 +358,56 @@ impl StreamingExecutionConfig {
         if self.tile_concurrency == Some(0) {
             return Err("streaming tile_concurrency must be greater than zero".into());
         }
+        self.max_memory_bytes()?;
         Ok(())
     }
+
+    /// The configured budget in bytes, if one was given.
+    pub fn max_memory_bytes(&self) -> Result<Option<u64>, RISICOError> {
+        match &self.max_memory {
+            None => Ok(None),
+            Some(budget) => parse_byte_size(budget).map(Some),
+        }
+    }
+}
+
+/// Parse a human byte size such as `512MB`, `6 GiB` or a bare byte count.
+///
+/// Both the decimal (`kB`, `MB`, `GB`) and binary (`KiB`, `MiB`, `GiB`) scales
+/// are accepted because configuration is written by people who mean either.
+fn parse_byte_size(text: &str) -> Result<u64, RISICOError> {
+    let trimmed = text.trim();
+    if trimmed.is_empty() {
+        return Err("streaming max_memory must not be empty".into());
+    }
+
+    let split = trimmed
+        .find(|character: char| !character.is_ascii_digit() && character != '.')
+        .unwrap_or(trimmed.len());
+    let (number, unit) = trimmed.split_at(split);
+    let amount: f64 = number
+        .parse()
+        .map_err(|_| format!("streaming max_memory has no leading number: {trimmed}"))?;
+    if !amount.is_finite() || amount <= 0.0 {
+        return Err(format!("streaming max_memory must be positive: {trimmed}").into());
+    }
+
+    let multiplier: u64 = match unit.trim().to_ascii_lowercase().as_str() {
+        "" | "b" => 1,
+        "k" | "kb" => 1_000,
+        "m" | "mb" => 1_000_000,
+        "g" | "gb" => 1_000_000_000,
+        "t" | "tb" => 1_000_000_000_000,
+        "ki" | "kib" => 1 << 10,
+        "mi" | "mib" => 1 << 20,
+        "gi" | "gib" => 1 << 30,
+        "ti" | "tib" => 1u64 << 40,
+        other => {
+            return Err(format!("streaming max_memory has an unknown unit: {other}").into());
+        }
+    };
+
+    Ok((amount * multiplier as f64) as u64)
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -793,6 +851,8 @@ output_types: []
         assert_eq!(defaults.tile_width, 512);
         assert_eq!(defaults.cells_per_tile, 1_048_576);
         assert_eq!(defaults.tile_concurrency, None);
+        assert_eq!(defaults.max_memory, None);
+        assert_eq!(defaults.max_memory_bytes().unwrap(), None);
         defaults.validate().unwrap();
 
         let configured: StreamingExecutionConfig = serde_yaml::from_str(
@@ -819,5 +879,38 @@ scratch_directory: /scratch/risico
         let invalid: StreamingExecutionConfig =
             serde_yaml::from_str("tile_concurrency: 0").unwrap();
         assert!(invalid.validate().is_err());
+    }
+
+    #[test]
+    fn memory_budgets_accept_both_the_decimal_and_binary_scales() {
+        let cases = [
+            ("512", 512_u64),
+            ("512B", 512),
+            ("6GB", 6_000_000_000),
+            ("6 GB", 6_000_000_000),
+            ("6gb", 6_000_000_000),
+            ("768 MiB", 768 << 20),
+            ("1.5GB", 1_500_000_000),
+            ("8GiB", 8 << 30),
+        ];
+        for (text, expected) in cases {
+            let configured: StreamingExecutionConfig =
+                serde_yaml::from_str(&format!("max_memory: \"{text}\"")).unwrap();
+            configured.validate().unwrap();
+            assert_eq!(
+                configured.max_memory_bytes().unwrap(),
+                Some(expected),
+                "parsing {text}"
+            );
+        }
+    }
+
+    #[test]
+    fn malformed_memory_budgets_are_rejected_by_validation() {
+        for text in ["", "  ", "lots", "GB", "-4GB", "0GB", "12 parsecs"] {
+            let configured: StreamingExecutionConfig =
+                serde_yaml::from_str(&format!("max_memory: \"{text}\"")).unwrap();
+            assert!(configured.validate().is_err(), "should reject {text:?}");
+        }
     }
 }
