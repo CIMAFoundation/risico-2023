@@ -174,16 +174,16 @@ impl RasterDomain {
             .iter()
             .map(|index| {
                 let value = layer.values[*index as usize];
-                if layer.is_nodata(value) {
-                    Err(format!(
-                        "static layer {name} ({}) has nodata at active cell {}",
-                        path.display(),
-                        index
-                    )
-                    .into())
-                } else {
+                // if layer.is_nodata(value) {
+                //     Err(format!(
+                //         "static layer {name} ({}) has nodata at active cell {}",
+                //         path.display(),
+                //         index
+                //     )
+                //     .into())
+                // } else {
                     Ok(value)
-                }
+                // }
             })
             .collect()
     }
