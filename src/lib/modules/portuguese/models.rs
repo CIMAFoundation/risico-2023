@@ -147,7 +147,7 @@ impl PortugueseState {
         Zip::from(&mut self.data)
             .and(&input.data)
             .and(&prop.data)
-            .par_for_each(|state, input_data, prop_data| {
+            .for_each(|state, input_data, prop_data| {
                 store_day_fn(state, input_data, prop_data, &time);
             });
         self.time = time;

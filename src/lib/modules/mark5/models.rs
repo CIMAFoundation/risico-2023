@@ -184,7 +184,7 @@ impl Mark5State {
         Zip::from(&mut self.data)
             .and(&input.data)
             .and(&prop.data)
-            .par_for_each(|state, input_data, prop_data| {
+            .for_each(|state, input_data, prop_data| {
                 store_day_fn(state, input_data, prop_data, &time);
             });
         self.time = time;
@@ -195,7 +195,7 @@ impl Mark5State {
         let time = &self.time;
         let output_data = Zip::from(&mut self.data)
                     .and(&props.data)
-                    .par_map_collect(|state, props_data| {
+                    .map_collect(|state, props_data| {
                         get_output_fn(state, props_data, &self.config, time)
                     });
         // clean the daily values

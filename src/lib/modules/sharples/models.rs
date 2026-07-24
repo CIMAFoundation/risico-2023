@@ -117,7 +117,7 @@ impl SharplesState {
         self.time = input.time;  // reference time of the input
         Zip::from(&mut self.data)
             .and(&input.data)
-            .par_for_each(|state, input_data| {
+            .for_each(|state, input_data| {
                 state.temp = input_data.temperature;
                 state.humidity = input_data.humidity;
                 state.wind_speed = input_data.wind_speed;

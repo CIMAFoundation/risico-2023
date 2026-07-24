@@ -153,7 +153,7 @@ impl RISICOState {
 
         Zip::from(&mut self.data)
             .and(&input.data)
-            .par_for_each(|state, input| {
+            .for_each(|state, input| {
                 let i_snow_cover = input.snow_cover;
 
                 if i_snow_cover == NODATAVAL {
@@ -172,7 +172,7 @@ impl RISICOState {
         let time = input.time.timestamp() as f32;
         Zip::from(&mut self.data)
             .and(&input.data)
-            .par_for_each(|state, input| {
+            .for_each(|state, input| {
                 let i_msi = input.msi;
 
                 if !(0.0..=1.0).contains(&i_msi) {
@@ -188,7 +188,7 @@ impl RISICOState {
             });
         Zip::from(&mut self.data)
             .and(&input.data)
-            .par_for_each(|state, input| {
+            .for_each(|state, input| {
                 let i_ndvi = input.ndvi;
 
                 if self.time.timestamp() - state.NDVI_TIME as i64 > SATELLITE_DATA_SECONDS_VALIDITY
@@ -208,7 +208,7 @@ impl RISICOState {
             });
         Zip::from(&mut self.data)
             .and(&input.data)
-            .par_for_each(|state, input| {
+            .for_each(|state, input| {
                 let i_ndwi = input.ndwi;
 
                 if self.time.timestamp() - state.NDWI_TIME as i64 > SATELLITE_DATA_SECONDS_VALIDITY
@@ -239,7 +239,7 @@ impl RISICOState {
             // .and(&self.snow_cover)
             .and(&props.data)
             .and(&input.data)
-            .par_for_each(|state, props, input_data| {
+            .for_each(|state, props, input_data| {
                 update_moisture_fn(state, props, input_data, &self.config, dt)
             });
     }
@@ -251,7 +251,7 @@ impl RISICOState {
         let output_data = Zip::from(&self.data)
             .and(&props.data)
             .and(&input.data)
-            .par_map_collect(|state, props, input| {
+            .map_collect(|state, props, input| {
                 get_output_fn(state, props, input, &self.config, time)
             });
 

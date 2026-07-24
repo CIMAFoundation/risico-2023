@@ -149,7 +149,7 @@ impl OrieuxState {
         self.time = input.time;  // reference time of the input
         Zip::from(&mut self.data)
             .and(&input.data)
-            .par_for_each(|state, input_data| {
+            .for_each(|state, input_data| {
                 store_day_fn(state, input_data);
             });
     }
@@ -157,7 +157,7 @@ impl OrieuxState {
     fn update_state(&mut self, props: &OrieuxProperties) {
         Zip::from(&mut self.data)
             .and(&props.data)
-            .par_for_each(|state, prop_data| {
+            .for_each(|state, prop_data| {
                 update_fn(state, prop_data, &self.time);
             });
     }

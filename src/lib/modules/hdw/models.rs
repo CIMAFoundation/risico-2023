@@ -103,7 +103,7 @@ impl HdwState {
         self.time = input.time;  // reference time of the input
         Zip::from(&mut self.data)
             .and(&input.data)
-            .par_for_each(|state, input_data| {
+            .for_each(|state, input_data| {
                 state.vpd = input_data.vpd;
                 state.wind_speed = input_data.wind_speed;
             });

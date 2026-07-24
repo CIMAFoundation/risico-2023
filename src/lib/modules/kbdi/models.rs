@@ -178,7 +178,7 @@ impl KBDIState {
         self.time = input.time;  // reference time of the input
         Zip::from(&mut self.data)
             .and(&input.data)
-            .par_for_each(|state, input_data| {
+            .for_each(|state, input_data| {
                 store_day_fn(state, input_data);
             });
     }
@@ -187,7 +187,7 @@ impl KBDIState {
         let time = &self.time;
         Zip::from(&mut self.data)
             .and(&props.data)
-            .par_map_collect(|state, props_data| {
+            .map_collect(|state, props_data| {
                 update_fn(state, props_data, &self.config, time)
             });
     }

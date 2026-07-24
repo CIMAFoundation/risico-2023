@@ -131,7 +131,7 @@ impl FWIState {
         Zip::from(&mut self.data)
             .and(&props.data)
             .and(&input.data)
-            .par_for_each(|state, props, input_data| {
+            .for_each(|state, props, input_data| {
                 update_state_fn(state, props, input_data, time, &self.config)
             });
     }
@@ -142,7 +142,7 @@ impl FWIState {
 
         let output_data = Zip::from(&mut self.data)
             .and(&props.data)
-            .par_map_collect(|state, prop| get_output_fn(state, prop, time, &self.config));
+            .map_collect(|state, prop| get_output_fn(state, prop, time, &self.config));
 
         Output::new(*time, output_data)
     }
