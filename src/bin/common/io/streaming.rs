@@ -5,7 +5,6 @@ use std::os::unix::fs::FileExt;
 use std::path::{Path, PathBuf};
 
 use memmap2::{MmapMut, MmapOptions};
-use ndarray::Array1;
 use risico::models::output::{Output, OutputVariableName};
 
 use crate::common::helpers::RISICOError;
@@ -247,11 +246,15 @@ impl MappedNativeOutputs {
         Ok(())
     }
 
-    fn scatter_plane(
+    fn has_variable(&self, variable: OutputVariableName) -> bool {
+        self.variables.contains(&variable)
+    }
+
+    /// Read one variable's whole plane into `destination`.
+    fn read_variable_into(
         &self,
         variable: OutputVariableName,
-        positions: &[usize],
-        destination: &mut [f32],
+        destination: &mut Vec<f32>,
     ) -> Result<(), RISICOError> {
         let plane = self
             .variables
@@ -262,7 +265,7 @@ impl MappedNativeOutputs {
                     "native output scratch does not contain variable {variable}"
                 ))
             })?;
-        self.planes.scatter_plane(plane, positions, destination)
+        self.planes.read_plane_into(plane, destination)
     }
 
     pub fn sync_all(&self) -> Result<(), RISICOError> {
@@ -298,8 +301,8 @@ impl<'a> TileNativeOutput<'a> {
 /// The whole domain's output for one timestep, held as one scratch per tile.
 ///
 /// Keeping tiles separate lets each one write its own mapping densely and
-/// without sharing a mapping with its neighbours. The domain is reassembled a
-/// single variable at a time, so only one plane is ever materialized.
+/// without sharing a mapping with its neighbours. Consumers read it one tile at
+/// a time, so a variable is never materialized for the whole domain at once.
 pub struct TiledNativeOutputs<'a> {
     cell_count: usize,
     tiles: Vec<TileNativeOutput<'a>>,
@@ -317,14 +320,37 @@ impl<'a> TiledNativeOutputs<'a> {
         Ok(Self { cell_count, tiles })
     }
 
-    /// Reassemble one variable across every tile into a domain-ordered array.
-    pub fn join_variable(&self, variable: OutputVariableName) -> Result<Array1<f32>, RISICOError> {
-        let mut joined = vec![0.0_f32; self.cell_count];
-        for tile in &self.tiles {
-            tile.outputs
-                .scatter_plane(variable, tile.positions, &mut joined)?;
-        }
-        Ok(Array1::from(joined))
+    pub fn cell_count(&self) -> usize {
+        self.cell_count
+    }
+
+    pub fn tile_count(&self) -> usize {
+        self.tiles.len()
+    }
+
+    pub fn has_variable(&self, variable: OutputVariableName) -> bool {
+        self.tiles
+            .first()
+            .is_some_and(|tile| tile.outputs.has_variable(variable))
+    }
+
+    /// Read one tile's values for a variable, with the domain positions they
+    /// belong to.
+    ///
+    /// The destination buffer is reused across tiles, so postprocessing a whole
+    /// variable costs one tile, not one domain.
+    pub fn read_tile(
+        &self,
+        tile: usize,
+        variable: OutputVariableName,
+        destination: &mut Vec<f32>,
+    ) -> Result<&'a [usize], RISICOError> {
+        let tile = self
+            .tiles
+            .get(tile)
+            .ok_or_else(|| RISICOError::from(format!("tile {tile} is outside the timestep")))?;
+        tile.outputs.read_variable_into(variable, destination)?;
+        Ok(tile.positions)
     }
 
     pub fn sync_all(&self) -> Result<(), RISICOError> {
@@ -433,53 +459,32 @@ impl MappedF32Planes {
         Ok(())
     }
 
-    /// Scatter a plane into `destination` at the given positions.
+    /// Read a whole plane into `destination`, which is resized to the plane.
     ///
-    /// Reads the plane in storage order and needs no intermediate buffer, so
-    /// joining many tile scratches into one domain array stays allocation-free.
-    pub fn scatter_plane(
+    /// The buffer is the caller's, so a consumer that walks every tile of a
+    /// timestep can hold one tile at a time instead of one domain.
+    pub fn read_plane_into(
         &self,
         plane: usize,
-        positions: &[usize],
-        destination: &mut [f32],
+        destination: &mut Vec<f32>,
     ) -> Result<(), RISICOError> {
         self.validate_plane(plane)?;
-        if positions.len() != self.cell_count {
-            return Err(format!(
-                "cannot scatter a {} cell plane through {} positions",
-                self.cell_count,
-                positions.len()
-            )
-            .into());
-        }
-        let domain_len = destination.len();
+        let cell_count = self.cell_count;
+        destination.clear();
+        destination.reserve(cell_count);
         self.with_plane_bytes(plane, |stored| {
             // SAFETY: the plane starts at a multiple of four bytes inside a
             // page-aligned mapping, so it is `f32` aligned; `align_to` still
             // reports any mismatch and the byte-wise path below covers it.
             let (prefix, floats, suffix) = unsafe { stored.align_to::<f32>() };
             if cfg!(target_endian = "little") && prefix.is_empty() && suffix.is_empty() {
-                for (&value, &position) in floats.iter().zip(positions) {
-                    let slot = destination.get_mut(position).ok_or_else(|| {
-                        RISICOError::from(format!(
-                            "scatter position {position} is outside a {domain_len} cell domain"
-                        ))
-                    })?;
-                    *slot = value;
-                }
+                destination.extend_from_slice(floats);
                 return Ok(());
             }
 
-            for (bytes, &position) in stored.chunks_exact(FLOAT_BYTES).zip(positions) {
-                let slot = destination.get_mut(position).ok_or_else(|| {
-                    RISICOError::from(format!(
-                        "scatter position {position} is outside a {domain_len} cell domain"
-                    ))
-                })?;
-                *slot = f32::from_le_bytes(
-                    bytes.try_into().expect("f32 byte range has a fixed length"),
-                );
-            }
+            destination.extend(stored.chunks_exact(FLOAT_BYTES).map(|bytes| {
+                f32::from_le_bytes(bytes.try_into().expect("f32 byte range has a fixed length"))
+            }));
             Ok(())
         })
     }
@@ -624,9 +629,9 @@ pub fn remove_scratch_file(path: impl AsRef<Path>) -> io::Result<()> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use rayon::prelude::*;
     use chrono::{TimeZone, Utc};
     use ndarray::Array1;
+    use rayon::prelude::*;
     use risico::models::output::OutputElement;
 
     fn grid(width: usize, height: usize) -> RasterGrid {
@@ -714,20 +719,19 @@ mod tests {
     }
 
     #[test]
-    fn mapped_planes_roundtrip_dense_writes_through_a_scatter() {
+    fn mapped_planes_roundtrip_dense_writes_through_a_read() {
         let path = scratch_path("planes");
         let mut planes = MappedF32Planes::create(&path, 2, 3).unwrap();
         planes.write_plane(0, &[10.0, 40.0, 70.0]).unwrap();
         planes.write_plane(1, &[1.5, 2.5, 6.5]).unwrap();
 
-        // Planes stay independent and land at the requested domain positions.
-        let mut domain = vec![0.0_f32; 8];
-        planes.scatter_plane(0, &[1, 4, 7], &mut domain).unwrap();
-        assert_eq!(domain, vec![0.0, 10.0, 0.0, 0.0, 40.0, 0.0, 0.0, 70.0]);
+        // Planes stay independent, and reading one reuses the caller's buffer.
+        let mut buffer = vec![9.0_f32; 17];
+        planes.read_plane_into(0, &mut buffer).unwrap();
+        assert_eq!(buffer, vec![10.0, 40.0, 70.0]);
 
-        let mut domain = vec![0.0_f32; 8];
-        planes.scatter_plane(1, &[0, 2, 6], &mut domain).unwrap();
-        assert_eq!(domain, vec![1.5, 0.0, 2.5, 0.0, 0.0, 0.0, 6.5, 0.0]);
+        planes.read_plane_into(1, &mut buffer).unwrap();
+        assert_eq!(buffer, vec![1.5, 2.5, 6.5]);
 
         planes.sync_all().unwrap();
         drop(planes);
@@ -744,27 +748,25 @@ mod tests {
         // Dropping the pages must cost nothing but a page fault on the way back.
         planes.release_pages().unwrap();
 
-        let mut domain = vec![0.0_f32; 4];
-        planes.scatter_plane(0, &[0, 1, 2, 3], &mut domain).unwrap();
-        assert_eq!(domain, vec![1.0, -2.5, 3.25, f32::MAX]);
+        let mut buffer = Vec::new();
+        planes.read_plane_into(0, &mut buffer).unwrap();
+        assert_eq!(buffer, vec![1.0, -2.5, 3.25, f32::MAX]);
 
-        let mut domain = vec![0.0_f32; 4];
-        planes.scatter_plane(1, &[0, 1, 2, 3], &mut domain).unwrap();
-        assert_eq!(domain, vec![0.0, 0.125, -7.5, 1e-8]);
+        planes.read_plane_into(1, &mut buffer).unwrap();
+        assert_eq!(buffer, vec![0.0, 0.125, -7.5, 1e-8]);
 
         // Releasing twice, and after reading back, stays harmless.
         planes.release_pages().unwrap();
         planes.release_pages().unwrap();
-        let mut domain = vec![0.0_f32; 4];
-        planes.scatter_plane(0, &[0, 1, 2, 3], &mut domain).unwrap();
-        assert_eq!(domain, vec![1.0, -2.5, 3.25, f32::MAX]);
+        planes.read_plane_into(0, &mut buffer).unwrap();
+        assert_eq!(buffer, vec![1.0, -2.5, 3.25, f32::MAX]);
 
         drop(planes);
         remove_scratch_file(path).unwrap();
     }
 
     #[test]
-    fn released_planes_read_back_correctly_under_concurrent_scatter() {
+    fn released_planes_read_back_correctly_under_concurrent_reads() {
         // Output variables are joined in parallel, so many planes of one
         // released scratch are read at once. A seek-based read would race on
         // the shared file offset; the positioned read must not. Enough planes
@@ -781,13 +783,12 @@ mod tests {
         }
         planes.release_pages().unwrap();
 
-        let positions: Vec<usize> = (0..cell_count).collect();
         let mismatches: usize = (0..plane_count)
             .into_par_iter()
             .map(|plane| {
-                let mut domain = vec![f32::NAN; cell_count];
-                planes.scatter_plane(plane, &positions, &mut domain).unwrap();
-                domain
+                let mut buffer = Vec::new();
+                planes.read_plane_into(plane, &mut buffer).unwrap();
+                buffer
                     .iter()
                     .enumerate()
                     .filter(|(cell, &value)| value != (plane * cell_count + cell) as f32)
@@ -810,7 +811,7 @@ mod tests {
     }
 
     #[test]
-    fn per_tile_scratches_rejoin_into_domain_order() {
+    fn per_tile_scratches_read_back_with_their_domain_positions() {
         let variables = vec![OutputVariableName::temperature, OutputVariableName::rain];
         let element = |temperature: f32, rain: f32| OutputElement {
             temperature,
@@ -861,20 +862,26 @@ mod tests {
             .collect();
 
         let joined = TiledNativeOutputs::new(6, tile_views).unwrap();
-        assert_eq!(
-            joined
-                .join_variable(OutputVariableName::temperature)
-                .unwrap()
-                .to_vec(),
-            vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0]
-        );
-        assert_eq!(
-            joined
-                .join_variable(OutputVariableName::rain)
-                .unwrap()
-                .to_vec(),
-            vec![10.0, 20.0, 30.0, 40.0, 50.0, 60.0]
-        );
+        assert!(joined.has_variable(OutputVariableName::temperature));
+        assert!(!joined.has_variable(OutputVariableName::dffm));
+
+        // Walking the tiles reconstructs the domain without ever holding it.
+        let mut buffer = Vec::new();
+        for variable in [OutputVariableName::temperature, OutputVariableName::rain] {
+            let mut domain = vec![0.0_f32; 6];
+            for tile in 0..joined.tile_count() {
+                let positions = joined.read_tile(tile, variable, &mut buffer).unwrap();
+                assert_eq!(buffer.len(), positions.len());
+                for (&value, &position) in buffer.iter().zip(positions) {
+                    domain[position] = value;
+                }
+            }
+            let expected = match variable {
+                OutputVariableName::temperature => vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0],
+                _ => vec![10.0, 20.0, 30.0, 40.0, 50.0, 60.0],
+            };
+            assert_eq!(domain, expected);
+        }
 
         drop(joined);
         for path in paths {

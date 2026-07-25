@@ -31,7 +31,9 @@ mod rischio_runtime_imports {
                 netcdf::{NetCdfInputConfiguration, NetCdfInputHandler},
                 prelude::InputHandler,
             },
-            streaming::{MappedNativeOutputs, TileNativeOutput, TilePlan, TiledNativeOutputs},
+            streaming::{
+                MappedNativeOutputs, SpatialTile, TileNativeOutput, TilePlan, TiledNativeOutputs,
+            },
         },
     };
 }
@@ -182,9 +184,31 @@ where
     Ok(Some(threads))
 }
 
+/// Write every tile's initial state, taken from the domain warm state.
+///
+/// Doing it before the timeline starts is what lets the warm state be released
+/// straight away, and it costs one checkpoint per tile that the first timestamp
+/// would have written anyway.
+fn seed_tile_states<C>(
+    config: &C,
+    tiles: &[SpatialTile],
+    state_paths: &[PathBuf],
+) -> Result<(), RISICOError>
+where
+    C: TileModelRuntime + Sync,
+{
+    tiles
+        .par_iter()
+        .zip(state_paths.par_iter())
+        .try_for_each(|(tile, path)| {
+            let state = config.tile_state(tile);
+            config.checkpoint_tile_state(&state, path)
+        })
+}
+
 fn run_tiled_model<C>(
     model_name: &str,
-    config: &C,
+    config: &mut C,
     handler: &mut dyn InputHandler,
     execution: &StreamingExecutionConfig,
 ) -> Result<(), RISICOError>
@@ -234,6 +258,16 @@ where
         ),
     };
 
+    // Seed every tile's checkpoint from the domain warm state, then let the
+    // model drop it: from here on a tile resumes from its own checkpoint, so
+    // the one array that is read only at the first timestamp stops being held
+    // for the whole run.
+    match &tile_pool {
+        Some(pool) => pool.install(|| seed_tile_states(config, tiles, &state_paths)),
+        None => seed_tile_states(config, tiles, &state_paths),
+    }?;
+    config.release_warm_state();
+
     // Mapping a tile onto the input grid does not depend on time, so register
     // every tile once and only re-select it as the timeline advances.
     handler.clear_registered_coordinates();
@@ -276,11 +310,12 @@ where
             .map(|(tile_index, tile)| -> Result<TileOutcome, RISICOError> {
                 let selection = tile_selections[tile_index];
                 let properties = config.tile_properties(tile);
+                // Every tile was checkpointed before the timeline started, so
+                // this is always a restore: the shell is sized from the tile
+                // and its contents come from disk.
                 let mut state = config.tile_state(tile);
                 let state_path = &state_paths[tile_index];
-                if state_path.exists() {
-                    config.restore_tile_state(&mut state, state_path)?;
-                }
+                config.restore_tile_state(&mut state, state_path)?;
                 let input = get_input(handler_ref, selection, time, tile.len());
                 let step = config.step(&mut state, &properties, &input);
 
@@ -490,100 +525,100 @@ fn main() -> Result<(), Box<dyn Error>> {
         let start = Utc::now();
         let result = match model_config {
             ConfigBuilderType::RISICO(builder) => {
-                builder.build(&date, &configs.palettes).and_then(|config| {
+                builder.build(&date, &configs.palettes).and_then(|mut config| {
                     run_tiled_model(
                         model_name,
-                        &config,
+                        &mut config,
                         input_handler.as_mut(),
                         &configs.streaming,
                     )
                 })
             }
             ConfigBuilderType::FWI(builder) => {
-                builder.build(&date, &configs.palettes).and_then(|config| {
+                builder.build(&date, &configs.palettes).and_then(|mut config| {
                     run_tiled_model(
                         model_name,
-                        &config,
+                        &mut config,
                         input_handler.as_mut(),
                         &configs.streaming,
                     )
                 })
             }
             ConfigBuilderType::Mark5(builder) => {
-                builder.build(&date, &configs.palettes).and_then(|config| {
+                builder.build(&date, &configs.palettes).and_then(|mut config| {
                     run_tiled_model(
                         model_name,
-                        &config,
+                        &mut config,
                         input_handler.as_mut(),
                         &configs.streaming,
                     )
                 })
             }
             ConfigBuilderType::KBDI(builder) => {
-                builder.build(&date, &configs.palettes).and_then(|config| {
+                builder.build(&date, &configs.palettes).and_then(|mut config| {
                     run_tiled_model(
                         model_name,
-                        &config,
+                        &mut config,
                         input_handler.as_mut(),
                         &configs.streaming,
                     )
                 })
             }
             ConfigBuilderType::Angstrom(builder) => {
-                builder.build(&date, &configs.palettes).and_then(|config| {
+                builder.build(&date, &configs.palettes).and_then(|mut config| {
                     run_tiled_model(
                         model_name,
-                        &config,
+                        &mut config,
                         input_handler.as_mut(),
                         &configs.streaming,
                     )
                 })
             }
             ConfigBuilderType::Fosberg(builder) => {
-                builder.build(&date, &configs.palettes).and_then(|config| {
+                builder.build(&date, &configs.palettes).and_then(|mut config| {
                     run_tiled_model(
                         model_name,
-                        &config,
+                        &mut config,
                         input_handler.as_mut(),
                         &configs.streaming,
                     )
                 })
             }
             ConfigBuilderType::Nesterov(builder) => {
-                builder.build(&date, &configs.palettes).and_then(|config| {
+                builder.build(&date, &configs.palettes).and_then(|mut config| {
                     run_tiled_model(
                         model_name,
-                        &config,
+                        &mut config,
                         input_handler.as_mut(),
                         &configs.streaming,
                     )
                 })
             }
             ConfigBuilderType::Sharples(builder) => {
-                builder.build(&date, &configs.palettes).and_then(|config| {
+                builder.build(&date, &configs.palettes).and_then(|mut config| {
                     run_tiled_model(
                         model_name,
-                        &config,
+                        &mut config,
                         input_handler.as_mut(),
                         &configs.streaming,
                     )
                 })
             }
             ConfigBuilderType::Orieux(builder) => {
-                builder.build(&date, &configs.palettes).and_then(|config| {
+                builder.build(&date, &configs.palettes).and_then(|mut config| {
                     run_tiled_model(
                         model_name,
-                        &config,
+                        &mut config,
                         input_handler.as_mut(),
                         &configs.streaming,
                     )
                 })
             }
             ConfigBuilderType::Hdw(builder) => {
-                builder.build(&date, &configs.palettes).and_then(|config| {
+                builder.build(&date, &configs.palettes).and_then(|mut config| {
                     run_tiled_model(
                         model_name,
-                        &config,
+                        &mut config,
                         input_handler.as_mut(),
                         &configs.streaming,
                     )

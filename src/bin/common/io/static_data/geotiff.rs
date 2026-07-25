@@ -1,4 +1,3 @@
-use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 
 use geotiff_reader::GeoTiffFile;
@@ -121,10 +120,23 @@ impl RasterGrid {
     }
 }
 
+/// The window a run of active cells was found in.
+///
+/// The domain mask is scanned window by window, so the active cells are already
+/// grouped: keeping the grouping costs one entry per window and saves rebuilding
+/// it, per cell, for every static layer that is read afterwards.
+#[derive(Clone, Copy, Debug)]
+struct CellWindow {
+    window: GridWindow,
+    start: usize,
+    end: usize,
+}
+
 #[derive(Debug)]
 pub struct RasterDomain {
     pub grid: RasterGrid,
     pub cell_indexes: Vec<u32>,
+    windows: Vec<CellWindow>,
 }
 
 impl RasterDomain {
@@ -132,8 +144,10 @@ impl RasterDomain {
         let path = path.as_ref();
         let layer = RasterLayerReader::open(path)?;
         let mut cell_indexes = Vec::new();
+        let mut windows = Vec::new();
         for window in raster_windows(&layer.grid, 512, 512) {
             let values = layer.read_window(window)?;
+            let start = cell_indexes.len();
             for (local_index, value) in values.into_iter().enumerate() {
                 if layer.is_nodata(value) || value == 0.0 {
                     continue;
@@ -143,6 +157,13 @@ impl RasterDomain {
                 let index = (window.row + local_row) * layer.grid.width + window.col + local_col;
                 cell_indexes.push(index as u32);
             }
+            if cell_indexes.len() > start {
+                windows.push(CellWindow {
+                    window,
+                    start,
+                    end: cell_indexes.len(),
+                });
+            }
         }
         if cell_indexes.is_empty() {
             return Err(format!("domain mask {} contains no active cells", path.display()).into());
@@ -151,6 +172,7 @@ impl RasterDomain {
         Ok(Self {
             grid: layer.grid,
             cell_indexes,
+            windows,
         })
     }
 
@@ -177,7 +199,21 @@ impl RasterDomain {
             .into());
         }
 
-        let values = layer.read_cells(&self.cell_indexes, 512, 512)?;
+        // Read one mask window at a time and keep only its active cells: the
+        // layer never exists in memory beyond a single window, whatever the
+        // raster's size.
+        let mut values = vec![0.0_f32; self.cell_indexes.len()];
+        for group in &self.windows {
+            let window = group.window;
+            let block = layer.read_window(window)?;
+            let cells = &self.cell_indexes[group.start..group.end];
+            for (slot, &cell) in values[group.start..group.end].iter_mut().zip(cells) {
+                let cell = cell as usize;
+                let row = cell / self.grid.width - window.row;
+                let col = cell % self.grid.width - window.col;
+                *slot = block[row * window.width + col];
+            }
+        }
         // for (&index, &value) in self.cell_indexes.iter().zip(&values) {
         //     if layer.is_nodata(value) {
         //         return Err(format!(
@@ -250,58 +286,6 @@ impl RasterLayerReader {
             .into());
         }
         Ok(values)
-    }
-
-    pub fn read_cells(
-        &self,
-        cell_indexes: &[u32],
-        tile_height: usize,
-        tile_width: usize,
-    ) -> Result<Vec<f32>, RISICOError> {
-        if tile_height == 0 || tile_width == 0 {
-            return Err("GeoTIFF read tile dimensions must be greater than zero".into());
-        }
-        let grid_len = self
-            .grid
-            .width
-            .checked_mul(self.grid.height)
-            .ok_or("raster dimensions overflow usize")?;
-        let mut groups: BTreeMap<(usize, usize), Vec<(usize, usize)>> = BTreeMap::new();
-        for (position, &cell_index) in cell_indexes.iter().enumerate() {
-            let cell = cell_index as usize;
-            if cell >= grid_len {
-                return Err(format!(
-                    "cell index {cell_index} is outside GeoTIFF {}",
-                    self.path.display()
-                )
-                .into());
-            }
-            let row = cell / self.grid.width;
-            let col = cell % self.grid.width;
-            groups
-                .entry((row / tile_height, col / tile_width))
-                .or_default()
-                .push((position, cell));
-        }
-
-        let mut result = vec![0.0; cell_indexes.len()];
-        for ((tile_row, tile_col), cells) in groups {
-            let row = tile_row * tile_height;
-            let col = tile_col * tile_width;
-            let window = GridWindow {
-                row,
-                col,
-                height: tile_height.min(self.grid.height - row),
-                width: tile_width.min(self.grid.width - col),
-            };
-            let values = self.read_window(window)?;
-            for (position, cell) in cells {
-                let source_row = cell / self.grid.width - window.row;
-                let source_col = cell % self.grid.width - window.col;
-                result[position] = values[source_row * window.width + source_col];
-            }
-        }
-        Ok(result)
     }
 
     pub fn is_nodata(&self, value: f32) -> bool {

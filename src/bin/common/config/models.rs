@@ -361,6 +361,16 @@ pub trait TileModelFactory: TiledModelConfig {
 
     fn tile_properties(&self, tile: &SpatialTile) -> Self::Properties;
     fn tile_state(&self, tile: &SpatialTile) -> Self::State;
+
+    /// Drop the whole-domain warm state once every tile has been seeded from
+    /// it and checkpointed.
+    ///
+    /// It is read exactly once per run, at the first timestamp, but it is one
+    /// record per domain cell and the models that carry per-cell histories make
+    /// it the largest array a run holds. Afterwards a tile resumes from its own
+    /// checkpoint, so keeping it would be paying for the whole run what only
+    /// the first step needs. Models without a warm state need no override.
+    fn release_warm_state(&mut self) {}
 }
 
 fn select_cells<T: Clone>(data: &ndarray::Array1<T>, tile: &SpatialTile) -> ndarray::Array1<T> {
@@ -370,7 +380,15 @@ fn select_cells<T: Clone>(data: &ndarray::Array1<T>, tile: &SpatialTile) -> ndar
         .collect()
 }
 
-fn select_warm_state<T: Clone>(data: &[T], tile: &SpatialTile) -> Vec<T> {
+/// Take a tile's slice of the domain warm state.
+///
+/// An empty domain warm state means it has already been released: every tile
+/// was seeded from it and checkpointed, so the caller is about to overwrite
+/// these records with the checkpoint and only needs a correctly sized shell.
+fn select_warm_state<T: Clone + Default>(data: &[T], tile: &SpatialTile) -> Vec<T> {
+    if data.is_empty() {
+        return vec![T::default(); tile.len()];
+    }
     tile.model_positions
         .iter()
         .map(|&position| data[position].clone())
@@ -397,6 +415,10 @@ impl TileModelFactory for RISICOConfig {
             RISICOModelConfig::new(&self.model_version),
         )
     }
+
+    fn release_warm_state(&mut self) {
+        self.warm_state = Vec::new();
+    }
 }
 
 impl TileModelFactory for FWIConfig {
@@ -417,6 +439,10 @@ impl TileModelFactory for FWIConfig {
             &self.warm_state_time,
             FWIModelConfig::new(&self.model_version),
         )
+    }
+
+    fn release_warm_state(&mut self) {
+        self.warm_state = Vec::new();
     }
 }
 
@@ -439,6 +465,10 @@ impl TileModelFactory for Mark5Config {
             Mark5ModelConfig::new(&self.model_version),
         )
     }
+
+    fn release_warm_state(&mut self) {
+        self.warm_state = Vec::new();
+    }
 }
 
 impl TileModelFactory for KbdiConfig {
@@ -459,6 +489,10 @@ impl TileModelFactory for KbdiConfig {
             &self.warm_state_time,
             KBDIModelConfig::new(&self.model_version),
         )
+    }
+
+    fn release_warm_state(&mut self) {
+        self.warm_state = Vec::new();
     }
 }
 
@@ -506,6 +540,10 @@ impl TileModelFactory for NesterovConfig {
             &self.warm_state_time,
         )
     }
+
+    fn release_warm_state(&mut self) {
+        self.warm_state = Vec::new();
+    }
 }
 
 impl TileModelFactory for OrieuxConfig {
@@ -525,6 +563,10 @@ impl TileModelFactory for OrieuxConfig {
             &select_warm_state(&self.warm_state, tile),
             &self.warm_state_time,
         )
+    }
+
+    fn release_warm_state(&mut self) {
+        self.warm_state = Vec::new();
     }
 }
 
@@ -658,8 +700,9 @@ pub trait TileMemoryFootprint {
     fn memory_model(&self) -> TileMemoryModel;
 }
 
-/// What the counted arrays miss for whole-domain data: the per-cell vegetation
-/// strings, the handler's source-grid index caches and the writer's buffers.
+/// What the counted arrays miss for whole-domain data: the static layers held
+/// while the properties are assembled, the handler's source-grid index caches
+/// and the writer's buffers.
 ///
 /// Calibrated against measured runs rather than derived, so it is deliberately
 /// on the generous side: overestimating costs some parallelism, underestimating
@@ -667,11 +710,13 @@ pub trait TileMemoryFootprint {
 const RESIDENT_OVERHEAD: f64 = 1.75;
 
 /// What the counted arrays miss for a tile in flight: the checkpoint
-/// serialization buffers, the per-variable gather temporaries, the domain-sized
-/// planes built when tile outputs are joined, and allocator retention.
+/// serialization buffers, the per-variable gather temporaries and allocator
+/// retention.
 ///
-/// Calibrated the same way and for the same reason.
-const IN_FLIGHT_OVERHEAD: f64 = 2.5;
+/// Calibrated the same way and for the same reason. It used to also cover the
+/// domain-sized arrays a timestep's output was joined into; those are gone, so
+/// a tile in flight now costs little more than the arrays counted below.
+const IN_FLIGHT_OVERHEAD: f64 = 1.5;
 
 macro_rules! impl_tile_memory_footprint {
     ($config:ty, $properties:ty, $state:ty, $warm:ty) => {
@@ -679,8 +724,11 @@ macro_rules! impl_tile_memory_footprint {
             fn memory_model(&self) -> TileMemoryModel {
                 use std::mem::size_of;
 
-                // Whole-domain arrays: the model's properties and warm state,
-                // plus the coordinates and the plan's cell bookkeeping.
+                // Whole-domain arrays: the model's properties, the coordinates
+                // and the plan's cell bookkeeping, plus the warm state. The
+                // warm state is released once the tiles are seeded, but it is
+                // held while they are, so it belongs in the floor a run cannot
+                // get under however few tiles are allowed at once.
                 let resident_per_cell = size_of::<$properties>()
                     + size_of::<$warm>()
                     + 2 * size_of::<f32>()
@@ -1161,16 +1209,44 @@ impl OutputWriter {
         self.write_source(lats, lons, &TiledOutputSource::new(time, output))
     }
 
+    /// Resample and write every configured variable of one timestep.
+    ///
+    /// Each variable is postprocessed on its own and holds a single output
+    /// grid, so the timestep's cost is set by how many variables are in flight
+    /// rather than by the domain. Variables run side by side; a variable only
+    /// splits its own work when there are threads left over, which keeps the
+    /// number of live output grids close to the number of cores.
     fn write_source(
         &mut self,
         lats: &[f32],
         lons: &[f32],
         output: &dyn NativeOutputSource,
     ) -> Result<(), RISICOError> {
-        self.outputs.par_iter_mut().for_each(|output_type| {
-            match output_type.write_variables(lats, lons, output) {
-                Ok(_) => (),
-                Err(e) => warn!("Error writing output: {}", e),
+        for output_type in &mut self.outputs {
+            output_type.prepare()?;
+        }
+
+        let requests: Vec<(usize, usize)> = self
+            .outputs
+            .iter()
+            .enumerate()
+            .flat_map(|(index, output_type)| {
+                (0..output_type.variables().len()).map(move |variable| (index, variable))
+            })
+            .collect();
+        if requests.is_empty() {
+            return Ok(());
+        }
+        let parallelism = (rayon::current_num_threads() / requests.len()).max(1);
+
+        let outputs = &self.outputs;
+        requests.par_iter().for_each(|&(index, variable)| {
+            let output_type = &outputs[index];
+            let variable = &output_type.variables()[variable];
+            if let Err(error) =
+                output_type.write_variable(variable, output, lats, lons, parallelism)
+            {
+                warn!("Error writing output: {}", error);
             }
         });
         Ok(())
@@ -1196,7 +1272,7 @@ impl RISICOConfig {
     ) -> Result<RISICOConfig, RISICOError> {
         let palettes = load_palettes(palettes);
 
-        let (props_container, ppf, vegetation_file, cell_indexes, grid) = match (
+        let (props_container, (ppf_summer, ppf_winter), vegetations_dict, cell_indexes, grid) = match (
             &config_defs.static_data,
             &config_defs.cells_file_path,
         ) {
@@ -1207,18 +1283,26 @@ impl RISICOConfig {
             }
             (None, None) => return Err("RISICO requires static_data or cells_file_path".into()),
             (None, Some(cells_file)) => {
-                let props_container = RISICOConfig::properties_from_file(cells_file)
-                    .map_err(|error| format!("error reading {cells_file}, {error}"))?;
-                let ppf = match &config_defs.ppf_file {
-                    Some(ppf_file) => RISICOConfig::read_ppf(ppf_file)
-                        .map_err(|error| format!("error reading {ppf_file}, {error}"))?,
-                    None => vec![(1.0, 1.0); props_container.lons.len()],
-                };
                 let vegetation_file = config_defs
                     .vegetation_file
-                    .clone()
+                    .as_deref()
                     .ok_or("legacy RISICO static data requires vegetation_file")?;
-                (props_container, ppf, vegetation_file, Vec::new(), None)
+                let vegetations_dict = RISICOConfig::read_vegetation(vegetation_file)
+                    .map_err(|error| format!("error reading {vegetation_file}, {error}"))?;
+                let props_container =
+                    RISICOConfig::properties_from_file(cells_file, &vegetations_dict)
+                        .map_err(|error| format!("error reading {cells_file}, {error}"))?;
+                let ppf = match &config_defs.ppf_file {
+                    Some(ppf_file) => RISICOConfig::read_ppf(ppf_file)
+                        .map_err(|error| format!("error reading {ppf_file}, {error}"))?
+                        .into_iter()
+                        .unzip(),
+                    None => (
+                        vec![1.0; props_container.lons.len()],
+                        vec![1.0; props_container.lons.len()],
+                    ),
+                };
+                (props_container, ppf, vegetations_dict, Vec::new(), None)
             }
             (Some(static_data), None) => match static_data {
                 StaticDataConfig::GeoTiff {
@@ -1276,14 +1360,26 @@ impl RISICOConfig {
                     let vegetation_values =
                         layers.next().expect("vegetation_id layer was requested");
 
-                    let slopes = slope_values
-                        .into_par_iter()
-                        .map(|value| value * PI / 180.0)
+                    let mut slopes = slope_values;
+                    slopes.par_iter_mut().for_each(|value| *value *= PI / 180.0);
+                    let mut aspects = aspect_values;
+                    aspects.par_iter_mut().for_each(|value| *value *= PI / 180.0);
+                    let vegetations_dict = RISICOConfig::read_vegetation(&vegetation_catalog)
+                        .map_err(|error| {
+                            format!("error reading {vegetation_catalog}, {error}")
+                        })?;
+                    // Resolving each raster id against the catalog here keeps
+                    // one shared handle per cell; formatting the id back into
+                    // an owned string per cell would cost more than every other
+                    // static layer put together.
+                    let by_id: HashMap<i64, Arc<RISICOVegetation>> = vegetations_dict
+                        .iter()
+                        .filter_map(|(id, vegetation)| {
+                            let parsed = id.parse::<i64>().ok()?;
+                            (parsed.to_string() == *id).then(|| (parsed, vegetation.clone()))
+                        })
                         .collect();
-                    let aspects = aspect_values
-                        .into_par_iter()
-                        .map(|value| value * PI / 180.0)
-                        .collect();
+                    let default_vegetation = Arc::new(RISICOVegetation::default());
                     let vegetations = vegetation_values
                         .into_par_iter()
                         .map(|value| {
@@ -1293,17 +1389,26 @@ impl RISICOConfig {
                                     "vegetation_id must contain finite integer values, found {value}"
                                 )))
                             } else {
-                                Ok((rounded as i64).to_string())
+                                Ok(by_id
+                                    .get(&(rounded as i64))
+                                    .unwrap_or(&default_vegetation)
+                                    .clone())
                             }
                         })
                         .collect::<Result<Vec<_>, RISICOError>>()?;
 
+                    // Kept as two arrays rather than one of pairs: the model
+                    // stores them separately, so pairing them up would only
+                    // build a third domain-sized array to take apart again.
                     let ppf = match ppf_layers {
-                        None => vec![(1.0, 1.0); domain.cell_indexes.len()],
+                        None => (
+                            vec![1.0; domain.cell_indexes.len()],
+                            vec![1.0; domain.cell_indexes.len()],
+                        ),
                         Some(_) => {
                             let summer = layers.next().expect("ppf_summer layer was requested");
                             let winter = layers.next().expect("ppf_winter layer was requested");
-                            summer.into_iter().zip(winter).collect()
+                            (summer, winter)
                         }
                     };
                     let props = RISICOCellPropertiesContainer {
@@ -1316,7 +1421,7 @@ impl RISICOConfig {
                     (
                         props,
                         ppf,
-                        vegetation_catalog,
+                        vegetations_dict,
                         domain.cell_indexes,
                         Some(domain.grid),
                     )
@@ -1332,10 +1437,6 @@ impl RISICOConfig {
         {
             panic!("All properties must have the same length");
         }
-
-        let vegetations_dict = RISICOConfig::read_vegetation(&vegetation_file)
-            .map_err(|error| format!("error reading {vegetation_file}, {error}"))?;
-
         let warm_state_hour = config_defs.warm_state_hour.unwrap_or(WARM_STATE_HOUR);
         let warm_state_lag_days = config_defs
             .warm_state_lag_days
@@ -1412,10 +1513,6 @@ impl RISICOConfig {
             )
             .into());
         }
-
-        let ppf_summer = ppf.iter().map(|(s, _)| *s).collect();
-        let ppf_winter = ppf.iter().map(|(_, w)| *w).collect();
-
         let props =
             RISICOProperties::new(props_container, vegetations_dict, ppf_summer, ppf_winter);
 
@@ -1446,6 +1543,7 @@ impl RISICOConfig {
     /// :return: A list of cells.
     pub fn properties_from_file(
         file_path: &str,
+        vegetations_dict: &HashMap<String, Arc<RISICOVegetation>>,
     ) -> Result<RISICOCellPropertiesContainer, RISICOError> {
         let file = fs::File::open(file_path).map_err(|err| format!("can't open file: {err}."))?;
 
@@ -1453,7 +1551,8 @@ impl RISICOConfig {
         let mut lats: Vec<f32> = Vec::new();
         let mut slopes: Vec<f32> = Vec::new();
         let mut aspects: Vec<f32> = Vec::new();
-        let mut vegetations: Vec<String> = Vec::new();
+        let mut vegetations: Vec<Arc<RISICOVegetation>> = Vec::new();
+        let default_vegetation = Arc::new(RISICOVegetation::default());
 
         let reader = BufReader::new(file);
 
@@ -1492,7 +1591,10 @@ impl RISICOConfig {
                 format!("Invalid `aspect` value in file {file_path} at line #{index}: '{line}'")
             })?;
 
-            let vegetation = line_parts[4].to_string();
+            let vegetation = vegetations_dict
+                .get(line_parts[4])
+                .unwrap_or(&default_vegetation)
+                .clone();
 
             let slope = slope * PI / 180.0;
             let aspect = aspect * PI / 180.0;

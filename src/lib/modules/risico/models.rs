@@ -297,19 +297,21 @@ impl RISICOProperties {
 
         // }
 
-        let default_veg = Arc::new(RISICOVegetation::default());
+        // The vegetation of each cell is resolved while the static layers are
+        // read, so this holds one shared handle per cell instead of one owned
+        // identifier string.
         let data: Array1<RISICOPropertiesElement> = props
             .vegetations
             .iter()
             .enumerate()
-            .map(|(idx, v)| RISICOPropertiesElement {
+            .map(|(idx, vegetation)| RISICOPropertiesElement {
                 lon: props.lons[idx],
                 lat: props.lats[idx],
                 slope: props.slopes[idx],
                 aspect: props.aspects[idx],
                 ppf_summer: ppf_summer[idx],
                 ppf_winter: ppf_winter[idx],
-                vegetation: vegetations_dict.get(v).unwrap_or(&default_veg).clone(),
+                vegetation: vegetation.clone(),
             })
             .collect();
 
@@ -333,5 +335,5 @@ pub struct RISICOCellPropertiesContainer {
     pub lats: Vec<f32>,
     pub slopes: Vec<f32>,
     pub aspects: Vec<f32>,
-    pub vegetations: Vec<String>,
+    pub vegetations: Vec<Arc<RISICOVegetation>>,
 }
