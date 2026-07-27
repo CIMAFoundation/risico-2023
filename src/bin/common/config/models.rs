@@ -97,7 +97,6 @@ use crate::common::io::models::{
 };
 use crate::common::io::static_data::geotiff::{RasterDomain, RasterGrid};
 use crate::common::io::streaming::{SpatialTile, TilePlan, TiledNativeOutputs};
-use crate::common::io::warm_state::legacy::{read_fwi, read_risico};
 use crate::common::io::warm_state::netcdf::{
     load_latest_fwi, load_latest_risico, write_fwi_snapshot, write_risico_snapshot,
 };
@@ -143,8 +142,7 @@ pub fn find_warm_state(
 
 pub struct RISICOConfig {
     run_date: DateTime<Utc>,
-    warm_state_path: Option<String>,
-    netcdf_warm_state_path: Option<String>,
+    netcdf_warm_state_path: String,
     cell_indexes: Vec<u32>,
     grid: Option<RasterGrid>,
     warm_state: Vec<RISICOWarmState>,
@@ -152,8 +150,6 @@ pub struct RISICOConfig {
     warm_state_hour: i64,
     properties: RISICOProperties,
     palettes: PaletteMap,
-    // use_temperature_effect: bool,  // DEPRECATED
-    // use_ndvi: bool,  // DEPRECATED
     output_time_resolution: u32,
     output_types_defs: Vec<OutputTypeConfig>,
     model_version: String,
@@ -161,8 +157,7 @@ pub struct RISICOConfig {
 
 pub struct FWIConfig {
     run_date: DateTime<Utc>,
-    warm_state_path: Option<String>,
-    netcdf_warm_state_path: Option<String>,
+    netcdf_warm_state_path: String,
     cell_indexes: Vec<u32>,
     grid: Option<RasterGrid>,
     warm_state: Vec<FWIWarmState>,
@@ -1272,39 +1267,8 @@ impl RISICOConfig {
     ) -> Result<RISICOConfig, RISICOError> {
         let palettes = load_palettes(palettes);
 
-        let (props_container, (ppf_summer, ppf_winter), vegetations_dict, cell_indexes, grid) = match (
-            &config_defs.static_data,
-            &config_defs.cells_file_path,
-        ) {
-            (Some(_), Some(_)) => {
-                return Err(
-                    "configure either static_data or cells_file_path for RISICO, not both".into(),
-                )
-            }
-            (None, None) => return Err("RISICO requires static_data or cells_file_path".into()),
-            (None, Some(cells_file)) => {
-                let vegetation_file = config_defs
-                    .vegetation_file
-                    .as_deref()
-                    .ok_or("legacy RISICO static data requires vegetation_file")?;
-                let vegetations_dict = RISICOConfig::read_vegetation(vegetation_file)
-                    .map_err(|error| format!("error reading {vegetation_file}, {error}"))?;
-                let props_container =
-                    RISICOConfig::properties_from_file(cells_file, &vegetations_dict)
-                        .map_err(|error| format!("error reading {cells_file}, {error}"))?;
-                let ppf = match &config_defs.ppf_file {
-                    Some(ppf_file) => RISICOConfig::read_ppf(ppf_file)
-                        .map_err(|error| format!("error reading {ppf_file}, {error}"))?
-                        .into_iter()
-                        .unzip(),
-                    None => (
-                        vec![1.0; props_container.lons.len()],
-                        vec![1.0; props_container.lons.len()],
-                    ),
-                };
-                (props_container, ppf, vegetations_dict, Vec::new(), None)
-            }
-            (Some(static_data), None) => match static_data {
+        let (props_container, (ppf_summer, ppf_winter), vegetations_dict, cell_indexes, grid) =
+            match &config_defs.static_data {
                 StaticDataConfig::GeoTiff {
                     domain_mask,
                     slope,
@@ -1426,8 +1390,7 @@ impl RISICOConfig {
                         Some(domain.grid),
                     )
                 }
-            },
-        };
+            };
 
         let n_cells = props_container.lons.len();
         if n_cells != props_container.lats.len()
@@ -1442,67 +1405,41 @@ impl RISICOConfig {
             .warm_state_lag_days
             .unwrap_or(WARM_STATE_LAG_DAYS);
 
-        let mut netcdf_warm_state_path = None;
-        let (warm_state, warm_state_time) = match &config_defs.warm_state {
-            None => {
-                let path = config_defs
-                    .warm_state_path
-                    .as_deref()
-                    .ok_or("legacy RISICO warm state requires warm_state_path")?;
-                RISICOConfig::read_warm_state(path, date, &warm_state_hour, &warm_state_lag_days)
-                    .unwrap_or((
-                        vec![RISICOWarmState::default(); n_cells],
-                        date - Duration::try_days(1).expect("Should be a valid duration"),
-                    ))
-            }
-            Some(WarmStateConfig::NetCdf {
-                directory,
-                legacy_fallback,
-                max_age_hours,
-                on_missing,
-            }) => {
-                let grid = grid.as_ref().ok_or(
-                    "NetCDF warm state requires GeoTIFF static_data so grid geometry is known",
-                )?;
-                netcdf_warm_state_path = Some(directory.clone());
-                // Match legacy lookup semantics: a run must not seed itself from a
-                // snapshot written by an earlier execution of that same run.
-                let latest_warm_state_time =
-                    warm_state_search_time(date, warm_state_hour, warm_state_lag_days);
-                if let Some(snapshot) = load_latest_risico(
-                    directory,
-                    latest_warm_state_time,
-                    max_age_hours.unwrap_or(120),
-                    &config_defs.model_version,
-                    grid,
-                    &cell_indexes,
-                )? {
-                    snapshot
-                } else {
-                    let fallback = legacy_fallback
-                        .as_deref()
-                        .or(config_defs.warm_state_path.as_deref())
-                        .and_then(|path| {
-                            RISICOConfig::read_warm_state(
-                                path,
-                                date,
-                                &warm_state_hour,
-                                &warm_state_lag_days,
-                            )
-                        });
-                    match fallback {
-                        Some(snapshot) => snapshot,
-                        None if *on_missing == MissingWarmStatePolicy::Defaults => (
-                            vec![RISICOWarmState::default(); n_cells],
-                            date - Duration::try_days(1).expect("Should be a valid duration"),
-                        ),
-                        None => {
-                            return Err(format!(
-                                "no valid RISICO warm state found in {directory} and defaults are disabled"
-                            )
-                            .into())
-                        }
-                    }
+        let WarmStateConfig::NetCdf {
+            directory,
+            max_age_hours,
+            on_missing,
+            ..
+        } = &config_defs.warm_state;
+
+        let grid_ref = grid
+            .as_ref()
+            .ok_or("NetCDF warm state requires GeoTIFF static_data so grid geometry is known")?;
+        let netcdf_warm_state_path = directory.clone();
+        // Match legacy lookup semantics: a run must not seed itself from a
+        // snapshot written by an earlier execution of that same run.
+        let latest_warm_state_time =
+            warm_state_search_time(date, warm_state_hour, warm_state_lag_days);
+        let (warm_state, warm_state_time) = if let Some(snapshot) = load_latest_risico(
+            directory,
+            latest_warm_state_time,
+            max_age_hours.unwrap_or(120),
+            &config_defs.model_version,
+            grid_ref,
+            &cell_indexes,
+        )? {
+            snapshot
+        } else {
+            match on_missing {
+                MissingWarmStatePolicy::Defaults => (
+                    vec![RISICOWarmState::default(); n_cells],
+                    date - Duration::try_days(1).expect("Should be a valid duration"),
+                ),
+                MissingWarmStatePolicy::Error => {
+                    return Err(format!(
+                        "no valid RISICO warm state found in {directory} and defaults are disabled"
+                    )
+                    .into())
                 }
             }
         };
@@ -1518,8 +1455,6 @@ impl RISICOConfig {
 
         let config = RISICOConfig {
             run_date: date,
-            // model_name: config_defs.model_name.clone(),
-            warm_state_path: config_defs.warm_state_path.clone(),
             netcdf_warm_state_path,
             cell_indexes,
             grid,
@@ -1528,92 +1463,12 @@ impl RISICOConfig {
             warm_state_hour,
             properties: props,
             palettes,
-            // use_temperature_effect: config_defs.use_temperature_effect,  // DEPRECATED
-            // use_ndvi: config_defs.use_ndvi,  // DEPRECATED
             output_time_resolution: config_defs.output_time_resolution,
             model_version: config_defs.model_version.clone(),
             output_types_defs: config_defs.output_types.clone(),
         };
 
         Ok(config)
-    }
-
-    /// Read the cells from a file.
-    /// :param file_path: The path to the file.
-    /// :return: A list of cells.
-    pub fn properties_from_file(
-        file_path: &str,
-        vegetations_dict: &HashMap<String, Arc<RISICOVegetation>>,
-    ) -> Result<RISICOCellPropertiesContainer, RISICOError> {
-        let file = fs::File::open(file_path).map_err(|err| format!("can't open file: {err}."))?;
-
-        let mut lons: Vec<f32> = Vec::new();
-        let mut lats: Vec<f32> = Vec::new();
-        let mut slopes: Vec<f32> = Vec::new();
-        let mut aspects: Vec<f32> = Vec::new();
-        let mut vegetations: Vec<Arc<RISICOVegetation>> = Vec::new();
-        let default_vegetation = Arc::new(RISICOVegetation::default());
-
-        let reader = BufReader::new(file);
-
-        for (index, line) in reader.lines().enumerate() {
-            let line = line.map_err(|err| format!("can't read from file: {err}."))?;
-            if line.starts_with("#") {
-                // skip header
-                continue;
-            }
-
-            let line_parts: Vec<&str> = line.trim().split(char::is_whitespace).collect();
-
-            if line_parts.len() < 5 {
-                let error_message = format!(
-                    "Invalid line in file {file_path}: 
-                expected 5 elements, found {} in line #{index}:
-                {line}",
-                    line_parts.len()
-                );
-                return Err(error_message.into());
-            }
-
-            //  [TODO] refactor this for using error handling
-            let lon = line_parts[0].parse::<f32>().map_err(|_| {
-                format!("Invalid `lon` value in file {file_path} at line #{index}: '{line}'")
-            })?;
-
-            let lat = line_parts[1].parse::<f32>().map_err(|_| {
-                format!("Invalid `lat` value in file {file_path} at line #{index}: '{line}'")
-            })?;
-
-            let slope = line_parts[2].parse::<f32>().map_err(|_| {
-                format!("Invalid `slope` value in file {file_path} at line #{index}: '{line}'")
-            })?;
-            let aspect = line_parts[3].parse::<f32>().map_err(|_| {
-                format!("Invalid `aspect` value in file {file_path} at line #{index}: '{line}'")
-            })?;
-
-            let vegetation = vegetations_dict
-                .get(line_parts[4])
-                .unwrap_or(&default_vegetation)
-                .clone();
-
-            let slope = slope * PI / 180.0;
-            let aspect = aspect * PI / 180.0;
-
-            lons.push(lon);
-            lats.push(lat);
-            slopes.push(slope);
-            aspects.push(aspect);
-            vegetations.push(vegetation);
-        }
-
-        let props = RISICOCellPropertiesContainer {
-            lats,
-            lons,
-            slopes,
-            aspects,
-            vegetations,
-        };
-        Ok(props)
     }
 
     /// Read the cells from a file.
@@ -1695,36 +1550,6 @@ impl RISICOConfig {
         Result::Ok(vegetations)
     }
 
-    /// Reads the PPF file and returns a vector of with (ppf_summer, ppf_winter) tuples
-    /// The PPF file is a text file with the following structure:
-    /// ppf_summer ppf_winter
-    /// where ppf_summer and ppf_winter are floats
-    pub fn read_ppf(ppf_file: &str) -> Result<Vec<(f32, f32)>, RISICOError> {
-        let file = File::open(ppf_file)
-            .map_err(|error| format!("Could not open file {}: {}", ppf_file, error))?;
-
-        let reader = io::BufReader::new(file);
-        let mut ppf: Vec<(f32, f32)> = Vec::new();
-        for line in reader.lines() {
-            let line = match line {
-                Ok(line) => line,
-                Err(error) => {
-                    return Err(format!("Error reading PPF file {}: {}", ppf_file, error).into());
-                }
-            };
-            let components: Vec<&str> = line.split_whitespace().collect();
-            let ppf_summer = components[0].parse::<f32>().map_err(|err| {
-                format!("Could not parse value from PPF file {}: {}", ppf_file, err)
-            })?;
-
-            let ppf_winter = components[1].parse::<f32>().map_err(|err| {
-                format!("Could not parse value from PPF file {}: {}", ppf_file, err)
-            })?;
-            ppf.push((ppf_summer, ppf_winter));
-        }
-        Ok(ppf)
-    }
-
     pub fn get_output_writer(&self) -> Result<OutputWriter, RISICOError> {
         Ok(OutputWriter::new(
             self.output_types_defs.as_slice(),
@@ -1743,96 +1568,22 @@ impl RISICOConfig {
         check_write_warm_state(time, self.warm_state_hour)
     }
 
-    #[allow(non_snake_case)]
-    /// Reads the warm state from the file
-    /// The warm state is stored in a file with the following structure:
-    /// base_warm_file_YYYYmmDDHHMM
-    /// where <base_warm_file> is the base name of the file and `YYYYmmDDHHMM` is the date of the warm state
-    /// The warm state is stored in a text file with the following structure:
-    /// dffm
-    pub fn read_warm_state(
-        base_warm_file: &str,
-        run_date: DateTime<Utc>,
-        hour: &i64,
-        lag_days: &i64,
-    ) -> Option<(Vec<RISICOWarmState>, DateTime<Utc>)> {
-        let (file, current_date) = find_warm_state(base_warm_file, run_date, *hour, *lag_days);
-        let file = match file {
-            Some(file) => file,
-            None => {
-                warn!(
-                    "WARNING: Could not find a valid warm state file for run date {}",
-                    run_date.format("%Y-%m-%d")
-                );
-                return None;
-            }
-        };
-        info!(
-            "Loading warm state from {}",
-            current_date.format("%Y-%m-%d %H:%M")
-        );
-
-        let source = format!("RISICO warm state at {current_date}");
-        match read_risico(io::BufReader::new(file), &source) {
-            Ok(warm_state) => Some((warm_state, current_date)),
-            Err(error) => {
-                warn!("Could not read legacy warm state: {error}");
-                None
-            }
-        }
-    }
-
-    #[allow(non_snake_case)]
     pub fn write_warm_state(
         &self,
         state: &RISICOState,
-        warm_state_time: DateTime<Utc>,
+        _warm_state_time: DateTime<Utc>,
     ) -> Result<(), RISICOError> {
-        if let Some(directory) = &self.netcdf_warm_state_path {
-            let grid = self
-                .grid
-                .as_ref()
-                .ok_or("NetCDF warm state is missing its grid")?;
-            write_risico_snapshot(
-                directory,
-                state,
-                &self.model_version,
-                grid,
-                &self.cell_indexes,
-            )?;
-            return Ok(());
-        }
-
-        let date_string = warm_state_time.format("%Y%m%d%H%M").to_string();
-        let warm_state_path = self
-            .warm_state_path
-            .as_deref()
-            .ok_or("legacy warm-state path is not configured")?;
-        let warm_state_name = format!("{}{}", warm_state_path, date_string);
-        let mut warm_state_file = File::create(&warm_state_name)
-            .map_err(|error| format!("error creating {}, {}", &warm_state_name, error))?;
-
-        let mut warm_state_writer = BufWriter::new(&mut warm_state_file);
-
-        for state in &state.data {
-            let dffm = state.dffm;
-
-            let MSI = state.MSI; //cell.state.MSI;
-            let MSI_TTL = state.MSI_TTL; //cell.state.MSI_TTL;
-            let NDVI = state.NDVI; //cell.state.NDVI;
-            let NDVI_TIME = state.NDVI_TIME; //cell.state.NDVI_TIME;
-            let NDWI = state.NDWI; //cell.state.NDWI;
-            let NDWI_TIME = state.NDWI_TIME; //cell.state.NDWI_TTL;
-            let snow_cover = state.snow_cover; //cell.state.snow_cover;
-            let snow_cover_time = state.snow_cover_time; //cell.state.snow_cover_time;
-
-            let line = format!(
-                "{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}",
-                dffm, snow_cover, snow_cover_time, MSI, MSI_TTL, NDVI, NDVI_TIME, NDWI, NDWI_TIME
-            );
-            writeln!(warm_state_writer, "{}", line)
-                .map_err(|error| format!("error writing to {}, {}", &warm_state_name, error))?;
-        }
+        let grid = self
+            .grid
+            .as_ref()
+            .ok_or("NetCDF warm state is missing its grid")?;
+        write_risico_snapshot(
+            &self.netcdf_warm_state_path,
+            state,
+            &self.model_version,
+            grid,
+            &self.cell_indexes,
+        )?;
         Ok(())
     }
 }
@@ -1845,30 +1596,14 @@ impl FWIConfig {
     ) -> Result<FWIConfig, RISICOError> {
         let palettes = load_palettes(palettes);
 
-        let (props_container, cell_indexes, grid) =
-            match (&config_defs.static_data, &config_defs.cells_file_path) {
-                (Some(_), Some(_)) => {
-                    return Err(
-                        "configure either static_data or cells_file_path for FWI, not both".into(),
-                    )
-                }
-                (None, None) => return Err("FWI requires static_data or cells_file_path".into()),
-                (None, Some(cells_file)) => (
-                    FWIConfig::properties_from_file(cells_file)
-                        .map_err(|error| format!("error reading {cells_file}, {error}"))?,
-                    Vec::new(),
-                    None,
-                ),
-                (Some(StaticDataConfig::GeoTiff { domain_mask, .. }), None) => {
-                    let domain = RasterDomain::open(domain_mask)?;
-                    let (lats, lons) = domain.coordinates();
-                    (
-                        FWICellPropertiesContainer { lats, lons },
-                        domain.cell_indexes,
-                        Some(domain.grid),
-                    )
-                }
-            };
+        let StaticDataConfig::GeoTiff { domain_mask, .. } = &config_defs.static_data;
+        let domain = RasterDomain::open(domain_mask)?;
+        let (lats, lons) = domain.coordinates();
+        let (props_container, cell_indexes, grid) = (
+            FWICellPropertiesContainer { lats, lons },
+            domain.cell_indexes,
+            Some(domain.grid),
+        );
 
         let n_cells = props_container.lons.len();
         if n_cells != props_container.lats.len() {
@@ -1880,67 +1615,41 @@ impl FWIConfig {
             .warm_state_lag_days
             .unwrap_or(WARM_STATE_LAG_DAYS);
 
-        let mut netcdf_warm_state_path = None;
-        let (warm_state, warm_state_time) = match &config_defs.warm_state {
-            None => {
-                let path = config_defs
-                    .warm_state_path
-                    .as_deref()
-                    .ok_or("legacy FWI warm state requires warm_state_path")?;
-                FWIConfig::read_warm_state(path, date, &warm_state_hour, &warm_state_lag_days)
-                    .unwrap_or((
-                        vec![FWIWarmState::default(); n_cells],
-                        date - Duration::try_days(1).expect("Should be a valid duration"),
-                    ))
-            }
-            Some(WarmStateConfig::NetCdf {
-                directory,
-                legacy_fallback,
-                max_age_hours,
-                on_missing,
-            }) => {
-                let grid = grid.as_ref().ok_or(
-                    "NetCDF warm state requires GeoTIFF static_data so grid geometry is known",
-                )?;
-                netcdf_warm_state_path = Some(directory.clone());
-                // Keep the NetCDF path numerically equivalent to find_warm_state.
-                // In particular, the default one-day lag excludes same-run files.
-                let latest_warm_state_time =
-                    warm_state_search_time(date, warm_state_hour, warm_state_lag_days);
-                if let Some(snapshot) = load_latest_fwi(
-                    directory,
-                    latest_warm_state_time,
-                    max_age_hours.unwrap_or(120),
-                    &config_defs.model_version,
-                    grid,
-                    &cell_indexes,
-                )? {
-                    snapshot
-                } else {
-                    let fallback = legacy_fallback
-                        .as_deref()
-                        .or(config_defs.warm_state_path.as_deref())
-                        .and_then(|path| {
-                            FWIConfig::read_warm_state(
-                                path,
-                                date,
-                                &warm_state_hour,
-                                &warm_state_lag_days,
-                            )
-                        });
-                    match fallback {
-                        Some(snapshot) => snapshot,
-                        None if *on_missing == MissingWarmStatePolicy::Defaults => (
-                            vec![FWIWarmState::default(); n_cells],
-                            date - Duration::try_days(1).expect("Should be a valid duration"),
-                        ),
-                        None => {
-                            return Err(format!(
-                                "no valid FWI warm state found in {directory} and defaults are disabled"
-                            )
-                            .into())
-                        }
-                    }
+        let WarmStateConfig::NetCdf {
+            directory,
+            max_age_hours,
+            on_missing,
+            ..
+        } = &config_defs.warm_state;
+
+        let grid_ref = grid
+            .as_ref()
+            .ok_or("NetCDF warm state requires GeoTIFF static_data so grid geometry is known")?;
+        let netcdf_warm_state_path = directory.clone();
+        // Keep the NetCDF path numerically equivalent to the previous legacy lookup.
+        // In particular, the default one-day lag excludes same-run files.
+        let latest_warm_state_time =
+            warm_state_search_time(date, warm_state_hour, warm_state_lag_days);
+        let (warm_state, warm_state_time) = if let Some(snapshot) = load_latest_fwi(
+            directory,
+            latest_warm_state_time,
+            max_age_hours.unwrap_or(120),
+            &config_defs.model_version,
+            grid_ref,
+            &cell_indexes,
+        )? {
+            snapshot
+        } else {
+            match on_missing {
+                MissingWarmStatePolicy::Defaults => (
+                    vec![FWIWarmState::default(); n_cells],
+                    date - Duration::try_days(1).expect("Should be a valid duration"),
+                ),
+                MissingWarmStatePolicy::Error => {
+                    return Err(format!(
+                        "no valid FWI warm state found in {directory} and defaults are disabled"
+                    )
+                    .into())
                 }
             }
         };
@@ -1963,8 +1672,6 @@ impl FWIConfig {
 
         let config = FWIConfig {
             run_date: date,
-            // model_name: config_defs.model_name.clone(),
-            warm_state_path: config_defs.warm_state_path.clone(),
             netcdf_warm_state_path,
             cell_indexes,
             grid,
@@ -1979,47 +1686,6 @@ impl FWIConfig {
         };
 
         Ok(config)
-    }
-
-    pub fn properties_from_file(
-        file_path: &str,
-    ) -> Result<FWICellPropertiesContainer, RISICOError> {
-        let file = fs::File::open(file_path).map_err(|err| format!("can't open file: {err}."))?;
-
-        let mut lons: Vec<f32> = Vec::new();
-        let mut lats: Vec<f32> = Vec::new();
-
-        let reader = BufReader::new(file);
-
-        for (index, line) in reader.lines().enumerate() {
-            let line = line.map_err(|err| format!("can't read from file: {err}."))?;
-            if line.starts_with("#") {
-                // skip header
-                continue;
-            }
-
-            let line_parts: Vec<&str> = line.trim().split(char::is_whitespace).collect();
-
-            if line_parts.len() < 2 {
-                let error_message = format!("Invalid line in file: {}", line);
-                return Err(error_message.into());
-            }
-
-            //  [TODO] refactor this for using error handling
-            let lon = line_parts[0].parse::<f32>().map_err(|_| {
-                format!("Invalid `lon` value in file {file_path} at line #{index}: '{line}'")
-            })?;
-
-            let lat = line_parts[1].parse::<f32>().map_err(|_| {
-                format!("Invalid `lat` value in file {file_path} at line #{index}: '{line}'")
-            })?;
-
-            lons.push(lon);
-            lats.push(lat);
-        }
-
-        let props = FWICellPropertiesContainer { lats, lons };
-        Ok(props)
     }
 
     pub fn get_output_writer(&self) -> Result<OutputWriter, RISICOError> {
@@ -2040,110 +1706,22 @@ impl FWIConfig {
         check_write_warm_state(time, self.warm_state_hour)
     }
 
-    #[allow(non_snake_case)]
-    /// Reads the warm state from the file
-    /// The warm state is stored in a file with the following structure:
-    /// base_warm_file_YYYYmmDDHHMM
-    /// where <base_warm_file> is the base name of the file and `YYYYmmDDHHMM` is the date of the warm state
-    /// The warm state is stored in a text file with the following structure:
-    /// dffm
-    pub fn read_warm_state(
-        base_warm_file: &str,
-        run_date: DateTime<Utc>,
-        hour: &i64,
-        lag_days: &i64,
-    ) -> Option<(Vec<FWIWarmState>, DateTime<Utc>)> {
-        let (file, current_date) = find_warm_state(base_warm_file, run_date, *hour, *lag_days);
-        let file = match file {
-            Some(file) => file,
-            None => {
-                warn!(
-                    "WARNING: Could not find a valid warm state file for run date {}",
-                    run_date.format("%Y-%m-%d")
-                );
-                return None;
-            }
-        };
-        info!(
-            "Loading warm state from {}",
-            current_date.format("%Y-%m-%d %H:%M")
-        );
-        let source = format!("FWI warm state at {current_date}");
-        match read_fwi(io::BufReader::new(file), &source, current_date) {
-            Ok(warm_state) => Some((warm_state, current_date)),
-            Err(error) => {
-                warn!("Could not read legacy FWI warm state: {error}");
-                None
-            }
-        }
-    }
-
-    #[allow(non_snake_case)]
     pub fn write_warm_state(
         &self,
         state: &FWIState,
-        warm_state_time: DateTime<Utc>,
+        _warm_state_time: DateTime<Utc>,
     ) -> Result<(), RISICOError> {
-        if let Some(directory) = &self.netcdf_warm_state_path {
-            let grid = self
-                .grid
-                .as_ref()
-                .ok_or("NetCDF warm state is missing its grid")?;
-            write_fwi_snapshot(
-                directory,
-                state,
-                &self.model_version,
-                grid,
-                &self.cell_indexes,
-            )?;
-            return Ok(());
-        }
-
-        let date_string = warm_state_time.format("%Y%m%d%H%M").to_string();
-        let warm_state_path = self
-            .warm_state_path
-            .as_deref()
-            .ok_or("legacy warm-state path is not configured")?;
-        let warm_state_name = format!("{}{}", warm_state_path, date_string);
-        let mut warm_state_file = File::create(&warm_state_name)
-            .map_err(|error| format!("error creating {}, {}", &warm_state_name, error))?;
-
-        let mut warm_state_writer = BufWriter::new(&mut warm_state_file);
-
-        for state in &state.data {
-            let dates = state.dates.clone();
-            let ffmc = state.ffmc.clone();
-            let dmc = state.dmc.clone();
-            let dc = state.dc.clone();
-            let rain = state.rain.clone();
-
-            let line = format!(
-                "{}\t{}\t{}\t{}\t{}",
-                dates
-                    .iter()
-                    .map(|value| format!("{}", value.format("%Y%m%d%H%M")))
-                    .collect::<Vec<String>>()
-                    .join(","),
-                ffmc.iter()
-                    .map(|value| format!("{}", value))
-                    .collect::<Vec<String>>()
-                    .join(","),
-                dmc.iter()
-                    .map(|value| format!("{}", value))
-                    .collect::<Vec<String>>()
-                    .join(","),
-                dc.iter()
-                    .map(|value| format!("{}", value))
-                    .collect::<Vec<String>>()
-                    .join(","),
-                rain.iter()
-                    .map(|value| format!("{}", value))
-                    .collect::<Vec<String>>()
-                    .join(",")
-            );
-            writeln!(warm_state_writer, "{}", line)
-                .map_err(|error| format!("error writing to {}, {}", &warm_state_name, error))?;
-        }
+        let grid = self
+            .grid
+            .as_ref()
+            .ok_or("NetCDF warm state is missing its grid")?;
+        write_fwi_snapshot(
+            &self.netcdf_warm_state_path,
+            state,
+            &self.model_version,
+            grid,
+            &self.cell_indexes,
+        )?;
         Ok(())
     }
 }
@@ -2206,37 +1784,6 @@ mod fwi_warm_state_tests {
         );
     }
 
-    #[test]
-    fn deployed_scalar_fwi_state_is_read_in_rain_ffmc_dmc_dc_order() {
-        let directory = std::env::temp_dir().join(format!(
-            "risico-fwi-legacy-state-{}-{}",
-            std::process::id(),
-            std::time::SystemTime::now()
-                .duration_since(std::time::UNIX_EPOCH)
-                .expect("valid system clock")
-                .as_nanos()
-        ));
-        fs::create_dir_all(&directory).expect("test directory should be created");
-        let base = directory.join("state0FWI_");
-        let snapshot = directory.join("state0FWI_202401010000");
-        fs::write(&snapshot, "0\t73.2036\t6\t15\n1.25\t80\t7\t16\n")
-            .expect("legacy state should be written");
-        let run_date = Utc
-            .with_ymd_and_hms(2024, 1, 2, 0, 0, 0)
-            .single()
-            .expect("valid test date");
-
-        let (state, time) =
-            FWIConfig::read_warm_state(base.to_str().expect("UTF-8 test path"), run_date, &0, &1)
-                .expect("deployed state should load");
-        assert_eq!(time, run_date - Duration::days(1));
-        assert_eq!(state.len(), 2);
-        assert_eq!(state[0].rain, vec![0.0]);
-        assert_eq!(state[0].ffmc, vec![73.2036]);
-        assert_eq!(state[0].dmc, vec![6.0]);
-        assert_eq!(state[0].dc, vec![15.0]);
-        fs::remove_dir_all(directory).expect("test directory should be removable");
-    }
 }
 
 impl Mark5Config {

@@ -45,25 +45,29 @@ use std::{collections::HashMap, sync::Arc};
 use chrono::Utc;
 
 // imports
-use risico::modules::risico::{
-    config::ModelConfig,
-    models::{
-        Input, InputElement, OutputVariableName, Properties, PropertiesElement, State, Vegetation,
-        WarmState,
+use risico::{
+    models::input::{Input, InputElement},
+    models::output::OutputVariableName,
+    modules::risico::{
+        config::RISICOModelConfig,
+        models::{
+            RISICOProperties, RISICOPropertiesElement, RISICOState, RISICOVegetation,
+            RISICOWarmState,
+        },
     },
 };
 
 fn main() {
     // let's create a single cell with some properties
-    let props = Properties {
-        data: vec![PropertiesElement {
+    let props = RISICOProperties {
+        data: vec![RISICOPropertiesElement {
             lon: 0.0,
             lat: 0.0,
             slope: 0.0,
             aspect: 0.0,
             ppf_summer: 1.0,
             ppf_winter: 1.0,
-            vegetation: Arc::new(Vegetation::default()),
+            vegetation: Arc::new(RISICOVegetation::default()),
         }]
         .into(),
         vegetations_dict: HashMap::new(),
@@ -71,9 +75,9 @@ fn main() {
     };
 
     // and its initial state
-    let warm_state = vec![WarmState {
+    let warm_state = vec![RISICOWarmState {
         dffm: 40.0,
-        ..WarmState::default()
+        ..RISICOWarmState::default()
     }];
 
 
@@ -85,13 +89,13 @@ fn main() {
         ..InputElement::default()
     }];
 
-    // let's select the risico model configuration between 'legacy' and 'v2023'
-    let config = ModelConfig::new("v2023");
+    // let's select the risico model configuration among 'legacy', 'v2023' and 'v2025'
+    let config = RISICOModelConfig::new("v2023");
     
     let time = Utc::now();
 
     // let's create a state 
-    let mut state = State::new(&warm_state, &time, config);
+    let mut state = RISICOState::new(&warm_state, &time, config);
 
     let input = Input {
         data: input_data.into(),
@@ -110,8 +114,13 @@ fn main() {
 
 ## GeoTIFF static data and NetCDF warm state
 
-RISICO can use aligned, single-band GeoTIFF layers as an alternative to the legacy
-cell, PPF, and vegetation-ID text files. Legacy configuration remains supported.
+RISICO and FWI configure their static data and warm state as aligned, single-band
+GeoTIFF layers and NetCDF snapshots. This is the only supported layout: the older
+cell/PPF/vegetation-ID text files and plain-text warm-state files are no longer
+readable directly by the model binary, and configuration files must be YAML (the
+older whole-file `.txt` key/value format is no longer supported). Existing
+deployments convert once with `static-converter` and `warm-state-converter`
+(below) before switching their configuration over.
 
 ```yaml
 models:
@@ -130,7 +139,6 @@ models:
     warm_state:
       type: netcdf
       directory: /opt/risico/state-nc
-      legacy_fallback: /opt/risico/STATE0/state0RISICO_
       max_age_hours: 120
       on_missing: error
     warm_state_hour: 0
@@ -150,8 +158,11 @@ configured domain with nearest-neighbour sampling, so a snapshot can survive a
 compatible grid-resolution change. A target active cell that maps outside the
 snapshot or onto a fill pixel makes that snapshot invalid. Snapshots are also
 validated against the model version, written through a temporary file, and
-atomically renamed. When `legacy_fallback` is set, the first migrated run may read
-a legacy text state and will subsequently write NetCDF snapshots.
+atomically renamed. A run with no valid NetCDF snapshot follows `on_missing`
+directly: `defaults` seeds the run with default state, `error` stops the run.
+There is no automatic fallback to a legacy text state; convert existing legacy
+warm state once with `warm-state-converter` (below) before switching a
+deployment over.
 
 FWI uses the same domain-mask and warm-state configuration, without the
 RISICO-specific layers:
@@ -167,7 +178,6 @@ models:
     warm_state:
       type: netcdf
       directory: /opt/risico/state-nc
-      legacy_fallback: /opt/risico/STATE0/state0FWI_
       max_age_hours: 120
       on_missing: error
     warm_state_hour: 0
@@ -188,6 +198,8 @@ NetCDF files are skipped unless `--overwrite` is used.
 ```console
 cargo run --bin warm-state-converter -- config \
   --config /opt/risico/configuration.yml \
+  --model-name RISICO2023 \
+  --legacy-prefix /opt/risico/STATE0/state0RISICO_ \
   --latest-only
 
 # The explicit form is useful outside a migrated deployment:
@@ -348,9 +360,6 @@ back and validated before conversion is reported as successful. A malformed
 legacy file is reported without preventing other discovered snapshots from
 being checked.
 
-
-
-
-
 ## License
+
 See [LICENSE](LICENSE.md) file

@@ -41,6 +41,12 @@ struct ConfigArgs {
     /// Migrated YAML configuration containing GeoTIFF and NetCDF warm-state settings.
     #[arg(long)]
     config: PathBuf,
+    /// `model_name` of the model entry to convert, as it appears in the config file.
+    #[arg(long)]
+    model_name: String,
+    /// Legacy filename prefix, or a directory when files are named only by timestamp.
+    #[arg(long)]
+    legacy_prefix: PathBuf,
     /// Convert only the newest legacy snapshot.
     #[arg(long)]
     latest_only: bool,
@@ -89,83 +95,43 @@ fn convert_config(args: ConfigArgs) -> Result<(), RISICOError> {
     let config = ConfigContainer::from_file(path)?;
     for model in config.models {
         match model {
-            ConfigBuilderType::RISICO(model) => {
-                convert_risico(arguments_from_config(
-                    &model.model_name,
+            ConfigBuilderType::RISICO(model) if model.model_name == args.model_name => {
+                return convert_risico(arguments_from_config(
                     model.static_data,
                     model.warm_state,
                     model.model_version,
-                    args.latest_only,
-                    args.overwrite,
-                )?)?;
+                    &args,
+                )?);
             }
-            ConfigBuilderType::FWI(model) => {
-                convert_fwi(arguments_from_config(
-                    &model.model_name,
+            ConfigBuilderType::FWI(model) if model.model_name == args.model_name => {
+                return convert_fwi(arguments_from_config(
                     model.static_data,
                     model.warm_state,
                     model.model_version,
-                    args.latest_only,
-                    args.overwrite,
-                )?)?;
+                    &args,
+                )?);
             }
-            other => {
-                return Err(format!(
-                    "warm-state conversion is not implemented for {}",
-                    other.get_model_name()
-                )
-                .into())
-            }
+            _ => continue,
         }
     }
-    Ok(())
+    Err(format!("no model named {} found in {path}", args.model_name).into())
 }
 
 fn arguments_from_config(
-    model_name: &str,
-    static_data: Option<StaticDataConfig>,
-    warm_state: Option<WarmStateConfig>,
+    static_data: StaticDataConfig,
+    warm_state: WarmStateConfig,
     model_version: String,
-    latest_only: bool,
-    overwrite: bool,
+    args: &ConfigArgs,
 ) -> Result<ConvertArgs, RISICOError> {
-    let domain_mask = match static_data {
-        Some(StaticDataConfig::GeoTiff { domain_mask, .. }) => domain_mask.into(),
-        None => {
-            return Err(format!(
-                "model {model_name} requires GeoTIFF static_data before warm-state conversion"
-            )
-            .into())
-        }
-    };
-    let (output, legacy_prefix) = match warm_state {
-        Some(WarmStateConfig::NetCdf {
-            directory,
-            legacy_fallback: Some(legacy_fallback),
-            ..
-        }) => (directory.into(), legacy_fallback.into()),
-        Some(WarmStateConfig::NetCdf {
-            legacy_fallback: None,
-            ..
-        }) => {
-            return Err(
-                format!("model {model_name} has no warm_state.legacy_fallback to convert").into(),
-            )
-        }
-        None => {
-            return Err(format!(
-                "model {model_name} requires NetCDF warm_state configuration before conversion"
-            )
-            .into())
-        }
-    };
+    let StaticDataConfig::GeoTiff { domain_mask, .. } = static_data;
+    let WarmStateConfig::NetCdf { directory, .. } = warm_state;
     Ok(ConvertArgs {
-        legacy_prefix,
-        domain_mask,
-        output,
+        legacy_prefix: args.legacy_prefix.clone(),
+        domain_mask: domain_mask.into(),
+        output: directory.into(),
         model_version,
-        latest_only,
-        overwrite,
+        latest_only: args.latest_only,
+        overwrite: args.overwrite,
     })
 }
 
