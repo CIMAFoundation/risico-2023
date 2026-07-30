@@ -2,7 +2,7 @@ use std::fs;
 use std::path::{Path, PathBuf};
 
 use chrono::{DateTime, Duration, Utc};
-use log::warn;
+use log::{info, warn};
 use netcdf::{extent::Extents, File};
 use risico::modules::fwi::{
     constants::{DC_INIT, DMC_INIT, FFMC_INIT, NODATAVAL},
@@ -359,7 +359,10 @@ fn load_latest<T>(
     candidates.sort_by(|left, right| right.0.cmp(&left.0));
     for (time, path) in candidates {
         match read(&path) {
-            Ok(state) => return Ok(Some((state, time))),
+            Ok(state) => {
+                info!("Loaded NetCDF warm state {}", path.display());
+                return Ok(Some((state, time)));
+            }
             Err(error) => warn!("Ignoring invalid warm state {}: {error}", path.display()),
         }
     }

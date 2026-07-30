@@ -223,6 +223,28 @@ cargo run --features gdal --bin static-converter -- fwi \
 Use `--features gdal_bindgen` instead of `--features gdal` when the installed
 GDAL version is newer than the bindings bundled by `gdal-sys`.
 
+### Building `static-converter` with the local Conda environment
+
+The project-local Conda environment (`.venv`) provides GDAL headers and
+libraries but does not provide `gdal.pc`. Build the release converter by
+pointing Cargo directly at that installation:
+
+```console
+conda run -p .venv env \
+  GDAL_INCLUDE_DIR="$PWD/.venv/include" \
+  GDAL_LIB_DIR="$PWD/.venv/lib" \
+  GDAL_VERSION=3.12.0 \
+  RUSTFLAGS='-C link-arg=-Wl,-rpath,$ORIGIN/../../.venv/lib' \
+  cargo build --release --features gdal --bin static-converter
+```
+
+The resulting `target/release/static-converter` is dynamically linked to the
+Conda GDAL library; the relative runtime path above lets it run from the build
+directory. `GDAL_VERSION=3.12.0` selects the newest bundled `gdal-sys`
+bindings, which are compatible with the local GDAL 3.13 installation. If a
+future GDAL version requires generated bindings, install `libclang` in the
+environment and use `--features gdal_bindgen` instead.
+
 The converter checks that cells are unique and in the canonical north-to-south,
 west-to-east order. This keeps legacy state rows aligned during a progressive
 migration.
