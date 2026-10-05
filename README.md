@@ -348,7 +348,13 @@ cargo run --features gdal --bin static-converter -- fwi \
 ```
 
 Use `--features gdal_bindgen` instead of `--features gdal` when the installed
-GDAL version is newer than the bindings bundled by `gdal-sys`.
+GDAL version has no bindings bundled by `gdal-sys`. This requires libclang and
+does not guarantee compatibility with newer GDAL APIs: `gdal` 0.19 does not
+compile against GDAL 3.13. Use a supported GDAL version (for example, 3.6.2)
+with `--features gdal` in that case. When GDAL is outside the system development
+paths, configure `GDAL_LIB_DIR` and `GDAL_VERSION`, or point `PKG_CONFIG_PATH`
+to its `gdal.pc`. A Conda environment must also provide HDF5 1.x for the current
+`hdf5-sys` dependency.
 
 The converter checks that cells are unique and in the canonical north-to-south,
 west-to-east order. This keeps legacy state rows aligned during a progressive

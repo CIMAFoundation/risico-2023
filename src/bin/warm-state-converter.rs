@@ -137,6 +137,7 @@ fn arguments_from_config(
 
 fn convert_risico(args: ConvertArgs) -> Result<(), RISICOError> {
     let domain = RasterDomain::open(&args.domain_mask)?;
+    let cell_indexes = legacy_cell_indexes(&domain.cell_indexes);
     let snapshots = selected_snapshots(&args)?;
     convert_all(&snapshots, |time, source| {
         let destination = args
@@ -159,7 +160,7 @@ fn convert_risico(args: ConvertArgs) -> Result<(), RISICOError> {
             &state,
             &args.model_version,
             &domain.grid,
-            &domain.cell_indexes,
+            &cell_indexes,
         )?;
         let verified = load_latest_risico(
             &args.output,
@@ -167,7 +168,7 @@ fn convert_risico(args: ConvertArgs) -> Result<(), RISICOError> {
             0,
             &args.model_version,
             &domain.grid,
-            &domain.cell_indexes,
+            &cell_indexes,
         )?
         .is_some_and(|(_, loaded_time)| loaded_time == *time);
         if !verified {
@@ -179,6 +180,7 @@ fn convert_risico(args: ConvertArgs) -> Result<(), RISICOError> {
 
 fn convert_fwi(args: ConvertArgs) -> Result<(), RISICOError> {
     let domain = RasterDomain::open(&args.domain_mask)?;
+    let cell_indexes = legacy_cell_indexes(&domain.cell_indexes);
     let snapshots = selected_snapshots(&args)?;
     convert_all(&snapshots, |time, source| {
         let destination = args
@@ -197,7 +199,7 @@ fn convert_fwi(args: ConvertArgs) -> Result<(), RISICOError> {
             &state,
             &args.model_version,
             &domain.grid,
-            &domain.cell_indexes,
+            &cell_indexes,
         )?;
         let verified = load_latest_fwi(
             &args.output,
@@ -205,7 +207,7 @@ fn convert_fwi(args: ConvertArgs) -> Result<(), RISICOError> {
             0,
             &args.model_version,
             &domain.grid,
-            &domain.cell_indexes,
+            &cell_indexes,
         )?
         .is_some_and(|(_, loaded_time)| loaded_time == *time);
         if !verified {
@@ -213,6 +215,14 @@ fn convert_fwi(args: ConvertArgs) -> Result<(), RISICOError> {
         }
         Ok(Conversion::Written(written))
     })
+}
+
+fn legacy_cell_indexes(domain_indexes: &[u32]) -> Vec<u32> {
+    // Runtime domains group cells by raster window. Legacy state rows instead
+    // follow north-to-south, west-to-east order, i.e. ascending raster indexes.
+    let mut indexes = domain_indexes.to_vec();
+    indexes.sort_unstable();
+    indexes
 }
 
 fn validate_cell_count(
@@ -343,6 +353,55 @@ mod tests {
                 .expect("valid system clock")
                 .as_nanos()
         ))
+    }
+
+    #[test]
+    fn legacy_state_rows_keep_their_locations_across_raster_windows() {
+        use chrono::TimeZone;
+        use common::io::static_data::geotiff::RasterGrid;
+
+        let directory = temporary_directory("window-order");
+        let grid = RasterGrid {
+            width: 513,
+            height: 2,
+            epsg: 4326,
+            transform: [7.0, 0.001, 0.0, 45.0, 0.0, -0.001],
+        };
+        // The left window's two rows precede the right window's two rows.
+        let window_indexes = [0, 513, 512, 1025];
+        let legacy_indexes = legacy_cell_indexes(&window_indexes);
+        let time = Utc.with_ymd_and_hms(2026, 10, 5, 0, 0, 0).unwrap();
+        let warm = read_risico(
+            std::io::Cursor::new(
+                "1 11 21 31 41 51 61 71 81\n\
+                 2 12 22 32 42 52 62 72 82\n\
+                 3 13 23 33 43 53 63 73 83\n\
+                 4 14 24 34 44 54 64 74 84\n",
+            ),
+            "test-state",
+        )
+        .unwrap();
+        let state = RISICOState::new(&warm, &time, RISICOModelConfig::new("v2025"));
+        write_risico_snapshot(&directory, &state, "v2025", &grid, &legacy_indexes).unwrap();
+
+        // Runtime loading uses window order, so the geographical second row
+        // must be loaded before the second cell of the geographical first row.
+        let (loaded, _) = load_latest_risico(&directory, time, 0, "v2025", &grid, &window_indexes)
+            .unwrap()
+            .unwrap();
+        for (actual, expected_index) in loaded.iter().zip([0, 2, 1, 3]) {
+            let expected = &warm[expected_index];
+            assert_eq!(actual.dffm, expected.dffm);
+            assert_eq!(actual.snow_cover, expected.snow_cover);
+            assert_eq!(actual.snow_cover_time, expected.snow_cover_time);
+            assert_eq!(actual.MSI, expected.MSI);
+            assert_eq!(actual.MSI_TTL, expected.MSI_TTL);
+            assert_eq!(actual.NDVI, expected.NDVI);
+            assert_eq!(actual.NDVI_TIME, expected.NDVI_TIME);
+            assert_eq!(actual.NDWI, expected.NDWI);
+            assert_eq!(actual.NDWI_TIME, expected.NDWI_TIME);
+        }
+        fs::remove_dir_all(directory).unwrap();
     }
 
     #[test]
