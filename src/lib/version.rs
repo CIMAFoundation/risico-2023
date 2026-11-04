@@ -1,7 +1,7 @@
-pub const FULL_VERSION: &str = "v1.0.6-6d0cee1";
+pub const FULL_VERSION: &str = "v1.1.0-rc1-d8d8246";
 pub const LONG_VERSION: &str = "
-version: v1.0.6
-commit: 6d0cee1cdd0992258f19ec10f0dcb8e34b423cf5
-branch: main
-released on: Fri, 17 Apr 2026 18:34:25 +0200";
+version: v1.1.0-rc1
+commit: d8d8246 (dev 73581e3 + nonzero exit on model failure)
+branch: fix/nonzero-exit-on-model-failure
+released on: Wed, 4 Nov 2026 21:40:00 +0100";
 
