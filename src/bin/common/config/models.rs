@@ -16,8 +16,8 @@ use rayon::prelude::*;
 use risico::{
     models::output::{Output, OutputVariableName},
     modules::angstrom::models::{
-        AngstromCellPropertiesContainer, AngstromProperties, AngstromPropertiesElement, AngstromState,
-        AngstromStateElement,
+        AngstromCellPropertiesContainer, AngstromProperties, AngstromPropertiesElement,
+        AngstromState, AngstromStateElement,
     },
     modules::fosberg::models::{
         FosbergCellPropertiesContainer, FosbergProperties, FosbergPropertiesElement, FosbergState,
@@ -26,12 +26,14 @@ use risico::{
     modules::fwi::{
         config::FWIModelConfig,
         models::{
-            FWICellPropertiesContainer, FWIProperties, FWIPropertiesElement, FWIState, FWIStateElement,
-            FWIWarmState,
+            FWICellPropertiesContainer, FWIProperties, FWIPropertiesElement, FWIState,
+            FWIStateElement, FWIWarmState,
         },
     },
     //    modules::portuguese::models::{PortugueseCellPropertiesContainer, PortugueseProperties, PortugueseState, PortugueseWarmState},
-    modules::hdw::models::{HdwCellPropertiesContainer, HdwProperties, HdwPropertiesElement, HdwState, HdwStateElement},
+    modules::hdw::models::{
+        HdwCellPropertiesContainer, HdwProperties, HdwPropertiesElement, HdwState, HdwStateElement,
+    },
     modules::kbdi::{
         config::KBDIModelConfig,
         models::{
@@ -43,31 +45,27 @@ use risico::{
         config::Mark5ModelConfig,
         models::{
             Mark5CellPropertiesContainer, Mark5Properties, Mark5PropertiesElement, Mark5State,
-            Mark5StateElement,
-            Mark5WarmState,
+            Mark5StateElement, Mark5WarmState,
         },
     },
     modules::nesterov::models::{
-        NesterovCellPropertiesContainer, NesterovProperties, NesterovPropertiesElement, NesterovState,
-        NesterovStateElement,
-        NesterovWarmState,
+        NesterovCellPropertiesContainer, NesterovProperties, NesterovPropertiesElement,
+        NesterovState, NesterovStateElement, NesterovWarmState,
     },
     modules::orieux::models::{
         OrieuxCellPropertiesContainer, OrieuxProperties, OrieuxPropertiesElement, OrieuxState,
-        OrieuxStateElement,
-        OrieuxWarmState,
+        OrieuxStateElement, OrieuxWarmState,
     },
     modules::risico::{
         config::RISICOModelConfig,
         models::{
             RISICOCellPropertiesContainer, RISICOProperties, RISICOPropertiesElement, RISICOState,
-            RISICOStateElement,
-            RISICOVegetation, RISICOWarmState,
+            RISICOStateElement, RISICOVegetation, RISICOWarmState,
         },
     },
     modules::sharples::models::{
-        SharplesCellPropertiesContainer, SharplesProperties, SharplesPropertiesElement, SharplesState,
-        SharplesStateElement,
+        SharplesCellPropertiesContainer, SharplesProperties, SharplesPropertiesElement,
+        SharplesState, SharplesStateElement,
     },
 };
 
@@ -87,6 +85,7 @@ use super::builder::{
     SharplesConfigBuilder,
     StaticDataConfig,
     StreamingExecutionConfig,
+    TileStateResidency,
     WarmStateConfig,
 };
 
@@ -357,6 +356,14 @@ pub trait TileModelFactory: TiledModelConfig {
     fn tile_properties(&self, tile: &SpatialTile) -> Self::Properties;
     fn tile_state(&self, tile: &SpatialTile) -> Self::State;
 
+    /// Drop the whole-domain property arrays once every tile's properties
+    /// have been built from them.
+    ///
+    /// Tile properties are immutable, so the runner builds them once and
+    /// keeps them; the domain arrays they were gathered from would then be a
+    /// second copy held for nothing. Coordinates must be taken before this.
+    fn release_properties(&mut self) {}
+
     /// Drop the whole-domain warm state once every tile has been seeded from
     /// it and checkpointed.
     ///
@@ -411,6 +418,10 @@ impl TileModelFactory for RISICOConfig {
         )
     }
 
+    fn release_properties(&mut self) {
+        self.properties.data = ndarray::Array1::from_vec(Vec::new());
+    }
+
     fn release_warm_state(&mut self) {
         self.warm_state = Vec::new();
     }
@@ -434,6 +445,10 @@ impl TileModelFactory for FWIConfig {
             &self.warm_state_time,
             FWIModelConfig::new(&self.model_version),
         )
+    }
+
+    fn release_properties(&mut self) {
+        self.properties.data = ndarray::Array1::from_vec(Vec::new());
     }
 
     fn release_warm_state(&mut self) {
@@ -461,6 +476,10 @@ impl TileModelFactory for Mark5Config {
         )
     }
 
+    fn release_properties(&mut self) {
+        self.properties.data = ndarray::Array1::from_vec(Vec::new());
+    }
+
     fn release_warm_state(&mut self) {
         self.warm_state = Vec::new();
     }
@@ -486,6 +505,10 @@ impl TileModelFactory for KbdiConfig {
         )
     }
 
+    fn release_properties(&mut self) {
+        self.properties.data = ndarray::Array1::from_vec(Vec::new());
+    }
+
     fn release_warm_state(&mut self) {
         self.warm_state = Vec::new();
     }
@@ -507,6 +530,10 @@ macro_rules! impl_stateless_tile_factory {
 
             fn tile_state(&self, tile: &SpatialTile) -> Self::State {
                 $state::new(&self.run_date, tile.len())
+            }
+
+            fn release_properties(&mut self) {
+                self.properties.data = ndarray::Array1::from_vec(Vec::new());
             }
         }
     };
@@ -536,6 +563,10 @@ impl TileModelFactory for NesterovConfig {
         )
     }
 
+    fn release_properties(&mut self) {
+        self.properties.data = ndarray::Array1::from_vec(Vec::new());
+    }
+
     fn release_warm_state(&mut self) {
         self.warm_state = Vec::new();
     }
@@ -558,6 +589,10 @@ impl TileModelFactory for OrieuxConfig {
             &select_warm_state(&self.warm_state, tile),
             &self.warm_state_time,
         )
+    }
+
+    fn release_properties(&mut self) {
+        self.properties.data = ndarray::Array1::from_vec(Vec::new());
     }
 
     fn release_warm_state(&mut self) {
@@ -685,14 +720,222 @@ impl_tile_state_persistence!(HdwConfig, HdwState, HdwStateElement);
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct TileMemoryModel {
     /// Held for every domain cell for the whole run, whatever the tiling is.
+    /// Excludes the live state, which is charged by `state_per_cell`.
     pub resident_per_cell: usize,
-    /// Held per tile cell only while that tile is in flight.
+    /// Held per tile cell only while that tile is in flight. Excludes the
+    /// live state.
     pub in_flight_per_cell: usize,
+    /// One cell's live model state, heap included. Charged to the whole
+    /// domain when the state stays in memory, to a tile in flight when it is
+    /// checkpointed.
+    pub state_per_cell: usize,
+    /// One cell's warm-state record, as gathered for a snapshot. A timestep
+    /// that writes one holds the whole domain's records until they are on
+    /// disk.
+    pub warm_state_per_cell: usize,
 }
 
 /// Per-cell memory cost of a model, used to derive tile concurrency.
 pub trait TileMemoryFootprint {
     fn memory_model(&self) -> TileMemoryModel;
+}
+
+/// A model's per-cell costs applied to one tile plan.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct PlanMemoryEstimate {
+    /// Bytes held for the whole run, whatever the concurrency.
+    pub resident: u64,
+    /// Bytes one tile in flight adds, sized from the largest tile so the
+    /// figure holds for every step of the plan rather than on average.
+    pub per_tile: u64,
+}
+
+impl TileMemoryModel {
+    /// The plan's cost with the live state either held for the whole domain
+    /// or carried by the tiles in flight.
+    pub fn estimate(&self, plan: &TilePlan, resident_state: bool) -> PlanMemoryEstimate {
+        let cell_count = plan.cell_count() as u64;
+        let largest_tile = plan
+            .tiles()
+            .iter()
+            .map(|tile| tile.len())
+            .max()
+            .unwrap_or(0) as u64;
+        let state = self.state_per_cell as u64;
+        let (resident_state, in_flight_state) = if resident_state {
+            (state, 0)
+        } else {
+            (0, state)
+        };
+        PlanMemoryEstimate {
+            resident: cell_count * (self.resident_per_cell as u64 + resident_state),
+            per_tile: largest_tile * (self.in_flight_per_cell as u64 + in_flight_state),
+        }
+    }
+
+    /// What holding every tile's state in memory costs for this plan.
+    pub fn state_bytes(&self, plan: &TilePlan) -> u64 {
+        plan.cell_count() as u64 * self.state_per_cell as u64
+    }
+
+    /// What one timestep's gathered warm-state records cost for this plan.
+    pub fn warm_state_bytes(&self, plan: &TilePlan) -> u64 {
+        plan.cell_count() as u64 * self.warm_state_per_cell as u64
+    }
+}
+
+/// What finishing one timestep costs in memory while it is being written.
+///
+/// Every output variable in flight holds one accumulator over its output grid
+/// (a value and a count per pixel) and then the finished grid, and each of
+/// the slots a variable is split over reads one tile at a time.
+pub fn postprocess_peak_bytes(
+    grid_pixels: impl IntoIterator<Item = usize>,
+    cores: usize,
+    largest_tile: usize,
+) -> u64 {
+    const ACCUMULATOR_AND_RESULT: u64 = 3 * std::mem::size_of::<f32>() as u64;
+    let mut pixels: Vec<u64> = grid_pixels
+        .into_iter()
+        .map(|pixels| pixels as u64)
+        .collect();
+    if pixels.is_empty() {
+        return 0;
+    }
+    let cores = cores.max(1);
+    pixels.sort_unstable_by(|left, right| right.cmp(left));
+    let grids: u64 = pixels.iter().take(cores).sum();
+    let tile_buffers = cores as u64 * largest_tile as u64 * std::mem::size_of::<f32>() as u64;
+    grids * ACCUMULATOR_AND_RESULT + tile_buffers
+}
+
+/// How one model run is laid out once the plan, the budget and the
+/// configuration have been reconciled.
+///
+/// Decided once, before any tile runs, and shared by the runner and the
+/// inspector so both describe the same run.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct ExecutionDecision {
+    /// Whether every tile's state stays in memory between timesteps.
+    pub resident_state: bool,
+    /// How many tiles may run at once. `None` leaves it to rayon: one per
+    /// core.
+    pub tile_concurrency: Option<usize>,
+    /// The plan's cost under the chosen residency.
+    pub estimate: PlanMemoryEstimate,
+    /// What the state costs when it is held in memory.
+    pub state_bytes: u64,
+    pub budget: Option<u64>,
+    /// The most tiles the plan and the machine could run at once.
+    pub ceiling: usize,
+    /// Whether one timestep's output is written while the next is stepped.
+    pub overlap_postprocess: bool,
+    /// What finishing a timestep adds while it overlaps the next step: its
+    /// output grids in flight and its gathered warm state.
+    pub finish_bytes: u64,
+}
+
+impl ExecutionDecision {
+    /// Reconcile the plan with the configuration.
+    ///
+    /// `output_bytes` is what the output writer holds while a timestep is
+    /// resampled, from `postprocess_peak_bytes`.
+    pub fn resolve(
+        footprint: TileMemoryModel,
+        execution: &StreamingExecutionConfig,
+        plan: &TilePlan,
+        cores: usize,
+        output_bytes: u64,
+    ) -> Result<Self, RISICOError> {
+        let ceiling = plan.tiles().len().min(cores).max(1);
+        let budget = execution.max_memory_bytes()?;
+        let state_bytes = footprint.state_bytes(plan);
+        let finish_bytes = output_bytes + footprint.warm_state_bytes(plan);
+
+        let resident_state = match execution.tile_state {
+            TileStateResidency::Memory => true,
+            TileStateResidency::Disk => false,
+            TileStateResidency::Auto => match budget {
+                // Without a budget nothing asks for memory to be bounded, so
+                // the state stays where it is cheapest to reach.
+                None => true,
+                Some(budget) => {
+                    // Judge the memory layout at the concurrency it would run
+                    // at: an explicit one, else the least that still fits.
+                    let in_memory = footprint.estimate(plan, true);
+                    let threads = execution.tile_concurrency.unwrap_or(1);
+                    in_memory.at_concurrency(threads) <= budget
+                }
+            },
+        };
+
+        let estimate = footprint.estimate(plan, resident_state);
+        let tile_concurrency = match (execution.tile_concurrency, budget) {
+            (Some(threads), _) => Some(threads),
+            (None, Some(budget)) => Some(estimate.tiles_within(budget, ceiling)),
+            (None, None) => None,
+        };
+
+        let step_peak = estimate.at_concurrency(tile_concurrency.unwrap_or(ceiling));
+        let overlap_postprocess = match (execution.overlap_postprocess, budget) {
+            (Some(overlap), _) => overlap,
+            (None, None) => true,
+            (None, Some(budget)) => step_peak + finish_bytes <= budget,
+        };
+
+        Ok(Self {
+            resident_state,
+            tile_concurrency,
+            estimate,
+            state_bytes,
+            budget,
+            ceiling,
+            overlap_postprocess,
+            finish_bytes,
+        })
+    }
+
+    /// The concurrency the run will actually use.
+    pub fn effective_concurrency(&self) -> usize {
+        self.tile_concurrency.unwrap_or(self.ceiling)
+    }
+
+    /// The resident set the estimate predicts for this run.
+    pub fn expected_peak(&self) -> u64 {
+        let step = self.estimate.at_concurrency(self.effective_concurrency());
+        if self.overlap_postprocess {
+            step + self.finish_bytes
+        } else {
+            step
+        }
+    }
+
+    /// Whether the budget cannot be met even one tile at a time.
+    pub fn over_budget(&self) -> bool {
+        self.budget
+            .is_some_and(|budget| self.estimate.at_concurrency(1) > budget)
+    }
+}
+
+impl PlanMemoryEstimate {
+    /// How many tiles a budget pays for once the whole-domain arrays are
+    /// charged.
+    ///
+    /// Always at least one: a budget smaller than the domain's fixed cost
+    /// cannot be honoured by tiling at all, and refusing to run would be less
+    /// useful than running at the smallest footprint available.
+    pub fn tiles_within(&self, budget: u64, ceiling: usize) -> usize {
+        if self.per_tile == 0 {
+            return ceiling.max(1);
+        }
+        let affordable = budget.saturating_sub(self.resident) / self.per_tile;
+        (affordable as usize).clamp(1, ceiling.max(1))
+    }
+
+    /// The resident set this plan is expected to reach at a concurrency.
+    pub fn at_concurrency(&self, tiles: usize) -> u64 {
+        self.resident + self.per_tile * tiles as u64
+    }
 }
 
 /// What the counted arrays miss for whole-domain data: the static layers held
@@ -715,36 +958,46 @@ const IN_FLIGHT_OVERHEAD: f64 = 1.5;
 
 macro_rules! impl_tile_memory_footprint {
     ($config:ty, $properties:ty, $state:ty, $warm:ty) => {
+        impl_tile_memory_footprint!($config, $properties, $state, $warm, 0);
+    };
+    ($config:ty, $properties:ty, $state:ty, $warm:ty, $state_heap:expr) => {
         impl TileMemoryFootprint for $config {
             fn memory_model(&self) -> TileMemoryModel {
                 use std::mem::size_of;
 
-                // Whole-domain arrays: the model's properties, the coordinates
-                // and the plan's cell bookkeeping, plus the warm state. The
-                // warm state is released once the tiles are seeded, but it is
-                // held while they are, so it belongs in the floor a run cannot
-                // get under however few tiles are allowed at once.
+                // Whole-domain arrays: the model's properties (gathered per
+                // tile once, then held for the run), the coordinates and the
+                // plan's cell bookkeeping, plus the warm state. The warm state
+                // is released once the tiles are seeded, but it is held while
+                // they are, so it belongs in the floor a run cannot get under
+                // however few tiles are allowed at once.
                 let resident_per_cell = size_of::<$properties>()
                     + size_of::<$warm>()
                     + 2 * size_of::<f32>()
                     + size_of::<usize>()
                     + size_of::<u32>();
 
-                // A tile in flight holds its own slice of the properties, its
-                // working state, the decoded input row, the warm state records
-                // it hands back, the model's output elements, and one f32 plane
-                // per output variable in the scratch it is written to.
+                // A tile in flight holds the decoded input row, the warm
+                // state records it hands back, the model's output elements,
+                // and one f32 plane per output variable in the scratch it is
+                // written to. Its properties were built once and are counted
+                // with the domain; its working state is charged separately,
+                // since where that lives is decided per run.
                 let outputs = self.native_output_variables().len();
-                let in_flight_per_cell = size_of::<$properties>()
-                    + size_of::<$state>()
-                    + size_of::<risico::models::input::InputElement>()
+                let in_flight_per_cell = size_of::<risico::models::input::InputElement>()
                     + size_of::<$warm>()
                     + size_of::<risico::models::output::OutputElement>()
                     + outputs * size_of::<f32>();
 
+                // The state element plus whatever it owns on the heap: models
+                // with a per-cell history keep most of their state there.
+                let state_per_cell = size_of::<$state>() + $state_heap;
+
                 TileMemoryModel {
                     resident_per_cell: (resident_per_cell as f64 * RESIDENT_OVERHEAD) as usize,
                     in_flight_per_cell: (in_flight_per_cell as f64 * IN_FLIGHT_OVERHEAD) as usize,
+                    state_per_cell: (state_per_cell as f64 * IN_FLIGHT_OVERHEAD) as usize,
+                    warm_state_per_cell: size_of::<$warm>(),
                 }
             }
         }
@@ -757,18 +1010,40 @@ impl_tile_memory_footprint!(
     RISICOStateElement,
     RISICOWarmState
 );
-impl_tile_memory_footprint!(FWIConfig, FWIPropertiesElement, FWIStateElement, FWIWarmState);
+/// Heap behind one cell's history of `entries` samples, each a timestamp and
+/// `values` floats.
+const fn history_heap(entries: usize, values: usize) -> usize {
+    entries * (std::mem::size_of::<DateTime<Utc>>() + values * std::mem::size_of::<f32>())
+}
+
+// FWI keeps an hourly window of eight series; KBDI and Mark5 a daily window
+// of one. Each holds one entry more than the window while a step is folded in.
+impl_tile_memory_footprint!(
+    FWIConfig,
+    FWIPropertiesElement,
+    FWIStateElement,
+    FWIWarmState,
+    history_heap(risico::modules::fwi::constants::TIME_WINDOW as usize + 1, 8)
+);
 impl_tile_memory_footprint!(
     Mark5Config,
     Mark5PropertiesElement,
     Mark5StateElement,
-    Mark5WarmState
+    Mark5WarmState,
+    history_heap(
+        risico::modules::mark5::constants::TIME_WINDOW as usize + 1,
+        1
+    )
 );
 impl_tile_memory_footprint!(
     KbdiConfig,
     KBDIPropertiesElement,
     KBDIStateElement,
-    KBDIWarmState
+    KBDIWarmState,
+    history_heap(
+        risico::modules::kbdi::constants::TIME_WINDOW as usize + 1,
+        1
+    )
 );
 impl_tile_memory_footprint!(
     NesterovConfig,
@@ -1204,6 +1479,15 @@ impl OutputWriter {
         Ok(Self { outputs })
     }
 
+    /// What this writer holds while a timestep's variables are resampled.
+    pub fn peak_bytes(&self, cores: usize, largest_tile: usize) -> u64 {
+        let grids = self.outputs.iter().flat_map(|output| {
+            let pixels = output.grid().nrows * output.grid().ncols;
+            output.variables().iter().map(move |_| pixels)
+        });
+        postprocess_peak_bytes(grids, cores, largest_tile)
+    }
+
     /// Write a timestep whose native output is held as one scratch per tile.
     pub fn write_tiled_output(
         &mut self,
@@ -1341,11 +1625,11 @@ impl RISICOConfig {
                     let mut slopes = slope_values;
                     slopes.par_iter_mut().for_each(|value| *value *= PI / 180.0);
                     let mut aspects = aspect_values;
-                    aspects.par_iter_mut().for_each(|value| *value *= PI / 180.0);
+                    aspects
+                        .par_iter_mut()
+                        .for_each(|value| *value *= PI / 180.0);
                     let vegetations_dict = RISICOConfig::read_vegetation(&vegetation_catalog)
-                        .map_err(|error| {
-                            format!("error reading {vegetation_catalog}, {error}")
-                        })?;
+                        .map_err(|error| format!("error reading {vegetation_catalog}, {error}"))?;
                     // Resolving each raster id against the catalog here keeps
                     // one shared handle per cell; formatting the id back into
                     // an owned string per cell would cost more than every other
@@ -1783,6 +2067,238 @@ mod fwi_warm_state_tests {
         fs::remove_file(path).expect("checkpoint should be removable");
     }
 
+    fn decision_fixture() -> (TileMemoryModel, TilePlan) {
+        // 100 cells in tiles of 10: resident 10 B, in flight 4 B, state 6 B
+        // per cell. Domain without state: 1000 B; a tile without state: 40 B.
+        let footprint = TileMemoryModel {
+            resident_per_cell: 10,
+            in_flight_per_cell: 4,
+            state_per_cell: 6,
+            warm_state_per_cell: 2,
+        };
+        (footprint, TilePlan::cells(100, 10).unwrap())
+    }
+
+    fn execution(
+        max_memory: Option<&str>,
+        tile_state: TileStateResidency,
+    ) -> StreamingExecutionConfig {
+        StreamingExecutionConfig {
+            max_memory: max_memory.map(str::to_string),
+            tile_state,
+            ..StreamingExecutionConfig::default()
+        }
+    }
+
+    #[test]
+    fn the_state_is_charged_where_it_lives() {
+        let (footprint, plan) = decision_fixture();
+        let in_memory = footprint.estimate(&plan, true);
+        assert_eq!(
+            in_memory,
+            PlanMemoryEstimate {
+                resident: 1600,
+                per_tile: 40
+            }
+        );
+        let on_disk = footprint.estimate(&plan, false);
+        assert_eq!(
+            on_disk,
+            PlanMemoryEstimate {
+                resident: 1000,
+                per_tile: 100
+            }
+        );
+        assert_eq!(footprint.state_bytes(&plan), 600);
+        assert_eq!(footprint.warm_state_bytes(&plan), 200);
+    }
+
+    #[test]
+    fn auto_keeps_the_state_in_memory_when_the_budget_has_room() {
+        let (footprint, plan) = decision_fixture();
+        // 1640 B is exactly the domain with state and one tile in flight.
+        let fits = ExecutionDecision::resolve(
+            footprint,
+            &execution(Some("1640"), TileStateResidency::Auto),
+            &plan,
+            8,
+            0,
+        )
+        .unwrap();
+        assert!(fits.resident_state);
+        assert_eq!(fits.tile_concurrency, Some(1));
+        assert!(!fits.over_budget());
+
+        // One byte less and the state goes to disk, where the same budget
+        // affords six tiles of 100 B over the 1000 B domain.
+        let spills = ExecutionDecision::resolve(
+            footprint,
+            &execution(Some("1639"), TileStateResidency::Auto),
+            &plan,
+            8,
+            0,
+        )
+        .unwrap();
+        assert!(!spills.resident_state);
+        assert_eq!(spills.tile_concurrency, Some(6));
+        assert_eq!(spills.expected_peak(), 1600);
+    }
+
+    #[test]
+    fn auto_without_a_budget_leaves_the_state_in_memory_and_rayon_in_charge() {
+        let (footprint, plan) = decision_fixture();
+        let decision = ExecutionDecision::resolve(
+            footprint,
+            &execution(None, TileStateResidency::Auto),
+            &plan,
+            8,
+            0,
+        )
+        .unwrap();
+        assert!(decision.resident_state);
+        assert_eq!(decision.tile_concurrency, None);
+        assert_eq!(decision.ceiling, 8);
+        assert_eq!(decision.effective_concurrency(), 8);
+        // The finish overlaps the step, so its 200 B warm state counts too.
+        assert_eq!(decision.expected_peak(), 1600 + 8 * 40 + 200);
+    }
+
+    #[test]
+    fn an_explicit_residency_is_taken_as_given() {
+        let (footprint, plan) = decision_fixture();
+        let forced_memory = ExecutionDecision::resolve(
+            footprint,
+            &execution(Some("500"), TileStateResidency::Memory),
+            &plan,
+            8,
+            0,
+        )
+        .unwrap();
+        assert!(forced_memory.resident_state);
+        assert!(forced_memory.over_budget());
+        assert_eq!(forced_memory.tile_concurrency, Some(1));
+
+        let forced_disk = ExecutionDecision::resolve(
+            footprint,
+            &execution(Some("100000"), TileStateResidency::Disk),
+            &plan,
+            4,
+            0,
+        )
+        .unwrap();
+        assert!(!forced_disk.resident_state);
+        assert_eq!(forced_disk.tile_concurrency, Some(4));
+    }
+
+    #[test]
+    fn an_explicit_concurrency_is_what_auto_judges_the_budget_at() {
+        let (footprint, plan) = decision_fixture();
+        let mut config = execution(Some("1700"), TileStateResidency::Auto);
+        config.tile_concurrency = Some(4);
+        // 1600 + 4 * 40 = 1760 > 1700: four tiles do not fit with the state
+        // in memory, so it goes to disk and the four tiles are kept.
+        let decision = ExecutionDecision::resolve(footprint, &config, &plan, 8, 0).unwrap();
+        assert!(!decision.resident_state);
+        assert_eq!(decision.tile_concurrency, Some(4));
+    }
+
+    #[test]
+    fn the_overlap_is_taken_only_when_a_finished_timestep_fits_beside_the_step() {
+        let (footprint, plan) = decision_fixture();
+        // Without a budget the overlap is free to take.
+        let unbounded = ExecutionDecision::resolve(
+            footprint,
+            &execution(None, TileStateResidency::Auto),
+            &plan,
+            8,
+            0,
+        )
+        .unwrap();
+        assert!(unbounded.overlap_postprocess);
+        assert_eq!(unbounded.finish_bytes, 200);
+        assert_eq!(unbounded.expected_peak(), 1600 + 8 * 40 + 200);
+
+        // State on disk at 1000 + 6 * 100 = 1600; finishing costs 300 + 200.
+        let fits = ExecutionDecision::resolve(
+            footprint,
+            &execution(Some("2100"), TileStateResidency::Disk),
+            &plan,
+            6,
+            300,
+        )
+        .unwrap();
+        assert_eq!(fits.tile_concurrency, Some(6));
+        assert!(fits.overlap_postprocess);
+        assert_eq!(fits.expected_peak(), 2100);
+
+        let tight = ExecutionDecision::resolve(
+            footprint,
+            &execution(Some("2099"), TileStateResidency::Disk),
+            &plan,
+            6,
+            300,
+        )
+        .unwrap();
+        assert!(!tight.overlap_postprocess);
+        assert_eq!(tight.expected_peak(), 1600);
+
+        let mut forced = execution(Some("2099"), TileStateResidency::Disk);
+        forced.overlap_postprocess = Some(true);
+        let forced = ExecutionDecision::resolve(footprint, &forced, &plan, 6, 300).unwrap();
+        assert!(forced.overlap_postprocess);
+    }
+
+    #[test]
+    fn postprocess_cost_counts_the_largest_grids_in_flight_and_one_tile_per_slot() {
+        // Four cores over three grids: all three grids and four tile buffers.
+        assert_eq!(
+            postprocess_peak_bytes([100, 50, 10], 4, 1000),
+            160 * 12 + 4 * 1000 * 4
+        );
+        // Two cores over three grids: only the two largest are in flight.
+        assert_eq!(
+            postprocess_peak_bytes([100, 50, 10], 2, 1000),
+            150 * 12 + 2 * 4000
+        );
+        assert_eq!(postprocess_peak_bytes([], 8, 1000), 0);
+    }
+
+    #[test]
+    fn a_budget_pays_for_what_is_left_after_the_domain() {
+        const GB: u64 = 1_000_000_000;
+        let estimate = PlanMemoryEstimate {
+            resident: 4 * GB,
+            per_tile: GB / 2,
+        };
+        // 8 GB budget, 4 GB domain, 500 MB per tile: eight tiles fit.
+        assert_eq!(estimate.tiles_within(8 * GB, 14), 8);
+        // Raising the budget buys more tiles until the ceiling stops it.
+        assert_eq!(estimate.tiles_within(12 * GB, 14), 14);
+        // Lowering it gives them back.
+        assert_eq!(estimate.tiles_within(5 * GB, 14), 2);
+        // Below the domain's own cost it still runs, one tile at a time.
+        assert_eq!(estimate.tiles_within(GB, 14), 1);
+        assert_eq!(estimate.tiles_within(0, 14), 1);
+        assert_eq!(estimate.at_concurrency(2), 5 * GB);
+    }
+
+    #[test]
+    fn the_ceiling_is_never_exceeded_and_never_reaches_zero() {
+        const GB: u64 = 1_000_000_000;
+        let estimate = PlanMemoryEstimate {
+            resident: 0,
+            per_tile: GB,
+        };
+        assert_eq!(estimate.tiles_within(1_000 * GB, 4), 4);
+        assert_eq!(estimate.tiles_within(1_000 * GB, 0), 1);
+        // A model that costs nothing per tile still respects the ceiling.
+        let free = PlanMemoryEstimate {
+            resident: 0,
+            per_tile: 0,
+        };
+        assert_eq!(free.tiles_within(GB, 6), 6);
+    }
+
     #[test]
     fn netcdf_cutoff_uses_the_same_lag_as_legacy_lookup() {
         let run_date = Utc
@@ -1797,7 +2313,6 @@ mod fwi_warm_state_tests {
                 .expect("valid warm-state date")
         );
     }
-
 }
 
 impl Mark5Config {
@@ -2830,7 +3345,7 @@ impl OrieuxConfig {
 //    }
 //
 //    pub fn get_output_writer(&self) -> Result<OutputWriter, RISICOError> {
-//        Ok(OutputWriter::new(
+//        OutputWriter::new(
 //            self.output_types_defs.as_slice(),
 //            &self.run_date,
 //            &self.palettes,

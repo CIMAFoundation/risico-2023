@@ -3,9 +3,9 @@ use serde_derive::{Deserialize, Serialize};
 use serde_yaml;
 use std::collections::HashMap;
 use std::fs::File;
+use std::io;
 use std::io::BufRead;
 use std::io::Read;
-use std::io;
 
 use crate::common::helpers::RISICOError;
 use crate::common::io::models::output::OutputVariable;
@@ -260,6 +260,21 @@ fn default_cells_per_tile() -> usize {
     1_048_576
 }
 
+/// Where each tile's live model state lives between timesteps.
+#[derive(Debug, Serialize, Deserialize, Clone, Copy, PartialEq, Eq, Default)]
+#[serde(rename_all = "lowercase")]
+pub enum TileStateResidency {
+    /// In memory when the `max_memory` budget has room for every tile's state
+    /// at the chosen concurrency, or when no budget is set; on disk otherwise.
+    #[default]
+    Auto,
+    /// Always in memory. The fastest option: no checkpoint is written or read.
+    Memory,
+    /// Always checkpointed to the scratch directory between timesteps, so the
+    /// run holds the state of only the tiles in flight.
+    Disk,
+}
+
 /// Model-independent controls for bounded-memory execution.
 ///
 /// Raster-backed models use two-dimensional windows. Legacy point models use
@@ -287,6 +302,17 @@ pub struct StreamingExecutionConfig {
     /// and a budget below the domain's fixed cost still runs, one tile at a
     /// time. An explicit `tile_concurrency` wins over this.
     pub max_memory: Option<String>,
+    /// Whether tile state stays in memory across timesteps or is checkpointed
+    /// to disk. Reading and writing every tile's checkpoint each timestep is
+    /// the single largest I/O cost of a run, so `auto` keeps the state in
+    /// memory whenever the budget allows.
+    #[serde(default)]
+    pub tile_state: TileStateResidency,
+    /// Whether a timestamp's output is resampled and written while the next
+    /// timestamp is being stepped. Unset, it is decided from the budget: the
+    /// overlap costs one timestamp's output grids and warm state on top of
+    /// the step, and is only taken when that still fits `max_memory`.
+    pub overlap_postprocess: Option<bool>,
     pub scratch_directory: Option<String>,
 }
 
@@ -298,6 +324,8 @@ impl Default for StreamingExecutionConfig {
             cells_per_tile: default_cells_per_tile(),
             tile_concurrency: None,
             max_memory: None,
+            tile_state: TileStateResidency::default(),
+            overlap_postprocess: None,
             scratch_directory: None,
         }
     }
@@ -564,7 +592,10 @@ output_time_resolution: 1
 "#;
         let config: RISICOConfigBuilder =
             serde_yaml::from_str(yaml).expect("configuration should parse");
-        assert!(matches!(config.static_data, StaticDataConfig::GeoTiff { .. }));
+        assert!(matches!(
+            config.static_data,
+            StaticDataConfig::GeoTiff { .. }
+        ));
         assert!(matches!(config.warm_state, WarmStateConfig::NetCdf { .. }));
     }
 
@@ -585,7 +616,10 @@ output_types: []
 "#;
         let config: FWIConfigBuilder =
             serde_yaml::from_str(yaml).expect("new FWI configuration should parse");
-        assert!(matches!(config.static_data, StaticDataConfig::GeoTiff { .. }));
+        assert!(matches!(
+            config.static_data,
+            StaticDataConfig::GeoTiff { .. }
+        ));
         assert!(matches!(config.warm_state, WarmStateConfig::NetCdf { .. }));
     }
 
@@ -599,7 +633,16 @@ output_types: []
         assert_eq!(defaults.tile_concurrency, None);
         assert_eq!(defaults.max_memory, None);
         assert_eq!(defaults.max_memory_bytes().unwrap(), None);
+        assert_eq!(defaults.tile_state, TileStateResidency::Auto);
+        assert_eq!(defaults.overlap_postprocess, None);
         defaults.validate().unwrap();
+
+        let on_disk: StreamingExecutionConfig = serde_yaml::from_str("tile_state: disk").unwrap();
+        assert_eq!(on_disk.tile_state, TileStateResidency::Disk);
+        let in_memory: StreamingExecutionConfig =
+            serde_yaml::from_str("tile_state: memory").unwrap();
+        assert_eq!(in_memory.tile_state, TileStateResidency::Memory);
+        assert!(serde_yaml::from_str::<StreamingExecutionConfig>("tile_state: tape").is_err());
 
         let configured: StreamingExecutionConfig = serde_yaml::from_str(
             r#"
