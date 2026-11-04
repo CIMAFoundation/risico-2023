@@ -25,6 +25,8 @@ build-binary = [
     "dep:hdf5-sys",
     "dep:geotiff-reader",
     "dep:memmap2",
+    "dep:zarrs",
+    "dep:serde_json",
 ]
 
 gdal_bindgen = ["gdal", "gdal/bindgen"]
@@ -65,6 +67,8 @@ netcdf-sys = { version = "0.5.1", optional = true }
 geotiff-reader = { version = "=0.7.0", default-features = false, features = ["local"], optional = true }
 memmap2 = { version = "0.9.5", optional = true }
 tzf-rs = { version = "0.4.9", default-features = false }
+zarrs = { version = "0.22.4", optional = true, default-features = false, features = ["filesystem", "zstd"] }
+serde_json = { version = "1.0", optional = true }
 
 
 

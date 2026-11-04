@@ -284,6 +284,23 @@ Output resolution does not affect numerical model execution: interpolation,
 clustering, precision rounding, and encoding happen only during the
 postprocessing stage.
 
+Output types are written as `ZBIN`, `NETCDF`, `ZARR`, `PNGWJSON` or, in a
+GDAL-enabled build, `GEOTIFF`; any other `format` is a configuration error.
+`ZARR` writes one Zarr v3 store per variable (`<path>/<name>.zarr`) with the
+same `time`, `latitude` and `longitude` axes as the NetCDF output, one
+zstd-compressed chunk per timestamp, replacing any store left by an earlier
+run. Zarr stores take no global lock, so a timestamp's variables are
+compressed in parallel.
+
+NETCDF output types accept a `compression_level` (0 to 9, default 7); for
+`ZARR` the same key is the zstd level (0 to 22). The
+NetCDF library accepts one call at a time, so every variable of a timestamp
+is deflated on a single thread; on runs that are output-bound this level is
+most of the wall time, and a lower level trades file size for speed. Output
+variables are chunked one timestamp at a time, and the library's chunk cache
+is capped at one such chunk per variable so that open output files cost
+little resident memory however long the timeline is.
+
 Allow scratch capacity for approximately four bytes multiplied by active model
 cells and configured native variables, plus the serialized live-state
 checkpoints and filesystem overhead. Only the current output timestamp is

@@ -21,6 +21,7 @@ use crate::common::{
     io::{
         streaming::TiledNativeOutputs,
         writers::{create_nc_file, write_to_pngwjson, write_to_zbin_file},
+        zarr::ZarrWriter,
     },
 };
 
@@ -364,10 +365,22 @@ impl OutputType {
         let writer: Box<dyn Writer> = match format.as_str() {
             "ZBIN" => Box::new(ZBinWriter::new(path, name, run_date)),
             "PNGWJSON" => Box::new(PngWriter::new(path, name, palettes, run_date)),
-            "NETCDF" => Box::new(NetcdfWriter::new(path)),
+            "NETCDF" => Box::new(NetcdfWriter::new(path, output_type_def.compression_level)),
+            "ZARR" => Box::new(ZarrWriter::new(
+                path,
+                name,
+                run_date,
+                output_type_def.compression_level,
+            )),
             #[cfg(feature = "gdal")]
             "GEOTIFF" => Box::new(GeotiffWriter::new(path, name, run_date)),
-            _ => Box::new(ZBinWriter::new(path, name, run_date)),
+            other => {
+                return Err(format!(
+                    "output type {name} has unknown format {other}; \
+                     expected ZBIN, NETCDF, ZARR, PNGWJSON or GEOTIFF"
+                )
+                .into())
+            }
         };
 
         let variables = output_type_def
@@ -402,6 +415,10 @@ impl OutputType {
 
     pub fn variables(&self) -> &[OutputVariable] {
         &self.variables
+    }
+
+    pub fn name(&self) -> &str {
+        &self.name
     }
 
     pub fn grid(&self) -> &RegularGrid {
@@ -449,17 +466,15 @@ impl OutputType {
 #[derive(Debug)]
 struct NetcdfWriter {
     path: PathBuf,
-    // name: String,
-    // run_date: DateTime<Utc>,
+    compression_level: i32,
     files: HashMap<String, Mutex<MutableFile>>,
 }
 
 impl NetcdfWriter {
-    fn new(path: &str) -> Self {
+    fn new(path: &str, compression_level: i32) -> Self {
         Self {
             path: PathBuf::from(path),
-            // name: name.to_string(),
-            // run_date: *run_date,
+            compression_level,
             files: HashMap::new(),
         }
     }
@@ -504,7 +519,7 @@ impl PngWriter {
 /// Writers take `&self` so that a timestep's variables can be written side by
 /// side while each one is resampled on its own, holding a single output grid
 /// rather than every variable at once.
-trait Writer: Send + Sync {
+pub(crate) trait Writer: Send + Sync {
     /// Open whatever the writer needs before the first variable arrives.
     fn prepare(
         &mut self,
@@ -537,7 +552,13 @@ impl Writer for NetcdfWriter {
             let path = self.path.as_os_str().to_str().expect("Invalid path");
 
             let file_name = format!("{}/{}.nc", path, variable.name);
-            let file = create_nc_file(&file_name, grid, &variable.name, variable.internal_name)?;
+            let file = create_nc_file(
+                &file_name,
+                grid,
+                &variable.name,
+                variable.internal_name,
+                self.compression_level,
+            )?;
             self.files.insert(variable.name.clone(), Mutex::new(file));
         }
         Ok(())

@@ -413,7 +413,17 @@ pub struct OutputTypeConfig {
     pub path: String,
     pub grid_path: String,
     pub format: String,
+    /// Compression level: deflate 0 to 9 for NETCDF, zstd 0 to 22 for ZARR,
+    /// 0 for none. The NetCDF library takes one call at a time, so every
+    /// variable of a timestep is deflated on one thread; on output-bound runs
+    /// this level is most of the wall time. Zarr stores compress in parallel.
+    #[serde(default = "default_compression_level")]
+    pub compression_level: i32,
     pub variables: Vec<OutputVariable>,
+}
+
+fn default_compression_level() -> i32 {
+    7
 }
 
 impl RISICOConfigBuilder {

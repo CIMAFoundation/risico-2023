@@ -1180,17 +1180,28 @@ pub struct OutputWriter {
 }
 
 impl OutputWriter {
+    /// Build every configured output type.
+    ///
+    /// An output type that cannot be built (typically a missing grid file) is
+    /// an error rather than a silent omission: a run that writes nothing
+    /// otherwise looks successful and is only noticed downstream.
     pub fn new(
         outputs_defs: &[OutputTypeConfig],
         date: &DateTime<Utc>,
         palettes: &PaletteMap,
-    ) -> Self {
-        Self {
-            outputs: outputs_defs
-                .iter()
-                .filter_map(|t| OutputType::new(t, date, palettes).ok())
-                .collect(),
-        }
+    ) -> Result<Self, RISICOError> {
+        let outputs = outputs_defs
+            .iter()
+            .map(|definition| {
+                OutputType::new(definition, date, palettes).map_err(|error| {
+                    RISICOError::from(format!(
+                        "cannot build output type {}: {error}",
+                        definition.name
+                    ))
+                })
+            })
+            .collect::<Result<Vec<_>, _>>()?;
+        Ok(Self { outputs })
     }
 
     /// Write a timestep whose native output is held as one scratch per tile.
@@ -1235,16 +1246,19 @@ impl OutputWriter {
         let parallelism = (rayon::current_num_threads() / requests.len()).max(1);
 
         let outputs = &self.outputs;
-        requests.par_iter().for_each(|&(index, variable)| {
+        requests.par_iter().try_for_each(|&(index, variable)| {
             let output_type = &outputs[index];
             let variable = &output_type.variables()[variable];
-            if let Err(error) =
-                output_type.write_variable(variable, output, lats, lons, parallelism)
-            {
-                warn!("Error writing output: {}", error);
-            }
-        });
-        Ok(())
+            output_type
+                .write_variable(variable, output, lats, lons, parallelism)
+                .map_err(|error| {
+                    RISICOError::from(format!(
+                        "cannot write {} to output {}: {error}",
+                        variable.output_name(),
+                        output_type.name()
+                    ))
+                })
+        })
     }
 }
 
@@ -1551,11 +1565,11 @@ impl RISICOConfig {
     }
 
     pub fn get_output_writer(&self) -> Result<OutputWriter, RISICOError> {
-        Ok(OutputWriter::new(
+        OutputWriter::new(
             self.output_types_defs.as_slice(),
             &self.run_date,
             &self.palettes,
-        ))
+        )
     }
 
     pub fn should_write_output(&self, time: &DateTime<Utc>) -> bool {
@@ -1689,11 +1703,11 @@ impl FWIConfig {
     }
 
     pub fn get_output_writer(&self) -> Result<OutputWriter, RISICOError> {
-        Ok(OutputWriter::new(
+        OutputWriter::new(
             self.output_types_defs.as_slice(),
             &self.run_date,
             &self.palettes,
-        ))
+        )
     }
 
     pub fn should_write_output(&self, time: &DateTime<Utc>) -> bool {
@@ -1879,11 +1893,11 @@ impl Mark5Config {
     }
 
     pub fn get_output_writer(&self) -> Result<OutputWriter, RISICOError> {
-        Ok(OutputWriter::new(
+        OutputWriter::new(
             self.output_types_defs.as_slice(),
             &self.run_date,
             &self.palettes,
-        ))
+        )
     }
 
     pub fn should_write_warm_state(&self, time: &DateTime<Utc>) -> bool {
@@ -2077,11 +2091,11 @@ impl KbdiConfig {
     }
 
     pub fn get_output_writer(&self) -> Result<OutputWriter, RISICOError> {
-        Ok(OutputWriter::new(
+        OutputWriter::new(
             self.output_types_defs.as_slice(),
             &self.run_date,
             &self.palettes,
-        ))
+        )
     }
 
     pub fn should_write_warm_state(&self, time: &DateTime<Utc>) -> bool {
@@ -2245,11 +2259,11 @@ impl AngstromConfig {
     }
 
     pub fn get_output_writer(&self) -> Result<OutputWriter, RISICOError> {
-        Ok(OutputWriter::new(
+        OutputWriter::new(
             self.output_types_defs.as_slice(),
             &self.run_date,
             &self.palettes,
-        ))
+        )
     }
 
     // check for writing output condition
@@ -2322,11 +2336,11 @@ impl FosbergConfig {
     }
 
     pub fn get_output_writer(&self) -> Result<OutputWriter, RISICOError> {
-        Ok(OutputWriter::new(
+        OutputWriter::new(
             self.output_types_defs.as_slice(),
             &self.run_date,
             &self.palettes,
-        ))
+        )
     }
 
     // check for writing output condition
@@ -2417,11 +2431,11 @@ impl NesterovConfig {
     }
 
     pub fn get_output_writer(&self) -> Result<OutputWriter, RISICOError> {
-        Ok(OutputWriter::new(
+        OutputWriter::new(
             self.output_types_defs.as_slice(),
             &self.run_date,
             &self.palettes,
-        ))
+        )
     }
 
     pub fn should_write_warm_state(&self, time: &DateTime<Utc>) -> bool {
@@ -2554,11 +2568,11 @@ impl SharplesConfig {
     }
 
     pub fn get_output_writer(&self) -> Result<OutputWriter, RISICOError> {
-        Ok(OutputWriter::new(
+        OutputWriter::new(
             self.output_types_defs.as_slice(),
             &self.run_date,
             &self.palettes,
-        ))
+        )
     }
 
     pub fn should_write_output(&self, time: &DateTime<Utc>) -> bool {
@@ -2657,11 +2671,11 @@ impl OrieuxConfig {
     }
 
     pub fn get_output_writer(&self) -> Result<OutputWriter, RISICOError> {
-        Ok(OutputWriter::new(
+        OutputWriter::new(
             self.output_types_defs.as_slice(),
             &self.run_date,
             &self.palettes,
-        ))
+        )
     }
 
     pub fn should_write_warm_state(&self, time: &DateTime<Utc>) -> bool {
@@ -2984,11 +2998,11 @@ impl HdwConfig {
     }
 
     pub fn get_output_writer(&self) -> Result<OutputWriter, RISICOError> {
-        Ok(OutputWriter::new(
+        OutputWriter::new(
             self.output_types_defs.as_slice(),
             &self.run_date,
             &self.palettes,
-        ))
+        )
     }
 
     // check for writing output condition

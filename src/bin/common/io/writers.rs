@@ -252,13 +252,28 @@ pub fn write_north_up_geotiff(
     Ok(())
 }
 
-const COMPRESSION_RATE: i32 = 7;
+/// Make variables defined from now on cache one chunk of `chunk_bytes`.
+///
+/// The cache only has to hold the chunk being written; anything larger is
+/// memory kept for a read pattern this writer never has.
+fn set_default_chunk_cache(chunk_bytes: usize) {
+    // A little slack so the chunk never exceeds the cache, which is the
+    // condition under which netcdf-c enlarges it tenfold.
+    let size = chunk_bytes + chunk_bytes / 8;
+    // SAFETY: plain FFI call with scalar arguments; netcdf-c serialises its
+    // own global state.
+    let status = unsafe { netcdf_sys::nc_set_chunk_cache(size, 1, 0.75) };
+    if status != 0 {
+        warn!("cannot set the NetCDF default chunk cache ({status}); output memory may grow");
+    }
+}
 
 pub fn create_nc_file<T>(
     file_name: &str,
     grid: &RegularGrid,
     output_name: &str,
     variable_name: T,
+    compression_level: i32,
 ) -> Result<netcdf::MutableFile, RISICOError>
 where
     T: EnumProperty + ToString,
@@ -323,13 +338,33 @@ where
         .add_attribute("calendar", "proleptic_gregorian")
         .unwrap_or_else(|_| panic!("Add time units failed"));
 
+    // One timestep per chunk, which is how the file is written and read, and
+    // a chunk cache sized for exactly that. Left to netcdf-c, a chunk larger
+    // than its default cache makes it grow the cache to ten chunks, which for
+    // a 1 km national grid is about 70 MB held per open variable for the
+    // whole run; thirteen variables were close to a gigabyte of resident
+    // memory that the model itself never needed. The default is process
+    // wide and read when a variable is defined, so it is set just before.
+    let record_bytes = grid.nrows * grid.ncols * std::mem::size_of::<f32>();
+    set_default_chunk_cache(record_bytes);
     let mut variable_var = file
         .add_variable::<f32>(output_name, &["time", "latitude", "longitude"])
         .unwrap_or_else(|_| panic!("Add {} failed", output_name));
 
     variable_var
-        .compression(COMPRESSION_RATE, true)
-        .expect("Set compression failed");
+        .chunking(&[1, grid.nrows, grid.ncols])
+        .expect("Set chunking failed");
+    if !(0..=9).contains(&compression_level) {
+        return Err(format!(
+            "NetCDF compression level must be between 0 and 9, got {compression_level}"
+        )
+        .into());
+    }
+    if compression_level > 0 {
+        variable_var
+            .compression(compression_level, true)
+            .expect("Set compression failed");
+    }
 
     variable_var
         .add_attribute("missing_value", NODATAVAL)
