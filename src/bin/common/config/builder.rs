@@ -1,72 +1,38 @@
 use chrono::{DateTime, Utc};
-use risico::models::output::OutputVariableName;
 use serde_derive::{Deserialize, Serialize};
 use serde_yaml;
+use std::collections::HashMap;
 use std::fs::File;
+use std::io;
 use std::io::BufRead;
 use std::io::Read;
-use std::str::FromStr;
-use std::{collections::HashMap, io};
 
 use crate::common::helpers::RISICOError;
-use crate::common::io::models::grid::ClusterMode;
 use crate::common::io::models::output::OutputVariable;
 use crate::common::io::readers::netcdf::NetCdfInputConfiguration;
 
 use super::models::{
-    WARM_STATE_HOUR,
-    WARM_STATE_LAG_DAYS,
-    RISICOConfig,
-    FWIConfig,
-    Mark5Config,
-    KbdiConfig,
     AngstromConfig,
+    FWIConfig,
     FosbergConfig,
-    NesterovConfig,
-    SharplesConfig,
-    OrieuxConfig,
-//    PortugueseConfig,
+    //    PortugueseConfig,
     HdwConfig,
+    KbdiConfig,
+    Mark5Config,
+    NesterovConfig,
+    OrieuxConfig,
+    RISICOConfig,
+    SharplesConfig,
 };
 
 pub type PaletteMap = HashMap<String, String>;
 pub type ConfigMap = HashMap<String, Vec<String>>;
 
-const MODEL_NAME_KEY: &str = "MODELNAME";
-const WARM_STATE_PATH_KEY: &str = "STATO0";
-const WARM_STATE_HOUR_KEY: &str = "STATO0_HOUR";
-const WARM_STATE_LAG_DAYS_KEY: &str = "STATO0_LAG_DAYS";
-const CELLS_FILE_KEY: &str = "CELLE";
-const VEGETATION_FILE_KEY: &str = "VEG";
-const PPF_FILE_KEY: &str = "PPF";
-const MODEL_VERSION_KEY: &str = "MODEL_VERSION";
-// const USE_TEMPERATURE_EFFECT_KEY: &str = "USETCONTR";  // DEPRECATED
-// const USE_NDVI_KEY: &str = "USENDVI";  // DEPRECATED
-const OUTPUTS_KEY: &str = "MODEL";
-const NETCDF_INPUT_CONFIG: &str = "NETCDFINPUTCONFIG";
-const VARIABLES_KEY: &str = "VARIABLE";
-const PALETTE_KEY: &str = "PALETTE";
-const KEY_HOURSRESOLUTION: &str = "OUTPUTHRES";
-
-trait ConfigMapExt {
-    /// Get the first value of a key in the config map
-    fn first(&self, key: &str) -> Option<String>;
-    fn all(&self, key: &str) -> Option<Vec<String>>;
-}
-
-impl ConfigMapExt for ConfigMap {
-    fn first(&self, key: &str) -> Option<String> {
-        self.get(key).and_then(|values| values.first().cloned())
-    }
-
-    fn all(&self, key: &str) -> Option<Vec<String>> {
-        self.get(key).cloned()
-    }
-}
-
+/// Parses the legacy `KEY=VALUE` grid-definition and cell-order text files
+/// still used by models without a GeoTIFF/NetCDF static-data equivalent, and
+/// by the offline `static-converter` migration tool.
 pub fn read_config(file_name: impl Into<String>) -> Result<ConfigMap, RISICOError> {
     let file_name = file_name.into();
-    // open file as text and read it using a buffered reader
     let file =
         File::open(&file_name).map_err(|error| format!("error opening config file: {error}"))?;
     let reader = io::BufReader::new(file);
@@ -85,7 +51,6 @@ pub fn read_config(file_name: impl Into<String>) -> Result<ConfigMap, RISICOErro
         if !line.contains("=") {
             return Err(format!("error parsing config file {file_name} at line {i}.").into());
         }
-        // implement split using regex
         let mut parts = line.split("=");
         let key = parts
             .next()
@@ -107,17 +72,48 @@ pub fn read_config(file_name: impl Into<String>) -> Result<ConfigMap, RISICOErro
 }
 
 #[derive(Debug, Serialize, Deserialize)]
+#[serde(tag = "type")]
+pub enum StaticDataConfig {
+    #[serde(rename = "geotiff")]
+    GeoTiff {
+        domain_mask: String,
+        slope: Option<String>,
+        aspect: Option<String>,
+        vegetation_id: Option<String>,
+        vegetation_catalog: Option<String>,
+        ppf_summer: Option<String>,
+        ppf_winter: Option<String>,
+    },
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone, Copy, Default, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum MissingWarmStatePolicy {
+    #[default]
+    Error,
+    Defaults,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+#[serde(tag = "type")]
+pub enum WarmStateConfig {
+    #[serde(rename = "netcdf")]
+    NetCdf {
+        directory: String,
+        max_age_hours: Option<i64>,
+        #[serde(default)]
+        on_missing: MissingWarmStatePolicy,
+    },
+}
+
+#[derive(Debug, Serialize, Deserialize)]
 pub struct RISICOConfigBuilder {
     pub model_name: String,
-    pub cells_file_path: String,
-    pub vegetation_file: String,
-    pub warm_state_path: String,
+    pub static_data: StaticDataConfig,
+    pub warm_state: WarmStateConfig,
     pub warm_state_hour: Option<i64>,
     pub warm_state_lag_days: Option<i64>,
-    pub ppf_file: Option<String>,
     pub output_types: Vec<OutputTypeConfig>,
-    // pub use_temperature_effect: bool,  // DEPRECATED
-    // pub use_ndvi: bool,  // DEPRECATED
     pub output_time_resolution: u32,
     pub model_version: String,
 }
@@ -125,8 +121,8 @@ pub struct RISICOConfigBuilder {
 #[derive(Debug, Serialize, Deserialize)]
 pub struct FWIConfigBuilder {
     pub model_name: String,
-    pub cells_file_path: String,
-    pub warm_state_path: String,
+    pub static_data: StaticDataConfig,
+    pub warm_state: WarmStateConfig,
     pub warm_state_hour: Option<i64>,
     pub warm_state_lag_days: Option<i64>,
     pub output_types: Vec<OutputTypeConfig>,
@@ -217,13 +213,12 @@ pub struct HdwConfigBuilder {
     pub output_time_resolution: u32,
 }
 
-
 #[allow(clippy::upper_case_acronyms)]
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(tag = "type")]
 pub enum ConfigBuilderType {
-    RISICO(RISICOConfigBuilder),
-    FWI(FWIConfigBuilder),
+    RISICO(Box<RISICOConfigBuilder>),
+    FWI(Box<FWIConfigBuilder>),
     Mark5(Mark5ConfigBuilder),
     KBDI(KbdiConfigBuilder),
     Angstrom(AngstromConfigBuilder),
@@ -231,10 +226,9 @@ pub enum ConfigBuilderType {
     Nesterov(NesterovConfigBuilder),
     Sharples(SharplesConfigBuilder),
     Orieux(OrieuxConfigBuilder),
-//     Portuguese(PortugueseConfigBuilder),
+    //     Portuguese(PortugueseConfigBuilder),
     Hdw(HdwConfigBuilder),
 }
-
 
 impl ConfigBuilderType {
     pub fn get_model_name(&self) -> &str {
@@ -248,10 +242,156 @@ impl ConfigBuilderType {
             ConfigBuilderType::Nesterov(_) => "Nesterov",
             ConfigBuilderType::Sharples(_) => "Sharples",
             ConfigBuilderType::Orieux(_) => "Orieux",
-//             ConfigBuilderType::Portuguese(_) => "Portuguese",
+            //             ConfigBuilderType::Portuguese(_) => "Portuguese",
             ConfigBuilderType::Hdw(_) => "Hdw",
         }
     }
+}
+
+fn default_tile_height() -> usize {
+    512
+}
+
+fn default_tile_width() -> usize {
+    512
+}
+
+fn default_cells_per_tile() -> usize {
+    1_048_576
+}
+
+/// Where each tile's live model state lives between timesteps.
+#[derive(Debug, Serialize, Deserialize, Clone, Copy, PartialEq, Eq, Default)]
+#[serde(rename_all = "lowercase")]
+pub enum TileStateResidency {
+    /// In memory when the `max_memory` budget has room for every tile's state
+    /// at the chosen concurrency, or when no budget is set; on disk otherwise.
+    #[default]
+    Auto,
+    /// Always in memory. The fastest option: no checkpoint is written or read.
+    Memory,
+    /// Always checkpointed to the scratch directory between timesteps, so the
+    /// run holds the state of only the tiles in flight.
+    Disk,
+}
+
+/// Model-independent controls for bounded-memory execution.
+///
+/// Raster-backed models use two-dimensional windows. Legacy point models use
+/// batches in their configured cell order but enter the same tile runner.
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct StreamingExecutionConfig {
+    #[serde(default = "default_tile_height")]
+    pub tile_height: usize,
+    #[serde(default = "default_tile_width")]
+    pub tile_width: usize,
+    #[serde(default = "default_cells_per_tile")]
+    pub cells_per_tile: usize,
+    /// How many tiles may be processed at once.
+    ///
+    /// Memory in flight scales with this times the tile size, so it is the
+    /// dial to turn when a run has to fit a smaller budget. Defaults to one
+    /// tile per available core.
+    pub tile_concurrency: Option<usize>,
+    /// Target peak resident size, as a human size such as `6GB` or `768 MiB`.
+    ///
+    /// Tile concurrency is derived from what is left of this budget once the
+    /// whole-domain arrays are accounted for, so the run adapts to the model
+    /// and the domain instead of needing a hand-tuned thread count. This is a
+    /// target rather than a limit: nothing enforces it against the allocator,
+    /// and a budget below the domain's fixed cost still runs, one tile at a
+    /// time. An explicit `tile_concurrency` wins over this.
+    pub max_memory: Option<String>,
+    /// Whether tile state stays in memory across timesteps or is checkpointed
+    /// to disk. Reading and writing every tile's checkpoint each timestep is
+    /// the single largest I/O cost of a run, so `auto` keeps the state in
+    /// memory whenever the budget allows.
+    #[serde(default)]
+    pub tile_state: TileStateResidency,
+    /// Whether a timestamp's output is resampled and written while the next
+    /// timestamp is being stepped. Unset, it is decided from the budget: the
+    /// overlap costs one timestamp's output grids and warm state on top of
+    /// the step, and is only taken when that still fits `max_memory`.
+    pub overlap_postprocess: Option<bool>,
+    pub scratch_directory: Option<String>,
+}
+
+impl Default for StreamingExecutionConfig {
+    fn default() -> Self {
+        Self {
+            tile_height: default_tile_height(),
+            tile_width: default_tile_width(),
+            cells_per_tile: default_cells_per_tile(),
+            tile_concurrency: None,
+            max_memory: None,
+            tile_state: TileStateResidency::default(),
+            overlap_postprocess: None,
+            scratch_directory: None,
+        }
+    }
+}
+
+impl StreamingExecutionConfig {
+    pub fn validate(&self) -> Result<(), RISICOError> {
+        if self.tile_height == 0 || self.tile_width == 0 {
+            return Err("streaming tile dimensions must be greater than zero".into());
+        }
+        if self.cells_per_tile == 0 {
+            return Err("streaming cells_per_tile must be greater than zero".into());
+        }
+        if self.tile_concurrency == Some(0) {
+            return Err("streaming tile_concurrency must be greater than zero".into());
+        }
+        self.max_memory_bytes()?;
+        Ok(())
+    }
+
+    /// The configured budget in bytes, if one was given.
+    pub fn max_memory_bytes(&self) -> Result<Option<u64>, RISICOError> {
+        match &self.max_memory {
+            None => Ok(None),
+            Some(budget) => parse_byte_size(budget).map(Some),
+        }
+    }
+}
+
+/// Parse a human byte size such as `512MB`, `6 GiB` or a bare byte count.
+///
+/// Both the decimal (`kB`, `MB`, `GB`) and binary (`KiB`, `MiB`, `GiB`) scales
+/// are accepted because configuration is written by people who mean either.
+fn parse_byte_size(text: &str) -> Result<u64, RISICOError> {
+    let trimmed = text.trim();
+    if trimmed.is_empty() {
+        return Err("streaming max_memory must not be empty".into());
+    }
+
+    let split = trimmed
+        .find(|character: char| !character.is_ascii_digit() && character != '.')
+        .unwrap_or(trimmed.len());
+    let (number, unit) = trimmed.split_at(split);
+    let amount: f64 = number
+        .parse()
+        .map_err(|_| format!("streaming max_memory has no leading number: {trimmed}"))?;
+    if !amount.is_finite() || amount <= 0.0 {
+        return Err(format!("streaming max_memory must be positive: {trimmed}").into());
+    }
+
+    let multiplier: u64 = match unit.trim().to_ascii_lowercase().as_str() {
+        "" | "b" => 1,
+        "k" | "kb" => 1_000,
+        "m" | "mb" => 1_000_000,
+        "g" | "gb" => 1_000_000_000,
+        "t" | "tb" => 1_000_000_000_000,
+        "ki" | "kib" => 1 << 10,
+        "mi" | "mib" => 1 << 20,
+        "gi" | "gib" => 1 << 30,
+        "ti" | "tib" => 1u64 << 40,
+        other => {
+            return Err(format!("streaming max_memory has an unknown unit: {other}").into());
+        }
+    };
+
+    Ok((amount * multiplier as f64) as u64)
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -259,15 +399,14 @@ pub struct ConfigContainer {
     pub models: Vec<ConfigBuilderType>,
     pub palettes: PaletteMap,
     pub netcdf_input_configuration: Option<NetCdfInputConfiguration>,
+    #[serde(default)]
+    pub streaming: StreamingExecutionConfig,
 }
 
 impl ConfigContainer {
     pub fn from_file(config_file: &str) -> Result<ConfigContainer, RISICOError> {
-        // Check the file extension to determine which method to use
         if config_file.ends_with(".yaml") || config_file.ends_with(".yml") {
             Self::from_yaml(config_file)
-        } else if config_file.ends_with(".txt") {
-            Self::from_txt_file(config_file)
         } else {
             Err(RISICOError::from(format!(
                 "Unsupported config file format: {}",
@@ -284,164 +423,10 @@ impl ConfigContainer {
         file.read_to_string(&mut contents)
             .map_err(|err| format!("Cannot read config file {}: {}", config_file, err))?;
 
-        let conf = serde_yaml::from_str(&contents)
+        let conf: Self = serde_yaml::from_str(&contents)
             .map_err(|err| format!("Cannot parse config file {}: {}", config_file, err))?;
+        conf.streaming.validate()?;
         Ok(conf)
-    }
-
-    fn parse_output_types(
-        output_types_defs: &Vec<String>,
-        variables_defs: &Vec<String>,
-    ) -> Result<Vec<OutputTypeConfig>, RISICOError> {
-        let mut output_types_vec: Vec<OutputTypeConfig> = Vec::new();
-
-        for out_type_def in output_types_defs {
-            let parts = out_type_def.split(":").collect::<Vec<&str>>();
-            if parts.len() != 5 {
-                return Err("Invalid output definition".into());
-            }
-            let (internal_name, name, path, grid_path, format) =
-                (parts[0], parts[1], parts[2], parts[3], parts[4]);
-
-            let output_type = OutputTypeConfig {
-                internal_name: internal_name.into(),
-                name: name.into(),
-                path: path.into(),
-                grid_path: grid_path.into(),
-                format: format.into(),
-                variables: Vec::new(),
-            };
-
-            output_types_vec.push(output_type);
-        }
-
-        for variable_def in variables_defs {
-            let parts = variable_def.split(":").collect::<Vec<&str>>();
-            if parts.len() != 5 {
-                return Err("Invalid variable definition".into());
-            }
-            let (output_type, internal_name, name, cluster_mode, precision) =
-                (parts[0], parts[1], parts[2], parts[3], parts[4]);
-
-            let precision = precision.parse::<i32>().map_err(|_| "Invalid precision")?;
-
-            output_types_vec
-                .iter_mut()
-                .filter(|_type| _type.internal_name == output_type)
-                .for_each(|_type| {
-                    let internal_name = OutputVariableName::from_str(internal_name)
-                        .unwrap_or_else(|_| panic!("Invalid Variable Name {}", &internal_name));
-                    let cluster_mode = ClusterMode::from_str(cluster_mode)
-                        .unwrap_or_else(|_| panic!("Invalid ClusterMode {}", &cluster_mode));
-                    _type.variables.push(OutputVariable::new(
-                        internal_name,
-                        name,
-                        cluster_mode,
-                        precision,
-                    ))
-                });
-        }
-
-        Ok(output_types_vec)
-    }
-
-    fn from_txt_file(config_file: &str) -> Result<ConfigContainer, RISICOError> {
-        let config_map = read_config(config_file)?;
-
-        // try to get the model name, expect it to be there
-        let model_name = config_map
-            .first(MODEL_NAME_KEY)
-            .ok_or(format!("Error: {MODEL_NAME_KEY} not found in config"))?;
-
-        let warm_state_path = config_map
-            .first(WARM_STATE_PATH_KEY)
-            .ok_or(format!("Error: {WARM_STATE_PATH_KEY} not found in config"))?;
-        
-        // try to get the warm state hour, otherwise default
-        let warm_state_hour = match config_map.first(WARM_STATE_HOUR_KEY) {
-            Some(value) => Some(value.parse::<i64>().unwrap_or(WARM_STATE_HOUR)),
-            None => Some(WARM_STATE_HOUR),
-        };
-
-        // try to get the warm state offset, otherwise default
-        let warm_state_lag_days = match config_map.first(WARM_STATE_LAG_DAYS_KEY) {
-            Some(value) => Some(value.parse::<i64>().unwrap_or(WARM_STATE_LAG_DAYS)),
-            None => Some(WARM_STATE_LAG_DAYS),
-        };
-
-        let cells_file_path = config_map
-            .first(CELLS_FILE_KEY)
-            .ok_or(format!("Error: {CELLS_FILE_KEY} not found in config"))?;
-
-        let vegetation_file = config_map
-            .first(VEGETATION_FILE_KEY)
-            .ok_or(format!("Error: {VEGETATION_FILE_KEY} not found in config"))?;
-
-        let model_version = match config_map.first(MODEL_VERSION_KEY) {
-            Some(value) => value,
-            None => "legacy".to_owned(),
-        };
-
-        let ppf_file = config_map.first(PPF_FILE_KEY);
-
-        // DEPRECATED
-        // let use_temperature_effect =
-        //     if let Some(value) = config_map.first(USE_TEMPERATURE_EFFECT_KEY) {
-        //         matches!(value.as_str(), "true" | "True" | "TRUE" | "1")
-        //     } else {
-        //         false
-        //     };
-
-        // DEPRECATED
-        // let use_ndvi = if let Some(value) = config_map.first(USE_NDVI_KEY) {
-        //     matches!(value.as_str(), "true" | "True" | "TRUE" | "1")
-        // } else {
-        //     false
-        // };
-
-        let output_time_resolution = match config_map.first(KEY_HOURSRESOLUTION) {
-            Some(value) => value.parse::<u32>().unwrap_or(3),
-            None => 3,
-        };
-
-        let output_types_defs = config_map
-            .all(OUTPUTS_KEY)
-            .ok_or(format!("KEY {OUTPUTS_KEY} not found"))?;
-
-        let variables_defs = config_map
-            .all(VARIABLES_KEY)
-            .ok_or(format!("KEY {VARIABLES_KEY} not found"))?;
-
-        let palettes = load_palettes(&config_map);
-        let output_types = Self::parse_output_types(&output_types_defs, &variables_defs)?;
-
-        let netcdf_input_configuration = config_map
-            .first(NETCDF_INPUT_CONFIG)
-            .map(|line| NetCdfInputConfiguration::from(&line))
-            .or(None);
-
-        let config = RISICOConfigBuilder {
-            model_name,
-            warm_state_path,
-            warm_state_hour,
-            warm_state_lag_days,
-            cells_file_path,
-            vegetation_file,
-            ppf_file,
-            output_types,
-            // use_temperature_effect,  // DEPRECATED
-            // use_ndvi,  // DEPRECATED
-            output_time_resolution,
-            model_version,
-        };
-
-        let config_container = ConfigContainer {
-            models: vec![ConfigBuilderType::RISICO(config)],
-            palettes,
-            netcdf_input_configuration,
-        };
-
-        Ok(config_container)
     }
 
     pub fn get_netcdf_input_config(&self) -> &Option<NetCdfInputConfiguration> {
@@ -456,7 +441,17 @@ pub struct OutputTypeConfig {
     pub path: String,
     pub grid_path: String,
     pub format: String,
+    /// Compression level: deflate 0 to 9 for NETCDF, zstd 0 to 22 for ZARR,
+    /// 0 for none. The NetCDF library takes one call at a time, so every
+    /// variable of a timestep is deflated on one thread; on output-bound runs
+    /// this level is most of the wall time. Zarr stores compress in parallel.
+    #[serde(default = "default_compression_level")]
+    pub compression_level: i32,
     pub variables: Vec<OutputVariable>,
+}
+
+fn default_compression_level() -> i32 {
+    7
 }
 
 impl RISICOConfigBuilder {
@@ -469,7 +464,6 @@ impl RISICOConfigBuilder {
     }
 }
 
-
 impl FWIConfigBuilder {
     pub fn build(
         &self,
@@ -480,8 +474,7 @@ impl FWIConfigBuilder {
     }
 }
 
-
-impl  Mark5ConfigBuilder {
+impl Mark5ConfigBuilder {
     pub fn build(
         &self,
         date: &DateTime<Utc>,
@@ -489,7 +482,6 @@ impl  Mark5ConfigBuilder {
     ) -> Result<Mark5Config, RISICOError> {
         Mark5Config::new(self, *date, palettes)
     }
-    
 }
 
 impl KbdiConfigBuilder {
@@ -572,27 +564,142 @@ impl HdwConfigBuilder {
     }
 }
 
+#[cfg(test)]
+mod tests {
+    use super::*;
 
-pub fn load_palettes(config_map: &ConfigMap) -> HashMap<String, String> {
-    let mut palettes: HashMap<String, String> = HashMap::new();
-    let palettes_defs = config_map.all(PALETTE_KEY);
-    if palettes_defs.is_none() {
-        return palettes;
+    #[test]
+    fn geotiff_and_netcdf_configuration_is_deserializable() {
+        let yaml = r#"
+model_name: RISICO2023
+model_version: v2025
+static_data:
+  type: geotiff
+  domain_mask: /data/domain.tif
+  slope: /data/slope.tif
+  aspect: /data/aspect.tif
+  vegetation_id: /data/vegetation.tif
+  vegetation_catalog: /data/vegetation.yml
+  ppf_summer: null
+  ppf_winter: null
+warm_state:
+  type: netcdf
+  directory: /state
+  max_age_hours: 120
+  on_missing: error
+output_types: []
+output_time_resolution: 1
+"#;
+        let config: RISICOConfigBuilder =
+            serde_yaml::from_str(yaml).expect("configuration should parse");
+        assert!(matches!(
+            config.static_data,
+            StaticDataConfig::GeoTiff { .. }
+        ));
+        assert!(matches!(config.warm_state, WarmStateConfig::NetCdf { .. }));
     }
-    let palettes_defs = palettes_defs.expect("should be there");
 
-    for palette_def in palettes_defs {
-        let parts = palette_def.split(":").collect::<Vec<&str>>();
-        if parts.len() != 2 {
-            continue;
+    #[test]
+    fn fwi_geotiff_and_netcdf_configuration_is_deserializable() {
+        let yaml = r#"
+model_name: FWIWORLD
+model_version: legacy
+static_data:
+  type: geotiff
+  domain_mask: /data/domain_mask.tif
+warm_state:
+  type: netcdf
+  directory: /state/netcdf
+  max_age_hours: 120
+  on_missing: error
+output_types: []
+"#;
+        let config: FWIConfigBuilder =
+            serde_yaml::from_str(yaml).expect("new FWI configuration should parse");
+        assert!(matches!(
+            config.static_data,
+            StaticDataConfig::GeoTiff { .. }
+        ));
+        assert!(matches!(config.warm_state, WarmStateConfig::NetCdf { .. }));
+    }
+
+    #[test]
+    fn streaming_execution_defaults_and_overrides_are_validated() {
+        let defaults: StreamingExecutionConfig =
+            serde_yaml::from_str("{}").expect("empty streaming configuration should use defaults");
+        assert_eq!(defaults.tile_height, 512);
+        assert_eq!(defaults.tile_width, 512);
+        assert_eq!(defaults.cells_per_tile, 1_048_576);
+        assert_eq!(defaults.tile_concurrency, None);
+        assert_eq!(defaults.max_memory, None);
+        assert_eq!(defaults.max_memory_bytes().unwrap(), None);
+        assert_eq!(defaults.tile_state, TileStateResidency::Auto);
+        assert_eq!(defaults.overlap_postprocess, None);
+        defaults.validate().unwrap();
+
+        let on_disk: StreamingExecutionConfig = serde_yaml::from_str("tile_state: disk").unwrap();
+        assert_eq!(on_disk.tile_state, TileStateResidency::Disk);
+        let in_memory: StreamingExecutionConfig =
+            serde_yaml::from_str("tile_state: memory").unwrap();
+        assert_eq!(in_memory.tile_state, TileStateResidency::Memory);
+        assert!(serde_yaml::from_str::<StreamingExecutionConfig>("tile_state: tape").is_err());
+
+        let configured: StreamingExecutionConfig = serde_yaml::from_str(
+            r#"
+tile_height: 128
+tile_width: 256
+cells_per_tile: 10000
+tile_concurrency: 4
+scratch_directory: /scratch/risico
+"#,
+        )
+        .unwrap();
+        assert_eq!(configured.tile_height, 128);
+        assert_eq!(configured.tile_width, 256);
+        assert_eq!(configured.tile_concurrency, Some(4));
+        assert_eq!(
+            configured.scratch_directory.as_deref(),
+            Some("/scratch/risico")
+        );
+
+        let invalid: StreamingExecutionConfig = serde_yaml::from_str("tile_height: 0").unwrap();
+        assert!(invalid.validate().is_err());
+
+        let invalid: StreamingExecutionConfig =
+            serde_yaml::from_str("tile_concurrency: 0").unwrap();
+        assert!(invalid.validate().is_err());
+    }
+
+    #[test]
+    fn memory_budgets_accept_both_the_decimal_and_binary_scales() {
+        let cases = [
+            ("512", 512_u64),
+            ("512B", 512),
+            ("6GB", 6_000_000_000),
+            ("6 GB", 6_000_000_000),
+            ("6gb", 6_000_000_000),
+            ("768 MiB", 768 << 20),
+            ("1.5GB", 1_500_000_000),
+            ("8GiB", 8 << 30),
+        ];
+        for (text, expected) in cases {
+            let configured: StreamingExecutionConfig =
+                serde_yaml::from_str(&format!("max_memory: \"{text}\"")).unwrap();
+            configured.validate().unwrap();
+            assert_eq!(
+                configured.max_memory_bytes().unwrap(),
+                Some(expected),
+                "parsing {text}"
+            );
         }
-        let (name, path) = (parts[0], parts[1]);
-
-        // if let Ok(palette) = Palette::load_palette(path) {
-        //     palettes.insert(name.to_string(), Box::new(palette));
-        // }
-
-        palettes.insert(name.into(), path.into());
     }
-    palettes
+
+    #[test]
+    fn malformed_memory_budgets_are_rejected_by_validation() {
+        for text in ["", "  ", "lots", "GB", "-4GB", "0GB", "12 parsecs"] {
+            let configured: StreamingExecutionConfig =
+                serde_yaml::from_str(&format!("max_memory: \"{text}\"")).unwrap();
+            assert!(configured.validate().is_err(), "should reject {text:?}");
+        }
+    }
 }

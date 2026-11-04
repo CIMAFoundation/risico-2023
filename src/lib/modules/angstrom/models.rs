@@ -11,7 +11,7 @@ use super::{
 /// Source: https://wikifire.wsl.ch/tiki-index8902.html?page=Angstr%C3%B6m+index&structure=Fire
 
 // CELLS PROPERTIES
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct AngstromPropertiesElement {
     pub lon: f32,
     pub lat: f32,
@@ -57,7 +57,7 @@ impl AngstromProperties {
 
 
 // STATE
-#[derive(Debug)]
+#[derive(Debug, serde_derive::Serialize, serde_derive::Deserialize)]
 #[allow(non_snake_case)]
 pub struct AngstromStateElement {
     pub temp: f32,  // temperature [°C]
@@ -105,7 +105,7 @@ impl AngstromState {
         self.time = input.time;
         Zip::from(&mut self.data)
             .and(&input.data)
-            .par_for_each(|state, input_data| {
+            .for_each(|state, input_data| {
                 state.temp = input_data.temperature;
                 state.humidity = input_data.humidity;
             });

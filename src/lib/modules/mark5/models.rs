@@ -10,7 +10,7 @@ use super::{
 };
 
 // CELLS PROPERTIES
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Mark5PropertiesElement {
     pub lon: f32,
     pub lat: f32,
@@ -77,7 +77,7 @@ impl Default for Mark5WarmState {
 }
 
 // STATE
-#[derive(Debug)]
+#[derive(Debug, serde_derive::Serialize, serde_derive::Deserialize)]
 #[allow(non_snake_case)]
 pub struct Mark5StateElement {
     pub dates: Vec<DateTime<Utc>>,  // dates of the previous time window
@@ -184,7 +184,7 @@ impl Mark5State {
         Zip::from(&mut self.data)
             .and(&input.data)
             .and(&prop.data)
-            .par_for_each(|state, input_data, prop_data| {
+            .for_each(|state, input_data, prop_data| {
                 store_day_fn(state, input_data, prop_data, &time);
             });
         self.time = time;
@@ -195,7 +195,7 @@ impl Mark5State {
         let time = &self.time;
         let output_data = Zip::from(&mut self.data)
                     .and(&props.data)
-                    .par_map_collect(|state, props_data| {
+                    .map_collect(|state, props_data| {
                         get_output_fn(state, props_data, &self.config, time)
                     });
         // clean the daily values

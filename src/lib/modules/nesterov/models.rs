@@ -12,7 +12,7 @@ use super::{
 /// Source: https://wikifire.wsl.ch/tiki-indexfa8e.html?page=Nesterov+ignition+index&structure=Fire
 
 // CELLS PROPERTIES
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct NesterovPropertiesElement {
     pub lon: f32,
     pub lat: f32,
@@ -71,7 +71,7 @@ impl Default for NesterovWarmState {
 }
 
 // STATE
-#[derive(Debug)]
+#[derive(Debug, serde_derive::Serialize, serde_derive::Deserialize)]
 #[allow(non_snake_case)]
 pub struct NesterovStateElement {
     pub nesterov: f32,  // Nesterov index
@@ -136,7 +136,7 @@ impl NesterovState {
         Zip::from(&mut self.data)
             .and(&input.data)
             .and(&prop.data)
-            .par_for_each(|state, input_data, prop_data| {
+            .for_each(|state, input_data, prop_data| {
                 store_day_fn(state, input_data, prop_data, &time);
             });
         self.time = time;

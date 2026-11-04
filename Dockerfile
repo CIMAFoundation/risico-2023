@@ -1,27 +1,16 @@
-# Use Ubuntu 16.04 as the base image
+# Ubuntu 16.04 keeps the produced binary compatible with old glibc versions.
 FROM ubuntu:16.04
 
-# install hdf5, netcdf, zlib
+# NetCDF and HDF5 are pure Rust in this build; only a C toolchain and curl
+# (for rustup) are needed.
 RUN apt-get update && apt-get install -y \
     libc6-dev \
-    curl libhdf5-dev\ 
-    libnetcdf-dev \
-    build-essential\
-    cmake \
-    zlib1g-dev
+    curl \
+    build-essential
 
 # Install the latest version of Rustup and the default stable toolchain
 RUN curl https://sh.rustup.rs -sSf | sh -s -- -y
 ENV PATH="/root/.cargo/bin:${PATH}"
-
-# install anaconda
-RUN curl https://repo.anaconda.com/miniconda/Miniconda3-py38_4.12.0-Linux-x86_64.sh -o miniconda.sh
-RUN bash miniconda.sh -b -p /root/miniconda
-
-ENV PATH="/root/miniconda/bin:${PATH}"
-
-# install conda packages
-RUN conda install cmake 
 
 WORKDIR /app
 
@@ -29,4 +18,4 @@ WORKDIR /app
 COPY . .
 
 #ENV RUSTFLAGS="-C target-feature=+crt-static"
-ENTRYPOINT ["cargo", "build", "--release", "--features=build-binary, static_deps", "--target", "x86_64-unknown-linux-gnu"]
+ENTRYPOINT ["cargo", "build", "--release", "--features=build-binary", "--target", "x86_64-unknown-linux-gnu"]

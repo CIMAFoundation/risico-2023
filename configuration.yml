@@ -1,10 +1,20 @@
 models:
   - type: RISICO
     model_name: RISICO2023
-    cells_file_path: /opt/risico/RISICO2023/STATIC/risico2023.txt
-    vegetation_file: /opt/risico/RISICO2023/STATIC/p_vegetazione.csv
-    warm_state_path: /opt/risico/RISICO2023/STATE0/state0RISICO_
-    ppf_file: null
+    static_data:
+      type: geotiff
+      domain_mask: /opt/risico/RISICO2023/STATIC/geotiff/domain_mask.tif
+      slope: /opt/risico/RISICO2023/STATIC/geotiff/slope.tif
+      aspect: /opt/risico/RISICO2023/STATIC/geotiff/aspect.tif
+      vegetation_id: /opt/risico/RISICO2023/STATIC/geotiff/vegetation_id.tif
+      vegetation_catalog: /opt/risico/RISICO2023/STATIC/p_vegetazione.csv
+      ppf_summer: null
+      ppf_winter: null
+    warm_state:
+      type: netcdf
+      directory: /opt/risico/RISICO2023/STATE0/netcdf
+      max_age_hours: 120
+      on_missing: error
     output_types:
       - internal_name: RISICO2023
         name: RISICO2023
@@ -18,16 +28,20 @@ models:
             precision: 0
     palettes:
       UMB: /opt/risico/PALETTE/RISICO_UMB.pal
-    use_temperature_effect: false
-    use_ndvi: true
     output_time_resolution: 1
     model_version: v2023
     netcdf_input_configuration: null
 
   - type: FWI
     model_name: FWIITALIA
-    cells_file_path: /opt/risico/RISICO2023/STATIC/risico2023.txt
-    warm_state_path: /opt/risico/RISICO2023/STATE0/state0RISICO_
+    static_data:
+      type: geotiff
+      domain_mask: /opt/risico/RISICO2023/STATIC/geotiff/domain_mask.tif
+    warm_state:
+      type: netcdf
+      directory: /opt/risico/RISICO2023/STATE0/netcdf-fwi
+      max_age_hours: 120
+      on_missing: error
     output_types:
       - internal_name: RISICO2023
         name: RISICO2023

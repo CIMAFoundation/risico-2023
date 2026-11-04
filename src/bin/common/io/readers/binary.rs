@@ -2,7 +2,7 @@ use chrono::{DateTime, NaiveDateTime, Utc};
 use libflate::gzip::{self, Decoder};
 use log::warn;
 use ndarray::Array1;
-use risico::{constants::NODATAVAL, models::input::InputVariableName};
+use risico::models::input::InputVariableName;
 
 use std::{
     collections::HashMap,
@@ -11,12 +11,13 @@ use std::{
     fs::File,
     io::{self, BufRead, Read},
     path::Path,
+    sync::{Arc, Mutex},
 };
 
 use crate::common::io::models::grid::Grid;
-
-use crate::common::io::models::grid::{IrregularGrid, RegularGrid};
 use rayon::prelude::*;
+
+use crate::common::io::models::grid::{CellIndexes, IrregularGrid, RegularGrid};
 
 use super::prelude::InputHandler;
 
@@ -221,7 +222,10 @@ pub struct BinaryInputFile {
 
 #[derive(Debug)]
 pub struct BinaryInputHandler {
-    pub grid_registry: HashMap<String, Array1<Option<usize>>>,
+    pub grid_registry: HashMap<String, CellIndexes>,
+    coordinate_registry: Vec<HashMap<String, CellIndexes>>,
+    grids: HashMap<String, Box<dyn Grid>>,
+    source_values: Mutex<HashMap<String, Arc<Array1<f32>>>>,
     pub data_map: HashMap<DateTime<Utc>, HashMap<InputVariableName, BinaryInputFile>>,
 }
 
@@ -278,32 +282,87 @@ impl BinaryInputHandler {
 
         Ok(BinaryInputHandler {
             grid_registry,
+            coordinate_registry: Vec::new(),
+            grids: HashMap::new(),
+            source_values: Mutex::new(HashMap::new()),
             data_map,
         })
     }
 }
 
 impl InputHandler for BinaryInputHandler {
+    /// Decode every file this timestamp refers to, in parallel.
+    fn preload(&mut self, date: &DateTime<Utc>) {
+        let Some(data_map) = self.data_map.get(date) else {
+            return;
+        };
+        let pending: Vec<String> = {
+            let cache = self
+                .source_values
+                .lock()
+                .expect("binary source cache lock is poisoned");
+            data_map
+                .values()
+                .map(|file| file.path.clone())
+                .filter(|path| !cache.contains_key(path))
+                .collect()
+        };
+
+        let decoded: Vec<(String, Arc<Array1<f32>>)> = pending
+            .into_par_iter()
+            .filter_map(|path| match read_values_from_file(path.as_str()) {
+                Ok(values) => Some((path, Arc::new(values))),
+                Err(error) => {
+                    warn!("Error reading file {path}: {error}");
+                    None
+                }
+            })
+            .collect();
+
+        let mut cache = self
+            .source_values
+            .lock()
+            .expect("binary source cache lock is poisoned");
+        cache.extend(decoded);
+    }
+
     /// Returns the data for the given date and variable on the selected coordinates
-    fn get_values(&self, var: InputVariableName, date: &DateTime<Utc>) -> Option<Array1<f32>> {
+    fn get_values(
+        &self,
+        selection: usize,
+        var: InputVariableName,
+        date: &DateTime<Utc>,
+    ) -> Option<Array1<f32>> {
         let data_map = self.data_map.get(date)?;
 
         let file = data_map.get(&var)?;
 
-        let data = read_values_from_file(file.path.as_str())
-            .unwrap_or_else(|_| panic!("Error reading file {}", file.path));
+        let cached = self
+            .source_values
+            .lock()
+            .expect("binary source cache lock is poisoned")
+            .get(&file.path)
+            .cloned();
+        let data = cached.unwrap_or_else(|| {
+            let values = Arc::new(
+                read_values_from_file(file.path.as_str())
+                    .unwrap_or_else(|_| panic!("Error reading file {}", file.path)),
+            );
+            self.source_values
+                .lock()
+                .expect("binary source cache lock is poisoned")
+                .insert(file.path.clone(), values.clone());
+            values
+        });
 
         let indexes = self
-            .grid_registry
+            .coordinate_registry
+            .get(selection)
+            .unwrap_or(&self.grid_registry)
             .get(&file.grid_name)
             .unwrap_or_else(|| panic!("there should be a grid named {}", file.grid_name));
 
-        let data: Vec<f32> = indexes
-            .par_iter()
-            .map(|index| index.and_then(|idx| Some(data[idx])).unwrap_or(NODATAVAL))
-            .collect();
-        let data = Array1::from(data);
-        Some(data)
+        Some(indexes.gather(data.as_slice().expect("source values are contiguous")))
     }
 
     /// Returns the timeline
@@ -317,23 +376,46 @@ impl InputHandler for BinaryInputHandler {
         timeline
     }
 
-    fn set_coordinates(&mut self, lats: &[f32], lons: &[f32]) -> Result<(), Box<dyn Error>> {
-        for (_, input_files) in self.data_map.iter() {
-            for (_, input_file) in input_files.iter() {
-                if !self.grid_registry.contains_key(&input_file.grid_name) {
-                    let mut grid = match read_grid_from_file(input_file.path.as_str()) {
-                        Ok(grid) => grid,
-                        Err(e) => return Err(e.into()),
-                    };
+    fn register_coordinates(
+        &mut self,
+        lats: &[f32],
+        lons: &[f32],
+    ) -> Result<usize, Box<dyn Error>> {
+        let grid_files: HashMap<String, String> = self
+            .data_map
+            .values()
+            .flat_map(HashMap::values)
+            .map(|input| (input.grid_name.clone(), input.path.clone()))
+            .collect();
 
-                    let indexes = grid.indexes(lats, lons);
-                    self.grid_registry
-                        .insert(input_file.grid_name.clone(), indexes);
-                }
+        let mut indexes_by_grid = HashMap::new();
+        for (grid_name, input_path) in grid_files {
+            if !self.grids.contains_key(&grid_name) {
+                let grid = read_grid_from_file(&input_path)?;
+                self.grids.insert(grid_name.clone(), grid);
             }
+            let indexes = self
+                .grids
+                .get(&grid_name)
+                .expect("input grid was just registered")
+                .indexes(lats, lons);
+            indexes_by_grid.insert(grid_name, indexes);
         }
 
-        Ok(())
+        let selection = self.coordinate_registry.len();
+        self.coordinate_registry.push(indexes_by_grid);
+        Ok(selection)
+    }
+
+    fn clear_registered_coordinates(&mut self) {
+        self.coordinate_registry.clear();
+    }
+
+    fn clear_cached_values(&mut self) {
+        self.source_values
+            .lock()
+            .expect("binary source cache lock is poisoned")
+            .clear();
     }
 
     fn info_input(&self) -> String {
@@ -345,5 +427,49 @@ impl InputHandler for BinaryInputHandler {
             }
         }
         info
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::common::io::models::grid::RegularGrid;
+
+    #[test]
+    fn registered_tile_coordinates_can_be_selected_without_remapping() {
+        let date = Utc::now();
+        let variable = InputVariableName::T;
+        let mut files = HashMap::new();
+        files.insert(
+            variable,
+            BinaryInputFile {
+                grid_name: "grid".to_owned(),
+                path: "unused".to_owned(),
+            },
+        );
+        let mut grids: HashMap<String, Box<dyn Grid>> = HashMap::new();
+        grids.insert(
+            "grid".to_owned(),
+            Box::new(RegularGrid::new(2, 2, 0.0, 0.0, 1.0, 1.0)),
+        );
+        let mut handler = BinaryInputHandler {
+            grid_registry: HashMap::new(),
+            coordinate_registry: Vec::new(),
+            grids,
+            source_values: Mutex::new(HashMap::new()),
+            data_map: HashMap::from([(date, files)]),
+        };
+
+        let first = handler
+            .register_coordinates(&[0.0], &[0.0])
+            .expect("first tile coordinates should register");
+        let second = handler
+            .register_coordinates(&[1.0], &[1.0])
+            .expect("second tile coordinates should register");
+
+        assert_eq!(handler.coordinate_registry[first]["grid"].get(0), Some(0));
+        assert_eq!(handler.coordinate_registry[second]["grid"].get(0), Some(3));
+        handler.clear_registered_coordinates();
+        assert!(handler.coordinate_registry.is_empty());
     }
 }

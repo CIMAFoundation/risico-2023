@@ -15,7 +15,7 @@ use super::{
     functions::{get_output_fn, update_moisture_fn},
 };
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct RISICOPropertiesElement {
     pub lon: f32,
     pub lat: f32,
@@ -88,7 +88,7 @@ impl Default for RISICOWarmState {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, serde_derive::Serialize, serde_derive::Deserialize)]
 #[allow(non_snake_case)]
 pub struct RISICOStateElement {
     pub dffm: f32,
@@ -153,7 +153,7 @@ impl RISICOState {
 
         Zip::from(&mut self.data)
             .and(&input.data)
-            .par_for_each(|state, input| {
+            .for_each(|state, input| {
                 let i_snow_cover = input.snow_cover;
 
                 if i_snow_cover == NODATAVAL {
@@ -172,7 +172,7 @@ impl RISICOState {
         let time = input.time.timestamp() as f32;
         Zip::from(&mut self.data)
             .and(&input.data)
-            .par_for_each(|state, input| {
+            .for_each(|state, input| {
                 let i_msi = input.msi;
 
                 if !(0.0..=1.0).contains(&i_msi) {
@@ -188,7 +188,7 @@ impl RISICOState {
             });
         Zip::from(&mut self.data)
             .and(&input.data)
-            .par_for_each(|state, input| {
+            .for_each(|state, input| {
                 let i_ndvi = input.ndvi;
 
                 if self.time.timestamp() - state.NDVI_TIME as i64 > SATELLITE_DATA_SECONDS_VALIDITY
@@ -208,7 +208,7 @@ impl RISICOState {
             });
         Zip::from(&mut self.data)
             .and(&input.data)
-            .par_for_each(|state, input| {
+            .for_each(|state, input| {
                 let i_ndwi = input.ndwi;
 
                 if self.time.timestamp() - state.NDWI_TIME as i64 > SATELLITE_DATA_SECONDS_VALIDITY
@@ -239,7 +239,7 @@ impl RISICOState {
             // .and(&self.snow_cover)
             .and(&props.data)
             .and(&input.data)
-            .par_for_each(|state, props, input_data| {
+            .for_each(|state, props, input_data| {
                 update_moisture_fn(state, props, input_data, &self.config, dt)
             });
     }
@@ -251,7 +251,7 @@ impl RISICOState {
         let output_data = Zip::from(&self.data)
             .and(&props.data)
             .and(&input.data)
-            .par_map_collect(|state, props, input| {
+            .map_collect(|state, props, input| {
                 get_output_fn(state, props, input, &self.config, time)
             });
 
@@ -297,19 +297,21 @@ impl RISICOProperties {
 
         // }
 
-        let default_veg = Arc::new(RISICOVegetation::default());
+        // The vegetation of each cell is resolved while the static layers are
+        // read, so this holds one shared handle per cell instead of one owned
+        // identifier string.
         let data: Array1<RISICOPropertiesElement> = props
             .vegetations
             .iter()
             .enumerate()
-            .map(|(idx, v)| RISICOPropertiesElement {
+            .map(|(idx, vegetation)| RISICOPropertiesElement {
                 lon: props.lons[idx],
                 lat: props.lats[idx],
                 slope: props.slopes[idx],
                 aspect: props.aspects[idx],
                 ppf_summer: ppf_summer[idx],
                 ppf_winter: ppf_winter[idx],
-                vegetation: vegetations_dict.get(v).unwrap_or(&default_veg).clone(),
+                vegetation: vegetation.clone(),
             })
             .collect();
 
@@ -333,5 +335,5 @@ pub struct RISICOCellPropertiesContainer {
     pub lats: Vec<f32>,
     pub slopes: Vec<f32>,
     pub aspects: Vec<f32>,
-    pub vegetations: Vec<String>,
+    pub vegetations: Vec<Arc<RISICOVegetation>>,
 }

@@ -1,0 +1,52 @@
+models:
+  - type: FWI
+    model_name: FWIITALIA
+    model_version: legacy
+    static_data:
+      type: geotiff
+      domain_mask: /share/risico/FWIITALIA/STATIC/geotiff/domain_mask.tif
+    warm_state:
+      type: netcdf
+      directory: /share/risico/FWIITALIA/STATE0-NC
+      legacy_fallback: /share/risico/FWIITALIA/STATE0/state0FWI_
+      max_age_hours: 120
+      on_missing: error
+    warm_state_hour: 0
+    warm_state_lag_days: 1
+    output_time_resolution: 24
+    output_types:
+      - internal_name: FWI
+        name: FWIITALIA-VERIFY
+        path: /share/risico/FWIITALIA/VERIFY-OUTPUT
+        grid_path: /share/risico/FWIITALIA/GRID/GRID.txt
+        format: ZBIN
+        variables:
+          - internal_name: ffmc
+            name: FFMC
+            cluster_mode: Max
+            precision: -1
+          - internal_name: dmc
+            name: DMC
+            cluster_mode: Max
+            precision: -1
+          - internal_name: dc
+            name: DC
+            cluster_mode: Max
+            precision: -1
+          - internal_name: isi
+            name: ISI
+            cluster_mode: Max
+            precision: -1
+          - internal_name: bui
+            name: BUI
+            cluster_mode: Max
+            precision: -1
+          - internal_name: fwi
+            name: FWI
+            cluster_mode: Max
+            precision: -1
+          - internal_name: ifwi
+            name: IFWI
+            cluster_mode: Max
+            precision: -1
+palettes: {}

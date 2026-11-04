@@ -11,7 +11,7 @@ use super::{
 /// Source: Srock, A.F.; Charney, J.J.; Potter, B.E.; Goodrick, S.L. The Hot-Dry-Windy Index: A New Fire Weather Index. Atmosphere 2018, 9, 279. https://doi.org/10.3390/atmos9070279
 
 // CELLS PROPERTIES
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct HdwPropertiesElement {
     pub lon: f32,
     pub lat: f32,
@@ -57,7 +57,7 @@ impl HdwProperties {
 
 
 // STATE
-#[derive(Debug)]
+#[derive(Debug, serde_derive::Serialize, serde_derive::Deserialize)]
 #[allow(non_snake_case)]
 pub struct HdwStateElement {
     pub vpd: f32,  // vapor pressure deificit [hPa]
@@ -103,7 +103,7 @@ impl HdwState {
         self.time = input.time;  // reference time of the input
         Zip::from(&mut self.data)
             .and(&input.data)
-            .par_for_each(|state, input_data| {
+            .for_each(|state, input_data| {
                 state.vpd = input_data.vpd;
                 state.wind_speed = input_data.wind_speed;
             });

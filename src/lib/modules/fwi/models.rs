@@ -9,7 +9,7 @@ use super::{
 };
 
 // CELLS PROPERTIES
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct FWIPropertiesElement {
     pub lon: f32,
     pub lat: f32,
@@ -58,7 +58,7 @@ pub struct FWIWarmState {
 }
 
 // STATE
-#[derive(Debug)]
+#[derive(Debug, serde_derive::Serialize, serde_derive::Deserialize)]
 #[allow(non_snake_case)]
 pub struct FWIStateElement {
     pub dates: Vec<DateTime<Utc>>,
@@ -131,7 +131,7 @@ impl FWIState {
         Zip::from(&mut self.data)
             .and(&props.data)
             .and(&input.data)
-            .par_for_each(|state, props, input_data| {
+            .for_each(|state, props, input_data| {
                 update_state_fn(state, props, input_data, time, &self.config)
             });
     }
@@ -142,7 +142,7 @@ impl FWIState {
 
         let output_data = Zip::from(&mut self.data)
             .and(&props.data)
-            .par_map_collect(|state, prop| get_output_fn(state, prop, time, &self.config));
+            .map_collect(|state, prop| get_output_fn(state, prop, time, &self.config));
 
         Output::new(*time, output_data)
     }

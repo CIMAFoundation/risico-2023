@@ -17,7 +17,7 @@ fn replace<'a>(
     src: &Array1<f32>,
     fun: fn(&'a mut InputElement) -> &'a mut f32,
 ) {
-    Zip::from(dst).and(src).par_for_each(|d, s| {
+    Zip::from(dst).and(src).for_each(|d, s| {
         let result = fun(d);
         if *result <= (NODATAVAL + 1.0) {
             *result = *s;
@@ -37,40 +37,69 @@ fn maybe_replace<'a>(
 
 /// Get the input data from the input handler and dave in the Input struct
 /// If the input data are not in the expected units, the function will convert them
-pub fn get_input(handler: &dyn InputHandler, time: &DateTime<Utc>, len: usize) -> Input {
+pub fn get_input(
+    handler: &dyn InputHandler,
+    selection: usize,
+    time: &DateTime<Utc>,
+    len: usize,
+) -> Input {
     let mut data: Array1<InputElement> = Array1::default(len);
 
     // Observed temperature
-    let temperature_obs = handler.get_values(K, time);  // supposed in K or °C
+    let temperature_obs = handler.get_values(selection, K, time); // supposed in K or °C
     if let Some(mut t) = temperature_obs {
-        t.mapv_inplace(|_t| if _t <= (NODATAVAL + 1.0) { NODATAVAL } else if _t > 200.0 { _t - 273.15 } else { _t }); // conversion to Celsius
+        t.mapv_inplace(|_t| {
+            if _t <= (NODATAVAL + 1.0) {
+                NODATAVAL
+            } else if _t > 200.0 {
+                _t - 273.15
+            } else {
+                _t
+            }
+        }); // conversion to Celsius
         replace(&mut data, &t, |i| &mut i.temperature); // save observed temperature [°C]
     }
 
     // Observed relative humidity
-    let humidity_obs = handler.get_values(F, time); // supposed in %
+    let humidity_obs = handler.get_values(selection, F, time); // supposed in %
     maybe_replace(&mut data, &humidity_obs, |i| &mut i.humidity); // save observed relative humidity if any [%]
 
     // Forecasted relative humidity
-    let humidity = handler.get_values(H, time); // supposed in %
+    let humidity = handler.get_values(selection, H, time); // supposed in %
     maybe_replace(&mut data, &humidity, |i| &mut i.humidity); // save forecasted relative humidity if any [%]
 
     // Forecasted temperature
-    let temperature = handler.get_values(T, time);  // supposed in K or °C
+    let temperature = handler.get_values(selection, T, time); // supposed in K or °C
     if let Some(mut t) = temperature {
-        t.mapv_inplace(|_t| if _t <= (NODATAVAL + 1.0) { NODATAVAL } else if _t > 200.0 { _t - 273.15 } else { _t }); // conversion to Celsius
+        t.mapv_inplace(|_t| {
+            if _t <= (NODATAVAL + 1.0) {
+                NODATAVAL
+            } else if _t > 200.0 {
+                _t - 273.15
+            } else {
+                _t
+            }
+        }); // conversion to Celsius
         replace(&mut data, &t, |i| &mut i.temperature); // save forecasted temperature [°C]
 
         // Forecasted dew point temperature
-        let temp_dew = handler.get_values(R, time);  // supposed in K or °C
+        let temp_dew = handler.get_values(selection, R, time); // supposed in K or °C
         if let Some(mut td) = temp_dew {
             // if the dew point temperature is available
-            td.mapv_inplace(|_t| if _t <= (NODATAVAL + 1.0) { NODATAVAL } else if _t > 200.0 { _t - 273.15 } else { _t }); // conversion to Celsius
-            replace(&mut data, &td, |i| &mut i.temp_dew);  // save dew point temperature [°C]
+            td.mapv_inplace(|_t| {
+                if _t <= (NODATAVAL + 1.0) {
+                    NODATAVAL
+                } else if _t > 200.0 {
+                    _t - 273.15
+                } else {
+                    _t
+                }
+            }); // conversion to Celsius
+            replace(&mut data, &td, |i| &mut i.temp_dew); // save dew point temperature [°C]
 
             // computation of the relative humidity and VPD from the forecasted temperature and dew point temperature
-            let mut h: Array1<f32> = Array1::ones(len) * NODATAVAL;  // [%]
-            let mut vpd: Array1<f32> = Array1::ones(len) * NODATAVAL;  // [hPa]
+            let mut h: Array1<f32> = Array1::ones(len) * NODATAVAL; // [%]
+            let mut vpd: Array1<f32> = Array1::ones(len) * NODATAVAL; // [hPa]
             azip!((
                 h in &mut h,  // %
                 v in &mut vpd,  // hPa
@@ -93,9 +122,8 @@ pub fn get_input(handler: &dyn InputHandler, time: &DateTime<Utc>, len: usize) -
                     }
                 }
             });
-            replace(&mut data, &h, |i| &mut i.humidity);  // replace the humidity values [%]
-            replace(&mut data, &vpd, |i| &mut i.vpd);  // save vapor pressure deficit [hPa]
-        
+            replace(&mut data, &h, |i| &mut i.humidity); // replace the humidity values [%]
+            replace(&mut data, &vpd, |i| &mut i.vpd); // save vapor pressure deficit [hPa]
         } else {
             // if the dew point temperature is not available, you need the relative humidity
             // or you need to compute it from specific humidity and surface pressure
@@ -104,8 +132,8 @@ pub fn get_input(handler: &dyn InputHandler, time: &DateTime<Utc>, len: usize) -
                 // there is the relative humidity data
 
                 // compute the temperature dew point from the temperature and relative humidity
-                let mut td: Array1<f32> = Array1::ones(len) * NODATAVAL;  // °C
-                let mut vpd: Array1<f32> = Array1::ones(len) * NODATAVAL;  // hPa
+                let mut td: Array1<f32> = Array1::ones(len) * NODATAVAL; // °C
+                let mut vpd: Array1<f32> = Array1::ones(len) * NODATAVAL; // hPa
                 azip!((
                     r in &mut td,  // °C
                     v in &mut vpd,  // hPa
@@ -134,19 +162,18 @@ pub fn get_input(handler: &dyn InputHandler, time: &DateTime<Utc>, len: usize) -
                 });
                 replace(&mut data, &td, |i| &mut i.temp_dew);
                 replace(&mut data, &vpd, |i| &mut i.vpd);
-              
             } else {
                 // compute the relative humidity from specific humidity and surface pressure forecasted surface pressure
 
                 // forecasted surface pressure
-                let psfc = handler.get_values(PSFC, time); // supposed in Pa
-                // forecasted specific humidity
-                let q = handler.get_values(Q, time); // supposed in kg/kg
+                let psfc = handler.get_values(selection, PSFC, time); // supposed in Pa
+                                                                      // forecasted specific humidity
+                let q = handler.get_values(selection, Q, time); // supposed in kg/kg
 
                 if let (Some(psfc), Some(q)) = (psfc, q) {
                     // compute the relative humidity from the forecasted temperature, surface pressure and specific humidity
-                    let mut h: Array1<f32> = Array1::ones(len) * NODATAVAL;  // %
-                    let mut vpd: Array1<f32> = Array1::ones(len) * NODATAVAL;  // hPa
+                    let mut h: Array1<f32> = Array1::ones(len) * NODATAVAL; // %
+                    let mut vpd: Array1<f32> = Array1::ones(len) * NODATAVAL; // hPa
                     azip!((
                         h in &mut h,  // %
                         v in &mut vpd,  // hPa
@@ -174,9 +201,9 @@ pub fn get_input(handler: &dyn InputHandler, time: &DateTime<Utc>, len: usize) -
                     });
                     replace(&mut data, &h, |i| &mut i.humidity);
                     replace(&mut data, &vpd, |i| &mut i.vpd);
-                
+
                     // compute the dew point temperature wiht the new computed relative humidity
-                    let mut td: Array1<f32> = Array1::ones(len) * NODATAVAL;  // [°C]
+                    let mut td: Array1<f32> = Array1::ones(len) * NODATAVAL; // [°C]
                     azip!((
                         r in &mut td,  // °C
                         h in &h, // %
@@ -192,15 +219,15 @@ pub fn get_input(handler: &dyn InputHandler, time: &DateTime<Utc>, len: usize) -
                             *r = (243.04 * gamma) / (17.625 - gamma);
                         }
                     });
-                    replace(&mut data, &td, |i| &mut i.temp_dew);           
+                    replace(&mut data, &td, |i| &mut i.temp_dew);
                 }
             }
         }
     }
 
     // wind speed and wind direction
-    let ws = handler.get_values(W, time); // supposed in m/s
-    let wd = handler.get_values(D, time); // supposed in degree with meteorological convenction (wind from, 0=from North)
+    let ws = handler.get_values(selection, W, time); // supposed in m/s
+    let wd = handler.get_values(selection, D, time); // supposed in degree with meteorological convenction (wind from, 0=from North)
     if let Some(ws) = ws {
         let ws = ws.mapv(|_ws| {
             if _ws <= (NODATAVAL + 1.0) {
@@ -217,7 +244,7 @@ pub fn get_input(handler: &dyn InputHandler, time: &DateTime<Utc>, len: usize) -
             if _wd <= (NODATAVAL + 1.0) {
                 return NODATAVAL;
             } else {
-                _wd.to_radians().rem_euclid(2.0 * PI)  // conversion to rad, remap to [0, 2PI]
+                _wd.to_radians().rem_euclid(2.0 * PI) // conversion to rad, remap to [0, 2PI]
             }
         });
         // save data
@@ -225,8 +252,8 @@ pub fn get_input(handler: &dyn InputHandler, time: &DateTime<Utc>, len: usize) -
     }
 
     // U and V components of the wind
-    let u = handler.get_values(U, time); // supposed in m/s
-    let v = handler.get_values(V, time); // supposed in m/s
+    let u = handler.get_values(selection, U, time); // supposed in m/s
+    let v = handler.get_values(selection, V, time); // supposed in m/s
     if let (Some(u), Some(v)) = (u, v) {
         // compute wind speed
         let ws = izip!(&u, &v)
@@ -245,7 +272,7 @@ pub fn get_input(handler: &dyn InputHandler, time: &DateTime<Utc>, len: usize) -
                     return NODATAVAL; // there is no data
                 }
                 // from https://confluence.ecmwf.int/pages/viewpage.action?pageId=133262398
-                (PI + f32::atan2(*_u, *_v)).rem_euclid(2.0 * PI)  // rad
+                (PI + f32::atan2(*_u, *_v)).rem_euclid(2.0 * PI) // rad
             })
             .collect::<Array1<f32>>();
         // save data
@@ -254,29 +281,29 @@ pub fn get_input(handler: &dyn InputHandler, time: &DateTime<Utc>, len: usize) -
     }
 
     // Observed precipitation
-    let op = handler.get_values(O, time); // supposed in mm
+    let op = handler.get_values(selection, O, time); // supposed in mm
     maybe_replace(&mut data, &op, |i| &mut i.rain);
 
     // Forecast precipitation
-    let fp = handler.get_values(P, time); // supposed in mm
+    let fp = handler.get_values(selection, P, time); // supposed in mm
     maybe_replace(&mut data, &fp, |i| &mut i.rain);
 
     // Forecasted snow cover depth
-    let snow = handler.get_values(SNOW, time); // supposed in cm
+    let snow = handler.get_values(selection, SNOW, time); // supposed in cm
     maybe_replace(&mut data, &snow, |i| &mut i.snow_cover);
 
     // SATELLITE VARIABLES
 
-    let swi = handler.get_values(SWI, time);
+    let swi = handler.get_values(selection, SWI, time);
     maybe_replace(&mut data, &swi, |i| &mut i.swi);
 
-    let ndvi = handler.get_values(NDVI, time);
+    let ndvi = handler.get_values(selection, NDVI, time);
     maybe_replace(&mut data, &ndvi, |i| &mut i.ndvi);
 
-    let ndwi = handler.get_values(NDWI, time);
+    let ndwi = handler.get_values(selection, NDWI, time);
     maybe_replace(&mut data, &ndwi, |i| &mut i.ndwi);
 
-    let msi = handler.get_values(M, time);
+    let msi = handler.get_values(selection, M, time);
     maybe_replace(&mut data, &msi, |i| &mut i.msi);
 
     Input {
@@ -313,3 +340,5 @@ impl Display for RISICOError {
         write!(f, "{}", self.msg)
     }
 }
+
+impl std::error::Error for RISICOError {}

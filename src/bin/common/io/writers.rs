@@ -1,11 +1,12 @@
-use chrono::Utc;
+use chrono::{DateTime, Utc};
 #[cfg(feature = "gdal")]
+use gdal::raster::{Buffer, RasterCreationOptions};
 #[cfg(feature = "gdal")]
-use gdal::raster::{Buffer, RasterCreationOption};
+use gdal::spatial_ref::SpatialRef;
 
 use libflate::gzip::{self, Encoder};
 use log::warn;
-use netcdf::extent::Extents;
+use nc4_stream::{AttrValue, DataType, EncodedRecord, Nc4Writer, VarId, VariableOptions};
 use risico::constants::NODATAVAL;
 use risico::version::FULL_VERSION;
 
@@ -152,26 +153,10 @@ pub fn write_to_geotiff(
     // Open a GDAL driver for GeoTIFF files
     let driver = gdal::DriverManager::get_driver_by_name(&"GTiff")?;
 
-    let options = vec![
-        RasterCreationOption {
-            key: "COMPRESS",
-            value: "LZW",
-        },
-        RasterCreationOption {
-            key: "PROFILE",
-            value: "GDALGeoTIFF",
-        },
-        RasterCreationOption {
-            key: "BIGTIFF",
-            value: "YES",
-        },
-    ];
+    let options =
+        RasterCreationOptions::from_iter(["COMPRESS=LZW", "PROFILE=GDALGeoTIFF", "BIGTIFF=YES"]);
     let mut dataset = driver.create_with_band_type_with_options::<f32, &str>(
-        file,
-        grid.ncols as isize,
-        grid.nrows as isize,
-        1,
-        &options,
+        file, grid.ncols, grid.nrows, 1, &options,
     )?;
 
     // Set the geo-transform for the dataset
@@ -203,109 +188,231 @@ pub fn write_to_geotiff(
         }
     }
     let size = (grid.ncols, grid.nrows);
-    let buffer = Buffer::new(size, data);
+    let mut buffer = Buffer::new(size, data);
 
     // Write the data to the band
-    band.write((0, 0), size, &buffer)?;
+    band.write((0, 0), size, &mut buffer)?;
 
     Ok(())
 }
 
-const COMPRESSION_RATE: i32 = 7;
+/// Write an already north-up regular grid through GDAL.
+///
+/// This is used by offline conversion tools. Runtime static-data loading does
+/// not depend on GDAL.
+#[cfg(feature = "gdal")]
+#[allow(dead_code)]
+pub fn write_north_up_geotiff(
+    file: &str,
+    width: usize,
+    height: usize,
+    transform: &[f64; 6],
+    epsg: u32,
+    values: &[f32],
+    nodata: f32,
+) -> Result<(), RISICOError> {
+    if values.len() != width * height {
+        return Err(format!(
+            "cannot write {file}: {} samples for a {width}x{height} grid",
+            values.len()
+        )
+        .into());
+    }
 
-pub fn create_nc_file<T>(
-    file_name: &str,
+    let driver = gdal::DriverManager::get_driver_by_name("GTiff")
+        .map_err(|error| format!("cannot load GDAL GTiff driver: {error}"))?;
+    let options = RasterCreationOptions::from_iter([
+        "COMPRESS=DEFLATE",
+        "PREDICTOR=3",
+        "TILED=YES",
+        "BIGTIFF=IF_SAFER",
+    ]);
+    let mut dataset = driver
+        .create_with_band_type_with_options::<f32, _>(file, width, height, 1, &options)
+        .map_err(|error| format!("cannot create GeoTIFF {file}: {error}"))?;
+    dataset
+        .set_geo_transform(transform)
+        .map_err(|error| format!("cannot georeference {file}: {error}"))?;
+    let spatial_reference = SpatialRef::from_epsg(epsg)
+        .map_err(|error| format!("cannot create EPSG:{epsg} reference: {error}"))?;
+    dataset
+        .set_spatial_ref(&spatial_reference)
+        .map_err(|error| format!("cannot set CRS on {file}: {error}"))?;
+    let mut band = dataset
+        .rasterband(1)
+        .map_err(|error| format!("cannot access band in {file}: {error}"))?;
+    band.set_no_data_value(Some(nodata as f64))
+        .map_err(|error| format!("cannot set nodata on {file}: {error}"))?;
+    let mut buffer = Buffer::new((width, height), values.to_vec());
+    band.write((0, 0), (width, height), &mut buffer)
+        .map_err(|error| format!("cannot write pixels to {file}: {error}"))?;
+    dataset
+        .flush_cache()
+        .map_err(|error| format!("cannot flush {file}: {error}"))?;
+    Ok(())
+}
+
+/// One NetCDF-4 output file of the model: the streaming writer plus the two
+/// variables a timestep touches, the data grid and its timestamp.
+pub struct Nc4Output {
+    writer: Option<Nc4Writer>,
+    data: VarId,
+    time: VarId,
+}
+
+impl Nc4Output {
+    /// Compress one grid. Needs only the file's definition, so callers run
+    /// it without exclusive access to the file.
+    pub fn encode(&self, values: &[f32]) -> Result<EncodedRecord, RISICOError> {
+        self.writer()?
+            .encode_record(self.data, values)
+            .map_err(nc4_error)
+    }
+
+    /// Append a compressed grid and its timestamp as the next record.
+    pub fn append(&mut self, record: EncodedRecord, time: DateTime<Utc>) -> Result<(), RISICOError> {
+        let writer = self
+            .writer
+            .as_mut()
+            .ok_or_else(|| RISICOError::from("NetCDF output is already finished".to_string()))?;
+        writer
+            .append_encoded_record(self.data, record)
+            .map_err(nc4_error)?;
+        writer
+            .append_record(self.time, &[time.timestamp()])
+            .map_err(nc4_error)
+    }
+
+    /// Write the metadata and close the file. A second call does nothing.
+    pub fn finish(&mut self) -> Result<(), RISICOError> {
+        match self.writer.take() {
+            Some(writer) => writer.finish().map_err(nc4_error),
+            None => Ok(()),
+        }
+    }
+
+    fn writer(&self) -> Result<&Nc4Writer, RISICOError> {
+        self.writer
+            .as_ref()
+            .ok_or_else(|| RISICOError::from("NetCDF output is already finished".to_string()))
+    }
+}
+
+fn nc4_error(error: nc4_stream::Error) -> RISICOError {
+    RISICOError::from(error.to_string())
+}
+
+/// Create the NetCDF-4 file of one output variable: latitude and longitude
+/// axes, an unlimited time axis, and the variable chunked one timestep at a
+/// time with shuffle and deflate at `compression_level` (0 disables both).
+pub fn create_nc4_file<T>(
+    file_name: &Path,
     grid: &RegularGrid,
     output_name: &str,
     variable_name: T,
-) -> Result<netcdf::MutableFile, RISICOError>
+    compression_level: i32,
+) -> Result<Nc4Output, RISICOError>
 where
     T: EnumProperty + ToString,
 {
-    let n_lats = grid.nrows;
-    let n_lons = grid.ncols;
-
-    let options = netcdf::Options::NETCDF4;
-
-    let mut file = netcdf::create_with(file_name, options)
-        .map_err(|err| format!("can't create file {file_name}: {err}"))?;
-
-    file.add_attribute("risico_version", FULL_VERSION)
-        .expect("Should add attribute 'risico_version'");
-
-    file.add_attribute("creation_date", Utc::now().to_rfc3339())
-        .expect("Should add attribute 'creation_date'");
-
-    file.add_attribute("missing_value", NODATAVAL)
-        .expect("Should add attribute");
-
-    // We must create a dimension which corresponds to our data
-    file.add_dimension("latitude", n_lats)
-        .map_err(|err| format!("Add latitude dimension failed {err}"))?;
-    file.add_dimension("longitude", n_lons)
-        .map_err(|err| format!("Add longitude dimension failed {err}"))?;
-
-    file.add_unlimited_dimension("time")
-        .map_err(|err| format!("Add time dimension failed {err}"))?;
-    let lats: Vec<f32> = (0..n_lats)
-        .map(|i| grid.min_lat + grid.step_lat * (i as f32) )
-        .collect();
-    let lons: Vec<f32> = (0..n_lons)
-        .map(|i| grid.min_lon + grid.step_lon * (i as f32) )
-        .collect();
-
-    let mut var = file
-        .add_variable::<f32>("latitude", &["latitude"])
-        .expect("Add latitude failed");
-
-    var.put_values(&lats, Extents::All)
-        .expect("Add longitude failed");
-
-    let mut var = file
-        .add_variable::<f32>("longitude", &["longitude"])
-        .expect("Add longitude failed");
-
-    var.put_values(&lons, Extents::All)
-        .expect("Add longitude failed");
-
-    let mut time_var = file
-        .add_variable::<i64>("time", &["time"])
-        .expect("Add time failed");
-
-    time_var
-        .add_attribute("units", "seconds since 1970-01-01 00:00:00.0")
-        .unwrap_or_else(|_| panic!("Add time units failed"));
-    time_var
-        .add_attribute("long_name", "time")
-        .unwrap_or_else(|_| panic!("Add time units failed"));
-    time_var
-        .add_attribute("calendar", "proleptic_gregorian")
-        .unwrap_or_else(|_| panic!("Add time units failed"));
-
-    let mut variable_var = file
-        .add_variable::<f32>(output_name, &["time", "latitude", "longitude"])
-        .unwrap_or_else(|_| panic!("Add {} failed", output_name));
-
-    variable_var
-        .compression(COMPRESSION_RATE, true)
-        .expect("Set compression failed");
-
-    variable_var
-        .add_attribute("missing_value", NODATAVAL)
-        .expect("Should add attribute");
-
-    variable_var
-        .add_attribute("units", variable_name.get_str("units").unwrap_or("unknown"))
-        .expect("Should add attribute");
-
-    variable_var
-        .add_attribute(
-            "long_name",
-            variable_name
-                .get_str("long_name")
-                .unwrap_or(&variable_name.to_string()),
+    if !(0..=9).contains(&compression_level) {
+        return Err(format!(
+            "NetCDF compression level must be between 0 and 9, got {compression_level}"
         )
-        .expect("Should add attribute");
+        .into());
+    }
+    let describe = |error: nc4_stream::Error| format!("{}: {error}", file_name.display());
 
-    Ok(file)
+    let mut file = Nc4Writer::create(file_name).map_err(describe)?;
+    file.put_attr("risico_version", FULL_VERSION)
+        .map_err(describe)?;
+    file.put_attr("creation_date", Utc::now().to_rfc3339())
+        .map_err(describe)?;
+    file.put_attr("missing_value", AttrValue::F32(NODATAVAL))
+        .map_err(describe)?;
+
+    let latitude = file
+        .add_dimension("latitude", grid.nrows)
+        .map_err(describe)?;
+    let longitude = file
+        .add_dimension("longitude", grid.ncols)
+        .map_err(describe)?;
+    let time = file.add_unlimited_dimension("time").map_err(describe)?;
+
+    let lats: Vec<f32> = (0..grid.nrows)
+        .map(|i| grid.min_lat + grid.step_lat * (i as f32))
+        .collect();
+    let lons: Vec<f32> = (0..grid.ncols)
+        .map(|i| grid.min_lon + grid.step_lon * (i as f32))
+        .collect();
+    let latitude_var = file
+        .add_variable(
+            "latitude",
+            DataType::F32,
+            &[latitude],
+            VariableOptions::contiguous(),
+        )
+        .map_err(describe)?;
+    file.put_values(latitude_var, &lats).map_err(describe)?;
+    let longitude_var = file
+        .add_variable(
+            "longitude",
+            DataType::F32,
+            &[longitude],
+            VariableOptions::contiguous(),
+        )
+        .map_err(describe)?;
+    file.put_values(longitude_var, &lons).map_err(describe)?;
+
+    let time_var = file
+        .add_variable(
+            "time",
+            DataType::I64,
+            &[time],
+            VariableOptions::chunked(vec![512]),
+        )
+        .map_err(describe)?;
+    file.put_var_attr(time_var, "units", "seconds since 1970-01-01 00:00:00.0")
+        .map_err(describe)?;
+    file.put_var_attr(time_var, "long_name", "time")
+        .map_err(describe)?;
+    file.put_var_attr(time_var, "calendar", "proleptic_gregorian")
+        .map_err(describe)?;
+
+    // One timestep per chunk, which is how the file is written and read.
+    let mut options = VariableOptions::chunked(vec![1, grid.nrows, grid.ncols]);
+    if compression_level > 0 {
+        options = options.shuffle(true).deflate(compression_level as u32);
+    }
+    let data = file
+        .add_variable(
+            output_name,
+            DataType::F32,
+            &[time, latitude, longitude],
+            options,
+        )
+        .map_err(describe)?;
+    file.put_var_attr(data, "missing_value", AttrValue::F32(NODATAVAL))
+        .map_err(describe)?;
+    file.put_var_attr(
+        data,
+        "units",
+        variable_name.get_str("units").unwrap_or("unknown"),
+    )
+    .map_err(describe)?;
+    file.put_var_attr(
+        data,
+        "long_name",
+        variable_name
+            .get_str("long_name")
+            .unwrap_or(&variable_name.to_string()),
+    )
+    .map_err(describe)?;
+
+    Ok(Nc4Output {
+        writer: Some(file),
+        data,
+        time: time_var,
+    })
 }
+

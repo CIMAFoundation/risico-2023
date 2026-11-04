@@ -2,7 +2,7 @@
 
 /data
 /target
-
+.benchmark
 
 
 # Created by https://www.toptal.com/developers/gitignore/api/rust,macos,linux,windows,python

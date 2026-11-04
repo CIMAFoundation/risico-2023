@@ -1,6 +1,5 @@
 use chrono::{DateTime, Utc};
 use ndarray::Array1;
-use rayon::prelude::*;
 use serde_derive::{Deserialize, Serialize};
 use strum_macros::{Display, EnumProperty, EnumString};
 
@@ -383,7 +382,7 @@ impl Output {
     }
 
     pub fn get_array(&self, func: fn(&OutputElement) -> f32) -> Array1<f32> {
-        let vec = self.data.par_iter().map(func).collect::<Vec<_>>();
+        let vec = self.data.iter().map(func).collect::<Vec<_>>();
         Array1::from_vec(vec)
     }
 

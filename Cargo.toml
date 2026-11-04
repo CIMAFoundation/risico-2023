@@ -19,15 +19,16 @@ build-binary = [
     "dep:rstar",
     "dep:serde_yaml",
     "dep:clap_derive",
-    "dep:netcdf",
-    "dep:netcdf-sys",
-    "dep:hdf5",
-    "dep:hdf5-sys",
+    "dep:netcdf-reader",
+    "dep:geotiff-reader",
+    "dep:libc",
+    "dep:zarrs",
+    "dep:serde_json",
+    "dep:nc4-stream",
 ]
 
-gdal_bindgen = ["gdal/bindgen"]
+gdal_bindgen = ["gdal", "gdal/bindgen"]
 gdal = ["dep:gdal"]
-static_deps = ["netcdf-sys/static", "hdf5-sys/static"]
 
 default = ["build-binary"]
 
@@ -39,8 +40,9 @@ strum = { version = "0.26.3", optional = false }
 strum_macros = { version = "0.26.4", optional = false }
 pretty_env_logger = { version = "0.5.0", optional = true }
 itertools = { version = "0.13.0", optional = false }
-chrono = { version = "0.4", optional = false }
+chrono = { version = "0.4", features = ["serde"], optional = false }
 serde = { version = "1.0", optional = false }
+bincode = "1.3"
 libflate = { version = "2.0.0", optional = true }
 rayon = { version = "1.6.0", optional = false }
 ndarray = { version = "0.16.0", features = ["rayon"], optional = false }
@@ -53,13 +55,17 @@ cftime-rs = { git = "https://github.com/CIMAFoundation/cftime-rs-no-cdylib"}
 chrono-tz = {version = "0.6"}
 lazy_static = "1.4.0"
 
-# Native dependencies
-gdal = { version = "0.17.0", default-features = false, optional = true }
-hdf5 = { version = "0.8.1", optional = true }
-hdf5-sys = { version = "0.8.1", optional = true }
-netcdf = { version = "0.8.1", optional = true }
-netcdf-sys = { version = "0.5.1", optional = true }
+# Native dependencies (GDAL only, and only for the static-data converter)
+gdal = { version = "0.19.0", default-features = false, optional = true }
+# Pure-Rust NetCDF: netcdf-reader reads classic and NetCDF-4 inputs and
+# snapshots, nc4-stream writes NetCDF-4 outputs and snapshots.
+netcdf-reader = { version = "0.12", optional = true }
+geotiff-reader = { version = "=0.7.0", default-features = false, features = ["local"], optional = true }
 tzf-rs = { version = "0.4.9", default-features = false }
+libc = { version = "0.2", optional = true }
+zarrs = { version = "0.22.4", optional = true, default-features = false, features = ["filesystem", "zstd"] }
+serde_json = { version = "1.0", optional = true }
+nc4-stream = { path = "crates/nc4-stream", optional = true }
 
 
 
@@ -72,13 +78,25 @@ name = "risico-2023"
 path = "src/bin/main.rs"
 # required-features = ["build-binary"]
 
-# [[bin]]
-# name = "risico-2023-config-converter"
-# path = "src/bin/converter.rs"
-# required-features = ["build-binary"]
+[[bin]]
+name = "static-converter"
+path = "src/bin/static-converter.rs"
+required-features = ["build-binary", "gdal"]
 
+[[bin]]
+name = "warm-state-converter"
+path = "src/bin/warm-state-converter.rs"
+required-features = ["build-binary"]
+
+[[bin]]
+name = "streaming-inspect"
+path = "src/bin/streaming-inspect.rs"
+required-features = ["build-binary"]
 
 # [[bin]]
 # name = "test-config"
 # path = "src/bin/test-config.rs"
 # required-features = ["build-binary"]
+
+[workspace]
+members = ["crates/nc4-stream"]

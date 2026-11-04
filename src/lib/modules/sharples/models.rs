@@ -13,7 +13,7 @@ use super::{
 
 
 // CELLS PROPERTIES
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct SharplesPropertiesElement {
     pub lon: f32,
     pub lat: f32,
@@ -59,7 +59,7 @@ impl SharplesProperties {
 
 
 // STATE
-#[derive(Debug)]
+#[derive(Debug, serde_derive::Serialize, serde_derive::Deserialize)]
 #[allow(non_snake_case)]
 pub struct SharplesStateElement {
     pub temp: f32,  // temperature [°C]
@@ -117,7 +117,7 @@ impl SharplesState {
         self.time = input.time;  // reference time of the input
         Zip::from(&mut self.data)
             .and(&input.data)
-            .par_for_each(|state, input_data| {
+            .for_each(|state, input_data| {
                 state.temp = input_data.temperature;
                 state.humidity = input_data.humidity;
                 state.wind_speed = input_data.wind_speed;
