@@ -100,3 +100,6 @@ required-features = ["build-binary"]
 # name = "test-config"
 # path = "src/bin/test-config.rs"
 # required-features = ["build-binary"]
+
+[workspace]
+members = ["crates/nc4-stream"]

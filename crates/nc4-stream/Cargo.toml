@@ -1,0 +1,15 @@
+[package]
+name = "nc4-stream"
+description = "Pure-Rust streaming NetCDF-4 (HDF5) writer: chunks go to disk as they arrive, metadata is written at close"
+version = "0.1.0"
+edition = "2021"
+license = "EUPL-1.2"
+rust-version = "1.81"
+
+[dependencies]
+flate2 = { version = "1", default-features = false, features = ["rust_backend"] }
+
+[dev-dependencies]
+netcdf-reader = "0.12"
+ndarray = "0.17"
+tempfile = "3"
