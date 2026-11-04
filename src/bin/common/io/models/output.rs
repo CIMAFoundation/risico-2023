@@ -1,10 +1,9 @@
-use std::{collections::HashMap, path::PathBuf, sync::Mutex};
+use std::{collections::HashMap, fs, path::PathBuf, sync::RwLock};
 
 use chrono::{DateTime, Utc};
 
 use log::debug;
 use ndarray::Array1;
-use netcdf::{extent::Extents, MutableFile};
 use rayon::prelude::*;
 use risico::{
     constants::NODATAVAL,
@@ -20,7 +19,7 @@ use crate::common::{
     helpers::RISICOError,
     io::{
         streaming::TiledNativeOutputs,
-        writers::{create_nc_file, write_to_pngwjson, write_to_zbin_file},
+        writers::{create_nc4_file, write_to_pngwjson, write_to_zbin_file, Nc4Output},
         zarr::ZarrWriter,
     },
 };
@@ -432,6 +431,11 @@ impl OutputType {
         self.writer.prepare(&self.grid, &self.variables)
     }
 
+    /// Complete this output type after the last timestep.
+    pub fn finish(&mut self) -> Result<(), RISICOError> {
+        self.writer.finish()
+    }
+
     /// Resample one variable onto this output type's grid and write it.
     pub fn write_variable(
         &self,
@@ -463,11 +467,13 @@ impl OutputType {
     }
 }
 
-#[derive(Debug)]
+/// One NetCDF-4 file per variable, written by the pure-Rust streaming
+/// writer: each timestep's grid is compressed on the calling thread and
+/// appended as one chunk, and the file's metadata is written by `finish`.
 struct NetcdfWriter {
     path: PathBuf,
     compression_level: i32,
-    files: HashMap<String, Mutex<MutableFile>>,
+    files: HashMap<String, RwLock<Nc4Output>>,
 }
 
 impl NetcdfWriter {
@@ -537,6 +543,12 @@ pub(crate) trait Writer: Send + Sync {
         grid: &RegularGrid,
         time: DateTime<Utc>,
     ) -> Result<(), RISICOError>;
+
+    /// Complete the output after the last timestep. Writers that keep files
+    /// open across the run write their metadata here.
+    fn finish(&mut self) -> Result<(), RISICOError> {
+        Ok(())
+    }
 }
 
 impl Writer for NetcdfWriter {
@@ -545,21 +557,25 @@ impl Writer for NetcdfWriter {
         grid: &RegularGrid,
         variables: &[OutputVariable],
     ) -> Result<(), RISICOError> {
+        fs::create_dir_all(&self.path).map_err(|error| {
+            format!(
+                "cannot create NetCDF output directory {}: {error}",
+                self.path.display()
+            )
+        })?;
         for variable in variables {
             if self.files.contains_key(&variable.name) {
                 continue;
             }
-            let path = self.path.as_os_str().to_str().expect("Invalid path");
-
-            let file_name = format!("{}/{}.nc", path, variable.name);
-            let file = create_nc_file(
+            let file_name = self.path.join(format!("{}.nc", variable.name));
+            let file = create_nc4_file(
                 &file_name,
                 grid,
                 &variable.name,
                 variable.internal_name,
                 self.compression_level,
             )?;
-            self.files.insert(variable.name.clone(), Mutex::new(file));
+            self.files.insert(variable.name.clone(), RwLock::new(file));
         }
         Ok(())
     }
@@ -571,45 +587,40 @@ impl Writer for NetcdfWriter {
         grid: &RegularGrid,
         time: DateTime<Utc>,
     ) -> Result<(), RISICOError> {
-        let mutex = self
+        let file = self
             .files
             .get(&variable.name)
             .ok_or_else(|| format!("no open file for variable {}", variable.name))?;
+        if values.len() != grid.nrows * grid.ncols {
+            return Err(format!(
+                "NetCDF sample for {} has {} values, the grid has {}",
+                variable.name,
+                values.len(),
+                grid.nrows * grid.ncols
+            )
+            .into());
+        }
+        debug!("[NC] Writing variable {} for {time}", variable.name);
+        // Compression needs only the file's definition, so it runs under a
+        // shared lock on the calling thread; only the append is exclusive.
+        let record = file
+            .read()
+            .expect("netcdf output file lock is poisoned")
+            .encode(values)?;
+        file.write()
+            .expect("netcdf output file lock is poisoned")
+            .append(record, time)?;
+        debug!("[NC] Done writing variable {} for {time}", variable.name);
+        Ok(())
+    }
 
-        let mut file = mutex.lock().expect("netcdf output file lock is poisoned");
-
-        debug!(
-            "[NC] Writing variable {} to {:?}",
-            variable.name,
-            file.path().expect("Should have a path")
-        );
-
-        let mut time_var = file
-            .variable_mut("time")
-            .ok_or_else(|| "variable not found: time".to_string())?;
-        let len = time_var.len();
-        let extents: Extents = (&[len], &[1]).try_into().expect("Should convert");
-
-        time_var
-            .put_values(&[time.timestamp()], extents)
-            .unwrap_or_else(|_| panic!("Add time failed"));
-
-        let mut variable_var = file
-            .variable_mut(&variable.name)
-            .ok_or_else(|| format!("variable not found: {}", variable.name))?;
-
-        let extents: Extents = (&[len, 0, 0], &[1, grid.nrows, grid.ncols])
-            .try_into()
-            .expect("Should convert");
-        variable_var
-            .put_values(values, extents)
-            .unwrap_or_else(|err| panic!("Add variable failed: {err}"));
-
-        debug!(
-            "[NC] Done Writing variable {} to {:?}",
-            variable.name,
-            file.path().expect("Should have a path")
-        );
+    fn finish(&mut self) -> Result<(), RISICOError> {
+        for (name, file) in &mut self.files {
+            file.get_mut()
+                .expect("netcdf output file lock is poisoned")
+                .finish()
+                .map_err(|error| format!("cannot finish NetCDF file {name}.nc: {error}"))?;
+        }
         Ok(())
     }
 }

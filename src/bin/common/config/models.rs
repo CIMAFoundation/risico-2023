@@ -1479,6 +1479,21 @@ impl OutputWriter {
         Ok(Self { outputs })
     }
 
+    /// Complete every output once the last timestep is written. Formats
+    /// that keep files open across the run (NetCDF) write their metadata
+    /// here; the others have nothing to do.
+    pub fn finish(&mut self) -> Result<(), RISICOError> {
+        for output_type in &mut self.outputs {
+            output_type.finish().map_err(|error| {
+                RISICOError::from(format!(
+                    "cannot finish output {}: {error}",
+                    output_type.name()
+                ))
+            })?;
+        }
+        Ok(())
+    }
+
     /// What this writer holds while a timestep's variables are resampled.
     pub fn peak_bytes(&self, cores: usize, largest_tile: usize) -> u64 {
         let grids = self.outputs.iter().flat_map(|output| {

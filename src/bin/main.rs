@@ -429,7 +429,7 @@ where
     let config = &*config;
     let lats = lats.as_slice();
     let lons = lons.as_slice();
-    std::thread::scope(|scope| -> Result<(), RISICOError> {
+    let run_result = std::thread::scope(|scope| -> Result<(), RISICOError> {
         let mut pending: Option<PendingFinish<'_>> = None;
         for time in &timeline {
             info!("{model_name}: processing {}", time.format("%Y-%m-%d %H:%M"));
@@ -609,7 +609,23 @@ where
             join_finish(model_name, timer, finished_time, handle)?;
         }
         Ok(())
-    })?;
+    });
+
+    // Outputs that stay open across the run (NetCDF files) get their
+    // metadata now. This runs after a failed run too, so the timesteps
+    // written before the failure stay readable.
+    let (finish_result, finish_elapsed) = timer.time("finish", || {
+        output_writer
+            .lock()
+            .expect("output writer lock is poisoned")
+            .finish()
+    });
+    run_result?;
+    finish_result?;
+    info!(
+        "{model_name}: outputs finished in {:.1}s",
+        finish_elapsed.as_secs_f64()
+    );
 
     handler.clear_registered_coordinates();
 

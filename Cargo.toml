@@ -27,6 +27,7 @@ build-binary = [
     "dep:libc",
     "dep:zarrs",
     "dep:serde_json",
+    "dep:nc4-stream",
 ]
 
 gdal_bindgen = ["gdal", "gdal/bindgen"]
@@ -69,6 +70,7 @@ tzf-rs = { version = "0.4.9", default-features = false }
 libc = { version = "0.2", optional = true }
 zarrs = { version = "0.22.4", optional = true, default-features = false, features = ["filesystem", "zstd"] }
 serde_json = { version = "1.0", optional = true }
+nc4-stream = { path = "crates/nc4-stream", optional = true }
 
 
 
