@@ -4,7 +4,8 @@ use std::path::{Path, PathBuf};
 
 use chrono::{DateTime, Duration, Utc};
 use log::warn;
-use netcdf::{extent::Extents, File};
+use nc4_stream::{AttrValue, DataType, DimId, Element, Nc4Writer, VariableOptions};
+use netcdf_reader::{NcAttrValue, NcFile, NcReadable, NcSliceInfo, NcSliceInfoElem};
 use risico::modules::fwi::{
     constants::{DC_INIT, DMC_INIT, FFMC_INIT, NODATAVAL},
     models::{FWIState, FWIWarmState},
@@ -45,8 +46,10 @@ pub fn write_risico_snapshot(
     validate_state_cells("RISICO", state.data.len(), grid, cell_indexes)?;
     publish_snapshot(directory, "RISICO", state.time, |path| {
         let mut file = create_grid_file(path, "RISICO", model_version, state.time, grid)?;
-        file.add_attribute("active_cell_count", cell_indexes.len() as u64)
-            .map_err(netcdf_error)?;
+        file.put_attr(
+            "active_cell_count",
+            AttrValue::U64(cell_indexes.len() as u64),
+        )?;
         write_active_mask(&mut file, grid, cell_indexes)?;
 
         let fields: [(&str, Vec<f32>); 9] = [
@@ -75,7 +78,7 @@ pub fn write_risico_snapshot(
         for (name, values) in fields {
             write_active_grid(&mut file, name, grid, cell_indexes, &values)?;
         }
-        Ok(())
+        file.close()
     })
 }
 
@@ -158,10 +161,11 @@ pub fn write_fwi_snapshot(
 
     publish_snapshot(directory, "FWI", state.time, |path| {
         let mut file = create_grid_file(path, "FWI", model_version, state.time, grid)?;
-        file.add_attribute("active_cell_count", cell_indexes.len() as u64)
-            .map_err(netcdf_error)?;
-        file.add_attribute("history_layout", "dense_grid_v1")
-            .map_err(netcdf_error)?;
+        file.put_attr(
+            "active_cell_count",
+            AttrValue::U64(cell_indexes.len() as u64),
+        )?;
+        file.put_attr("history_layout", "dense_grid_v1")?;
         write_active_mask(&mut file, grid, cell_indexes)?;
 
         let history_count = state
@@ -179,8 +183,7 @@ pub fn write_fwi_snapshot(
             .max()
             .unwrap_or(0)
             .max(1);
-        file.add_dimension("history", history_count)
-            .map_err(netcdf_error)?;
+        file.add_dimension("history", history_count)?;
 
         let grid_len = grid.width * grid.height;
         let mut counts = vec![0_u32; grid_len];
@@ -233,7 +236,7 @@ pub fn write_fwi_snapshot(
                 Some(FLOAT_FILL),
             )?;
         }
-        Ok(())
+        file.close()
     })
 }
 
@@ -254,8 +257,8 @@ fn read_fwi_snapshot(
         sample_grid_variable::<u32>(&file, "history_count", &source_grid, &source_indexes)?;
     let history_len = file
         .dimension("history")
-        .ok_or("missing NetCDF dimension history")?
-        .len();
+        .map_err(|_| "missing NetCDF dimension history")?
+        .size as usize;
     let grid_len = source_grid.width * source_grid.height;
     let expected_len = history_len * grid_len;
     let times = read_variable::<i64>(&file, "history_time")?;
@@ -403,56 +406,94 @@ fn publish_snapshot(
     Ok(destination)
 }
 
+/// A snapshot being written: the streaming writer and its dimensions by name.
+struct GridFile {
+    writer: Nc4Writer,
+    dims: BTreeMap<String, DimId>,
+}
+
+impl GridFile {
+    fn put_attr(&mut self, name: &str, value: impl Into<AttrValue>) -> Result<(), RISICOError> {
+        self.writer.put_attr(name, value).map_err(nc4_error)
+    }
+
+    fn add_dimension(&mut self, name: &str, len: usize) -> Result<(), RISICOError> {
+        let dim = self.writer.add_dimension(name, len).map_err(nc4_error)?;
+        self.dims.insert(name.to_string(), dim);
+        Ok(())
+    }
+
+    fn dim(&self, name: &str) -> Result<DimId, RISICOError> {
+        self.dims
+            .get(name)
+            .copied()
+            .ok_or_else(|| format!("snapshot has no dimension {name}").into())
+    }
+
+    /// Write the file's metadata; the snapshot is unreadable before this.
+    fn close(self) -> Result<(), RISICOError> {
+        self.writer.finish().map_err(nc4_error)
+    }
+}
+
 fn create_grid_file(
     path: &Path,
     model: &str,
     model_version: &str,
     state_time: DateTime<Utc>,
     grid: &RasterGrid,
-) -> Result<netcdf::MutableFile, RISICOError> {
-    let mut file = netcdf::create_with(path, netcdf::Options::NETCDF4)
+) -> Result<GridFile, RISICOError> {
+    let writer = Nc4Writer::create(path)
         .map_err(|error| format!("cannot create {}: {error}", path.display()))?;
-    file.add_attribute("state_schema_version", STATE_SCHEMA_VERSION)
-        .map_err(netcdf_error)?;
-    file.add_attribute("model", model).map_err(netcdf_error)?;
-    file.add_attribute("model_version", model_version)
-        .map_err(netcdf_error)?;
-    file.add_attribute("state_time", state_time.timestamp())
-        .map_err(netcdf_error)?;
-    file.add_attribute("epsg", grid.epsg)
-        .map_err(netcdf_error)?;
-    file.add_attribute("geotransform", grid.transform.to_vec())
-        .map_err(netcdf_error)?;
-    file.add_attribute("spatial_layout", "regular_grid_y_x")
-        .map_err(netcdf_error)?;
-    file.add_dimension("y", grid.height).map_err(netcdf_error)?;
-    file.add_dimension("x", grid.width).map_err(netcdf_error)?;
+    let mut file = GridFile {
+        writer,
+        dims: BTreeMap::new(),
+    };
+    file.put_attr("state_schema_version", AttrValue::I32(STATE_SCHEMA_VERSION))?;
+    file.put_attr("model", model)?;
+    file.put_attr("model_version", model_version)?;
+    file.put_attr("state_time", AttrValue::I64(state_time.timestamp()))?;
+    file.put_attr("epsg", AttrValue::U32(grid.epsg))?;
+    file.put_attr("geotransform", AttrValue::F64s(grid.transform.to_vec()))?;
+    file.put_attr("spatial_layout", "regular_grid_y_x")?;
+    file.add_dimension("y", grid.height)?;
+    file.add_dimension("x", grid.width)?;
 
-    let mut x = file
-        .add_variable::<f64>("x", &["x"])
-        .map_err(netcdf_error)?;
-    x.add_attribute("standard_name", "longitude")
-        .map_err(netcdf_error)?;
-    x.add_attribute("units", "degrees_east")
-        .map_err(netcdf_error)?;
-    x.put_values(&grid.x_coordinates(), Extents::All)
-        .map_err(netcdf_error)?;
-    let mut y = file
-        .add_variable::<f64>("y", &["y"])
-        .map_err(netcdf_error)?;
-    y.add_attribute("standard_name", "latitude")
-        .map_err(netcdf_error)?;
-    y.add_attribute("units", "degrees_north")
-        .map_err(netcdf_error)?;
-    y.put_values(&grid.y_coordinates(), Extents::All)
-        .map_err(netcdf_error)?;
+    let x = file
+        .writer
+        .add_variable("x", DataType::F64, &[file.dim("x")?], VariableOptions::contiguous())
+        .map_err(nc4_error)?;
+    file.writer
+        .put_var_attr(x, "standard_name", "longitude")
+        .map_err(nc4_error)?;
+    file.writer
+        .put_var_attr(x, "units", "degrees_east")
+        .map_err(nc4_error)?;
+    file.writer
+        .put_values(x, &grid.x_coordinates())
+        .map_err(nc4_error)?;
+    let y = file
+        .writer
+        .add_variable("y", DataType::F64, &[file.dim("y")?], VariableOptions::contiguous())
+        .map_err(nc4_error)?;
+    file.writer
+        .put_var_attr(y, "standard_name", "latitude")
+        .map_err(nc4_error)?;
+    file.writer
+        .put_var_attr(y, "units", "degrees_north")
+        .map_err(nc4_error)?;
+    file.writer
+        .put_values(y, &grid.y_coordinates())
+        .map_err(nc4_error)?;
     Ok(file)
 }
 
-fn open_grid_file(path: &Path, model: &str, model_version: &str) -> Result<File, RISICOError> {
-    let file = netcdf::open(path)
+fn open_grid_file(path: &Path, model: &str, model_version: &str) -> Result<NcFile, RISICOError> {
+    let file = NcFile::open(path)
         .map_err(|error| format!("cannot open NetCDF snapshot {}: {error}", path.display()))?;
-    let schema: i32 = attribute(&file, "state_schema_version")?;
+    let schema: i32 = int_attribute(&file, "state_schema_version")?
+        .try_into()
+        .map_err(|_| "invalid NetCDF attribute state_schema_version")?;
     if schema != STATE_SCHEMA_VERSION {
         return Err(format!("unsupported state schema version {schema}").into());
     }
@@ -472,23 +513,20 @@ fn open_grid_file(path: &Path, model: &str, model_version: &str) -> Result<File,
     Ok(file)
 }
 
-fn grid_from_file(file: &File) -> Result<RasterGrid, RISICOError> {
+fn grid_from_file(file: &NcFile) -> Result<RasterGrid, RISICOError> {
     let width = file
         .dimension("x")
-        .ok_or("missing NetCDF dimension x")?
-        .len();
+        .map_err(|_| "missing NetCDF dimension x")?
+        .size as usize;
     let height = file
         .dimension("y")
-        .ok_or("missing NetCDF dimension y")?
-        .len();
-    let epsg: u32 = attribute(file, "epsg")?;
-    let values = match file
-        .attribute("geotransform")
-        .ok_or("missing NetCDF attribute geotransform")?
-        .value()
-        .map_err(netcdf_error)?
-    {
-        netcdf::AttrValue::Doubles(values) => values,
+        .map_err(|_| "missing NetCDF dimension y")?
+        .size as usize;
+    let epsg: u32 = int_attribute(file, "epsg")?
+        .try_into()
+        .map_err(|_| "invalid NetCDF attribute epsg")?;
+    let values = match &global_attribute(file, "geotransform")?.value {
+        NcAttrValue::Doubles(values) => values.clone(),
         _ => return Err("NetCDF attribute geotransform is not a double array".into()),
     };
     let transform: [f64; 6] = values.try_into().map_err(|values: Vec<f64>| {
@@ -544,7 +582,7 @@ fn sampling_indexes(
 }
 
 fn write_active_grid(
-    file: &mut netcdf::MutableFile,
+    file: &mut GridFile,
     name: &str,
     grid: &RasterGrid,
     cell_indexes: &[u32],
@@ -558,7 +596,7 @@ fn write_active_grid(
 }
 
 fn write_active_mask(
-    file: &mut netcdf::MutableFile,
+    file: &mut GridFile,
     grid: &RasterGrid,
     cell_indexes: &[u32],
 ) -> Result<(), RISICOError> {
@@ -570,7 +608,7 @@ fn write_active_mask(
 }
 
 fn validate_active_samples(
-    file: &File,
+    file: &NcFile,
     source_grid: &RasterGrid,
     source_indexes: &[usize],
 ) -> Result<(), RISICOError> {
@@ -583,7 +621,7 @@ fn validate_active_samples(
 }
 
 fn sample_float_grid(
-    file: &File,
+    file: &NcFile,
     name: &str,
     source_grid: &RasterGrid,
     source_indexes: &[usize],
@@ -597,23 +635,23 @@ fn sample_float_grid(
 /// nearest-neighbour remapping. Grouping them by source window preserves those
 /// semantics without decoding the complete source grid.
 fn sample_grid_variable<T>(
-    file: &File,
+    file: &NcFile,
     name: &str,
     source_grid: &RasterGrid,
     source_indexes: &[usize],
 ) -> Result<Vec<T>, RISICOError>
 where
-    T: netcdf::NcPutGet + Copy,
+    T: NcReadable + Copy,
 {
     const READ_TILE: usize = 256;
 
     let variable = file
         .variable(name)
-        .ok_or_else(|| RISICOError::from(format!("missing NetCDF variable {name}")))?;
+        .map_err(|_| RISICOError::from(format!("missing NetCDF variable {name}")))?;
     let dimensions = variable.dimensions();
     if dimensions.len() != 2
-        || dimensions[0].len() != source_grid.height
-        || dimensions[1].len() != source_grid.width
+        || dimensions[0].size as usize != source_grid.height
+        || dimensions[1].size as usize != source_grid.width
     {
         return Err(format!(
             "snapshot variable {name} is not aligned with the {}x{} source grid",
@@ -641,10 +679,25 @@ where
         let col = tile_col * READ_TILE;
         let height = READ_TILE.min(source_grid.height - row);
         let width = READ_TILE.min(source_grid.width - col);
-        let extents: Extents = (&[row, col], &[height, width])
-            .try_into()
-            .map_err(|error| format!("cannot create NetCDF window for {name}: {error}"))?;
-        let values = variable.values::<T, _>(extents).map_err(netcdf_error)?;
+        let window = NcSliceInfo {
+            selections: vec![
+                NcSliceInfoElem::Slice {
+                    start: row as u64,
+                    end: (row + height) as u64,
+                    step: 1,
+                },
+                NcSliceInfoElem::Slice {
+                    start: col as u64,
+                    end: (col + width) as u64,
+                    step: 1,
+                },
+            ],
+        };
+        let values = file
+            .read_variable_slice::<T>(name, &window)
+            .map_err(reader_error)?
+            .into_raw_vec_and_offset()
+            .0;
         if values.len() != height * width {
             return Err(format!(
                 "snapshot variable {name} returned {} window values, expected {}",
@@ -712,75 +765,135 @@ fn is_fill(value: f32) -> bool {
 }
 
 fn snapshot_time(path: &Path) -> Result<DateTime<Utc>, RISICOError> {
-    let file =
-        netcdf::open(path).map_err(|error| format!("cannot open NetCDF snapshot: {error}"))?;
-    let timestamp: i64 = attribute(&file, "state_time")?;
+    let file = NcFile::open(path).map_err(|error| format!("cannot open NetCDF snapshot: {error}"))?;
+    let timestamp = int_attribute(&file, "state_time")?;
     DateTime::from_timestamp(timestamp, 0)
         .ok_or_else(|| format!("invalid state_time {timestamp}").into())
 }
 
+/// An element type a snapshot grid can hold, with its fill value option.
+trait SnapshotElement: Element {
+    fn with_fill(options: VariableOptions, fill: Self) -> VariableOptions;
+}
+
+impl SnapshotElement for f32 {
+    fn with_fill(options: VariableOptions, fill: Self) -> VariableOptions {
+        options.fill_value_f32(fill)
+    }
+}
+
+impl SnapshotElement for i64 {
+    fn with_fill(options: VariableOptions, fill: Self) -> VariableOptions {
+        options.fill_value_i64(fill)
+    }
+}
+
+impl SnapshotElement for u32 {
+    fn with_fill(options: VariableOptions, fill: Self) -> VariableOptions {
+        options.fill_value_u32(fill)
+    }
+}
+
+impl SnapshotElement for u8 {
+    fn with_fill(options: VariableOptions, fill: Self) -> VariableOptions {
+        options.fill_value_u8(fill)
+    }
+}
+
+/// Side of the square chunks snapshot grids are stored in; the reader samples
+/// windows of the same size, so one window is one chunk.
+const SNAPSHOT_CHUNK: usize = 256;
+
 fn write_compressed_variable<T>(
-    file: &mut netcdf::MutableFile,
+    file: &mut GridFile,
     name: &str,
     dimensions: &[&str],
     values: &[T],
     fill: Option<T>,
 ) -> Result<(), RISICOError>
 where
-    T: netcdf::NcPutGet + Copy,
+    T: SnapshotElement,
 {
-    let mut variable = file
-        .add_variable::<T>(name, dimensions)
-        .map_err(netcdf_error)?;
-    if let Some(fill) = fill {
-        variable.set_fill_value(fill).map_err(netcdf_error)?;
+    let dims = dimensions
+        .iter()
+        .map(|dim| file.dim(dim))
+        .collect::<Result<Vec<_>, _>>()?;
+    // Spatial dimensions (the last two) are chunked in tiles, any leading
+    // dimension one slab at a time.
+    let mut chunk = Vec::with_capacity(dims.len());
+    for (position, dim) in dimensions.iter().enumerate() {
+        let extent = match *dim {
+            "x" => file_extent(file, "x")?,
+            "y" => file_extent(file, "y")?,
+            _ => 1,
+        };
+        let spatial = position + 2 >= dimensions.len();
+        chunk.push(if spatial { extent.min(SNAPSHOT_CHUNK).max(1) } else { 1 });
     }
-    variable
-        .compression(COMPRESSION_LEVEL, true)
-        .map_err(netcdf_error)?;
-    variable
-        .put_values(values, Extents::All)
-        .map_err(netcdf_error)
+    let mut options = VariableOptions::chunked(chunk)
+        .shuffle(true)
+        .deflate(COMPRESSION_LEVEL as u32);
+    if let Some(fill) = fill {
+        options = T::with_fill(options, fill);
+    }
+    let variable = file
+        .writer
+        .add_variable(name, T::DATA_TYPE, &dims, options)
+        .map_err(nc4_error)?;
+    file.writer.put_values(variable, values).map_err(nc4_error)
 }
 
-fn attribute<T>(file: &File, name: &str) -> Result<T, RISICOError>
-where
-    T: TryFrom<netcdf::AttrValue>,
-    <T as TryFrom<netcdf::AttrValue>>::Error: std::fmt::Display,
-{
-    let value = file
-        .attribute(name)
-        .ok_or_else(|| format!("missing NetCDF attribute {name}"))?
-        .value()
-        .map_err(netcdf_error)?;
-    value
-        .try_into()
-        .map_err(|error| format!("invalid NetCDF attribute {name}: {error}").into())
+fn file_extent(file: &GridFile, dimension: &str) -> Result<usize, RISICOError> {
+    file.writer
+        .dimension_len(file.dim(dimension)?)
+        .ok_or_else(|| format!("snapshot has no dimension {dimension}").into())
 }
 
-fn string_attribute(file: &File, name: &str) -> Result<String, RISICOError> {
-    match file
-        .attribute(name)
-        .ok_or_else(|| format!("missing NetCDF attribute {name}"))?
-        .value()
-        .map_err(netcdf_error)?
-    {
-        netcdf::AttrValue::Str(value) => Ok(value),
+fn global_attribute<'a>(file: &'a NcFile, name: &str) -> Result<&'a netcdf_reader::NcAttribute, RISICOError> {
+    file.global_attribute(name)
+        .map_err(|_| format!("missing NetCDF attribute {name}").into())
+}
+
+/// An integer attribute of any width, as netcdf-c readers would convert it.
+fn int_attribute(file: &NcFile, name: &str) -> Result<i64, RISICOError> {
+    let value = match &global_attribute(file, name)?.value {
+        NcAttrValue::Bytes(v) => v.first().map(|v| i64::from(*v)),
+        NcAttrValue::Shorts(v) => v.first().map(|v| i64::from(*v)),
+        NcAttrValue::Ints(v) => v.first().map(|v| i64::from(*v)),
+        NcAttrValue::Int64s(v) => v.first().copied(),
+        NcAttrValue::UBytes(v) => v.first().map(|v| i64::from(*v)),
+        NcAttrValue::UShorts(v) => v.first().map(|v| i64::from(*v)),
+        NcAttrValue::UInts(v) => v.first().map(|v| i64::from(*v)),
+        NcAttrValue::UInt64s(v) => v.first().and_then(|v| i64::try_from(*v).ok()),
+        _ => None,
+    };
+    value.ok_or_else(|| format!("invalid NetCDF attribute {name}: not an integer").into())
+}
+
+fn string_attribute(file: &NcFile, name: &str) -> Result<String, RISICOError> {
+    match &global_attribute(file, name)?.value {
+        NcAttrValue::Chars(value) => Ok(value.clone()),
+        NcAttrValue::Strings(values) => Ok(values.concat()),
         _ => Err(format!("NetCDF attribute {name} is not a string").into()),
     }
 }
 
-fn read_variable<T>(file: &File, name: &str) -> Result<Vec<T>, RISICOError>
+fn read_variable<T>(file: &NcFile, name: &str) -> Result<Vec<T>, RISICOError>
 where
-    T: netcdf::NcPutGet,
+    T: NcReadable,
 {
-    file.variable(name)
-        .ok_or_else(|| RISICOError::from(format!("missing NetCDF variable {name}")))?
-        .values::<T, _>(Extents::All)
-        .map_err(netcdf_error)
+    Ok(file
+        .read_variable::<T>(name)
+        .map_err(reader_error)?
+        .into_raw_vec_and_offset()
+        .0)
 }
 
-fn netcdf_error(error: netcdf::error::Error) -> RISICOError {
+fn nc4_error(error: nc4_stream::Error) -> RISICOError {
+    format!("NetCDF error: {error}").into()
+}
+
+fn reader_error(error: netcdf_reader::Error) -> RISICOError {
     format!("NetCDF error: {error}").into()
 }
 

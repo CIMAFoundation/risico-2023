@@ -19,7 +19,7 @@ jobs:
   #       with:
   #         RUSTTARGET: x86_64-unknown-linux-musl
   #         EXTRA_FILES: "README.md"
-  #         FEATURES: "static_deps"
+  #         FEATURES: "build-binary"
 
   build-with-linux-gnu:
     name: release x86_64-unknown-linux-gnu

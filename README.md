@@ -8,7 +8,9 @@ This project is ongoing. We welcome contributions and feedback.
 
 ### Compiling and running the model
 
-Compile the production binary using Cargo:
+Compile the production binary using Cargo. No native NetCDF or HDF5
+libraries are needed: NetCDF I/O is pure Rust. Only the optional
+`static-converter` (feature `gdal`) links a C library, GDAL.
 
 ```bash
 cargo build --release --bin risico-2023
@@ -334,13 +336,20 @@ run. Zarr stores take no global lock, so a timestamp's variables are
 compressed in parallel.
 
 NETCDF output types accept a `compression_level` (0 to 9, default 7); for
-`ZARR` the same key is the zstd level (0 to 22). The
-NetCDF library accepts one call at a time, so every variable of a timestamp
-is deflated on a single thread; on runs that are output-bound this level is
-most of the wall time, and a lower level trades file size for speed. Output
-variables are chunked one timestamp at a time, and the library's chunk cache
-is capped at one such chunk per variable so that open output files cost
-little resident memory however long the timeline is.
+`ZARR` the same key is the zstd level (0 to 22). NetCDF-4 files are written
+by the in-repo `nc4-stream` crate (`crates/nc4-stream`), a pure-Rust
+streaming writer: each timestamp's grid is shuffled and deflated on the
+thread that produced it and appended to the file as one chunk, so the
+variables of a timestamp compress in parallel and an open output file costs
+one chunk of memory however long the timeline is. The chunk index and the
+rest of the file metadata are written when the run ends, so output files
+are readable only after a run finishes or fails cleanly. The files have the
+same structure netcdf-c writes (unlimited `time`, one chunk per timestamp,
+dimension scales), so ncdump, xarray and GDAL read them as before.
+
+NetCDF input files and warm-state snapshots are read with the pure-Rust
+`netcdf-reader` crate and snapshots are written with `nc4-stream`, so the
+build needs neither libnetcdf nor libhdf5.
 
 Allow scratch capacity for approximately four bytes multiplied by active model
 cells and configured native variables, plus, when the state is on disk, the
@@ -412,8 +421,7 @@ does not guarantee compatibility with newer GDAL APIs: `gdal` 0.19 does not
 compile against GDAL 3.13. Use a supported GDAL version (for example, 3.6.2)
 with `--features gdal` in that case. When GDAL is outside the system development
 paths, configure `GDAL_LIB_DIR` and `GDAL_VERSION`, or point `PKG_CONFIG_PATH`
-to its `gdal.pc`. A Conda environment must also provide HDF5 1.x for the current
-`hdf5-sys` dependency.
+to its `gdal.pc`.
 
 The converter checks that cells are unique and in the canonical north-to-south,
 west-to-east order. This keeps legacy state rows aligned during a progressive
