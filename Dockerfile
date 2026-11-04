@@ -1,10 +1,12 @@
 # Ubuntu 16.04 keeps the produced binary compatible with old glibc versions.
+# The release workflow builds a static musl binary instead (see
+# .github/workflows/build-on-release.yml); this image is kept for building a
+# glibc-linked binary locally with ./build-with-docker.sh.
 FROM ubuntu:16.04
 
-# NetCDF and HDF5 are pure Rust in this build; only a C toolchain and curl
-# (for rustup) are needed.
+# NetCDF and HDF5 are pure Rust in this build; only a C toolchain (for the
+# vendored zstd sources) and curl (for rustup) are needed.
 RUN apt-get update && apt-get install -y \
-    libc6-dev \
     curl \
     build-essential
 
@@ -17,5 +19,4 @@ WORKDIR /app
 # Copy the local application code into the container
 COPY . .
 
-#ENV RUSTFLAGS="-C target-feature=+crt-static"
 ENTRYPOINT ["cargo", "build", "--release", "--features=build-binary", "--target", "x86_64-unknown-linux-gnu"]
