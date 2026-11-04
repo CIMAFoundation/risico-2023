@@ -22,7 +22,9 @@ use zarrs::{
     array::{codec::ZstdCodec, Array, ArrayBuilder, DataType},
     array_subset::ArraySubset,
     filesystem::FilesystemStore,
-    group::GroupBuilder,
+    group::{Group, GroupBuilder},
+    metadata_ext::group::consolidated_metadata::{ConsolidatedMetadata, ConsolidatedMetadataKind},
+    node::Node,
 };
 
 use crate::common::helpers::RISICOError;
@@ -119,10 +121,29 @@ impl Writer for ZarrWriter {
                 ))
             })
     }
+
+    /// Write the consolidated metadata of every store once its arrays have
+    /// their final shape. Readers such as xarray `open_zarr(consolidated=True)`
+    /// (the DDS xarray service) refuse a Zarr v3 store without it.
+    fn finish(&mut self) -> Result<(), RISICOError> {
+        for (name, store) in &self.stores {
+            store
+                .lock()
+                .expect("Zarr store lock is poisoned")
+                .consolidate()
+                .map_err(|error| {
+                    RISICOError::from(format!(
+                        "cannot consolidate the metadata of Zarr store {name}: {error}"
+                    ))
+                })?;
+        }
+        Ok(())
+    }
 }
 
 /// One variable's store: the data array and its time axis.
 struct VariableStore {
+    store: Arc<FilesystemStore>,
     data: Array<FilesystemStore>,
     time: Array<FilesystemStore>,
     samples: u64,
@@ -238,18 +259,37 @@ impl VariableStore {
                 .bytes_to_bytes_codecs(vec![Arc::new(ZstdCodec::new(compression_level, false))]);
         }
         let data = data_builder
-            .build(store, &format!("/{}", variable.output_name()))
+            .build(store.clone(), &format!("/{}", variable.output_name()))
             .map_err(|error| format!("cannot create Zarr data array: {error}"))?;
         data.store_metadata()
             .map_err(|error| format!("cannot store Zarr data metadata: {error}"))?;
 
         Ok(Self {
+            store,
             data,
             time,
             samples: 0,
             rows,
             cols,
         })
+    }
+
+    /// Inline the metadata of the arrays into the root group (`consolidated_metadata`).
+    fn consolidate(&self) -> Result<(), String> {
+        let root = Node::open(&self.store, "/")
+            .map_err(|error| format!("cannot open the store hierarchy: {error}"))?;
+        let metadata = root
+            .consolidate_metadata()
+            .ok_or_else(|| "the store root is not a group".to_string())?;
+        let mut group = Group::open(self.store.clone(), "/")
+            .map_err(|error| format!("cannot open the root group: {error}"))?;
+        group.set_consolidated_metadata(Some(ConsolidatedMetadata {
+            metadata,
+            kind: ConsolidatedMetadataKind::Inline,
+        }));
+        group
+            .store_metadata()
+            .map_err(|error| format!("cannot store the root group metadata: {error}"))
     }
 
     /// Grow both arrays by one timestep and write it.
