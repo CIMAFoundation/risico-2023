@@ -626,6 +626,21 @@ impl Writer for NetcdfWriter {
 }
 
 impl Writer for ZBinWriter {
+    fn prepare(
+        &mut self,
+        grid: &RegularGrid,
+        variables: &[OutputVariable],
+    ) -> Result<(), RISICOError> {
+        let _ = (grid, variables);
+        fs::create_dir_all(&self.path).map_err(|error| {
+            format!(
+                "cannot create output directory {}: {error}",
+                self.path.display()
+            )
+        })?;
+        Ok(())
+    }
+
     fn write_variable(
         &self,
         variable: &OutputVariable,
@@ -658,6 +673,21 @@ impl Writer for ZBinWriter {
 }
 
 impl Writer for PngWriter {
+    fn prepare(
+        &mut self,
+        grid: &RegularGrid,
+        variables: &[OutputVariable],
+    ) -> Result<(), RISICOError> {
+        let _ = (grid, variables);
+        fs::create_dir_all(&self.path).map_err(|error| {
+            format!(
+                "cannot create output directory {}: {error}",
+                self.path.display()
+            )
+        })?;
+        Ok(())
+    }
+
     fn write_variable(
         &self,
         variable: &OutputVariable,
@@ -711,6 +741,21 @@ impl GeotiffWriter {
 }
 #[cfg(feature = "gdal")]
 impl Writer for GeotiffWriter {
+    fn prepare(
+        &mut self,
+        grid: &RegularGrid,
+        variables: &[OutputVariable],
+    ) -> Result<(), RISICOError> {
+        let _ = (grid, variables);
+        fs::create_dir_all(&self.path).map_err(|error| {
+            format!(
+                "cannot create output directory {}: {error}",
+                self.path.display()
+            )
+        })?;
+        Ok(())
+    }
+
     fn write_variable(
         &self,
         variable: &OutputVariable,
