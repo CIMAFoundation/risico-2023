@@ -165,6 +165,7 @@ pub struct FWIConfig {
     properties: FWIProperties,
     palettes: PaletteMap,
     output_time_resolution: u32,
+    output_time_offset: i64,
     output_types_defs: Vec<OutputTypeConfig>,
     model_version: String,
 }
@@ -1974,7 +1975,21 @@ impl FWIConfig {
             .into());
         }
 
-        let props = FWIProperties::new(props_container);
+        if !["legacy", "cffdrs", "sliding_window"].contains(&config_defs.model_version.as_str()) {
+            warn!("FWI: unknown model_version {:?}, the legacy model is used", config_defs.model_version);
+        }
+        info!(
+            "FWI ({}): warm state at {} for run date {}",
+            config_defs.model_version,
+            warm_state_time.format("%Y-%m-%d %H:%M"),
+            date.format("%Y-%m-%d %H:%M")
+        );
+
+        let mut props = FWIProperties::new(props_container);
+        if config_defs.model_version == "cffdrs" {
+            // daily step at local standard noon: one time-zone lookup per cell
+            props.compute_standard_offsets(&date);
+        }
 
         // if config_defs.model_version = 'legacy' them put output_time_resolution to 24
         let mut output_time_resolution = config_defs.output_time_resolution.unwrap_or(24);
@@ -1982,6 +1997,7 @@ impl FWIConfig {
             warn!("Using legacy model version, setting output_time_resolution to 24");
             output_time_resolution = 24;
         }
+        let output_time_offset = config_defs.output_time_offset.unwrap_or(0);
 
         let config = FWIConfig {
             run_date: date,
@@ -1994,6 +2010,7 @@ impl FWIConfig {
             properties: props,
             palettes,
             output_time_resolution,
+            output_time_offset,
             model_version: config_defs.model_version.clone(),
             output_types_defs: config_defs.output_types.clone(),
         };
@@ -2009,10 +2026,11 @@ impl FWIConfig {
         )
     }
 
+    /// Outputs at run date + offset + k * resolution hours (k may be negative).
     pub fn should_write_output(&self, time: &DateTime<Utc>) -> bool {
         let time_diff = time.signed_duration_since(self.run_date);
-        let hours = time_diff.num_hours();
-        hours % self.output_time_resolution as i64 == 0
+        let hours = time_diff.num_hours() - self.output_time_offset;
+        hours.rem_euclid(self.output_time_resolution as i64) == 0
     }
 
     pub fn should_write_warm_state(&self, time: &DateTime<Utc>) -> bool {
@@ -2067,6 +2085,9 @@ mod fwi_warm_state_tests {
             temperature: vec![29.0],
             wind_speed: vec![4.0],
             rain24h: vec![2.0],
+            noon_temperature: 28.0,
+            noon_humidity: 33.0,
+            noon_wind_speed: 4000.0,
         }];
 
         write_tile_checkpoint(&path, time, &data).expect("checkpoint should be written");

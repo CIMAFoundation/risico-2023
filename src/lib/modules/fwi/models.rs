@@ -5,7 +5,7 @@ use ndarray::{Array1, Zip};
 use super::{
     config::FWIModelConfig,
     constants::*,
-    functions::{get_output_fn, update_state_fn},
+    functions::{get_output_fn, standard_utc_offset_hours, update_state_fn},
 };
 
 // CELLS PROPERTIES
@@ -13,6 +13,10 @@ use super::{
 pub struct FWIPropertiesElement {
     pub lon: f32,
     pub lat: f32,
+    /// Standard (non-DST) UTC offset of the cell's time zone in hours, used by
+    /// `model_version: cffdrs` to find local standard noon; NaN until
+    /// `FWIProperties::compute_standard_offsets` is called.
+    pub std_utc_offset_hours: f32,
 }
 
 #[derive(Debug)]
@@ -32,11 +36,23 @@ impl FWIProperties {
             .lons
             .into_iter()
             .zip(props.lats)
-            .map(|(lon, lat)| FWIPropertiesElement { lon, lat })
+            .map(|(lon, lat)| FWIPropertiesElement {
+                lon,
+                lat,
+                std_utc_offset_hours: f32::NAN,
+            })
             .collect();
 
         let len = data.len();
         Self { data, len }
+    }
+
+    /// Fill `std_utc_offset_hours` from the time zone of every cell
+    /// (tzf-rs boundaries, chrono-tz rules evaluated at `date`).
+    pub fn compute_standard_offsets(&mut self, date: &DateTime<Utc>) {
+        for prop in self.data.iter_mut() {
+            prop.std_utc_offset_hours = standard_utc_offset_hours(prop.lon, prop.lat, date);
+        }
     }
 
     pub fn get_coords(&self) -> (Vec<f32>, Vec<f32>) {
@@ -69,7 +85,12 @@ pub struct FWIStateElement {
     pub humidity: Vec<f32>,
     pub temperature: Vec<f32>,
     pub wind_speed: Vec<f32>,
-    pub rain24h: Vec<f32>
+    pub rain24h: Vec<f32>,
+    /// Weather of the last daily step (`model_version: cffdrs`): local
+    /// standard noon temperature [C], relative humidity [%] and wind [m/h].
+    pub noon_temperature: f32,
+    pub noon_humidity: f32,
+    pub noon_wind_speed: f32,
 }
 
 
@@ -104,6 +125,9 @@ impl FWIState {
                         temperature: vec![NODATAVAL; n],
                         wind_speed: vec![NODATAVAL; n],
                         rain24h: vec![NODATAVAL; n],
+                        noon_temperature: NODATAVAL,
+                        noon_humidity: NODATAVAL,
+                        noon_wind_speed: NODATAVAL,
                     }
                 })
                 .collect(),

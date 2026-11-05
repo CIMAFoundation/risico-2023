@@ -186,6 +186,22 @@ models:
     output_types: []
 ```
 
+FWI model versions:
+
+- `cffdrs`: the canonical daily Canadian FWI System (Van Wagner 1987; equations
+  and constants of the cffdrs R package, `src/lib/modules/fwi/cffdrs.rs`, tested
+  against its published fixtures). The daily step runs at each cell's local
+  *standard* noon (tzf-rs time zone, IANA rules, no DST), with
+  temperature, humidity and wind interpolated linearly between the input steps
+  around noon and the rain accumulated since the previous noon. The snapshot
+  keeps the codes and the rain accumulated since the last noon, so a restart is
+  exact. Write one map per day after the latest noon of the domain with
+  `output_time_resolution: 24` and `output_time_offset` (hours from the run
+  date, e.g. `12` for domains whose standard offsets are all >= 0).
+- `legacy`: the port used by FWI-ITALIA-ICON/IFS (civil-time noon, daily step
+  computed when the output is written; kept unchanged).
+- `sliding_window`: rolling 24 h windows.
+
 FWI snapshots preserve each cell's complete moisture/rain history as
 `history, y, x` grids plus a `history_count` grid. Legacy-model snapshots use one
 scalar observation per pixel, matching the deployed `rain ffmc dmc dc` warm-state
