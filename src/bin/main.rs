@@ -703,6 +703,8 @@ fn main() -> Result<(), Box<dyn Error>> {
     let mut input_handler = get_input_handler(&args.input_path, &configs)?;
     info!("Input files:\n{}", input_handler.info_input());
 
+    let mut failed_models: Vec<String> = Vec::new();
+
     for model_config in &configs.models {
         let model_name = model_config.get_model_name();
         info!("Running model: {model_name}");
@@ -812,11 +814,19 @@ fn main() -> Result<(), Box<dyn Error>> {
             };
         if let Err(error) = result {
             warn!("Error running model {model_name}: {error}");
+            failed_models.push(model_name.to_string());
         }
         info!(
             "{model_name} elapsed time: {} seconds",
             (Utc::now() - start).num_seconds()
         );
+    }
+
+    if !failed_models.is_empty() {
+        // Each model failure is logged above so the others can continue; the
+        // process must still report it, or an operational launcher would
+        // treat a run without output as a success.
+        return Err(format!("model execution failed for: {}", failed_models.join(", ")).into());
     }
 
     Ok(())
