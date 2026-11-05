@@ -53,6 +53,9 @@ serde_derive = { version = "1.0.209", optional = false }
 serde_yaml = { version = "0.9.17", optional = true }
 cftime-rs = { git = "https://github.com/CIMAFoundation/cftime-rs-no-cdylib"}
 chrono-tz = {version = "0.6"}
+# current IANA rules for the local standard noon of the FWI `cffdrs` version
+# (0.6 predates e.g. Europe/Kyiv, America/Nuuk -2, Asia/Almaty +5)
+chrono-tz-current = { package = "chrono-tz", version = "0.10.4" }
 lazy_static = "1.4.0"
 
 # Native dependencies (GDAL only, and only for the static-data converter)

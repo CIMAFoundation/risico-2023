@@ -765,3 +765,327 @@ pub fn get_output_fn(
 ) -> OutputElement{
     config.get_output(state, prop, time)
 }
+
+// MODEL VERSION "cffdrs": canonical daily FWI System at local standard noon
+//
+// The equations are in `cffdrs.rs`. This part turns the (hourly or 3-hourly)
+// forecast steps into the daily observations the system expects:
+// - the daily step runs at local standard noon (time zone of the cell from
+//   tzf-rs, standard offset without daylight saving time, i.e. 13:00 local
+//   summer time), when the input step that reaches or passes that instant is
+//   processed: it no longer depends on when outputs are written;
+// - noon temperature, humidity and wind are interpolated linearly between the
+//   two input steps bracketing noon (the later one alone when the earlier one
+//   is unknown, e.g. right after a warm start);
+// - the rain of the daily step is the rain accumulated since the previous
+//   noon, the bracketing step being split linearly, so that every millimetre
+//   is counted once; the accumulated rain is the `rain` of the warm state, the
+//   same quantity as the `r0` column of the FWI12 state files.
+//
+// State vectors hold one element: `dates[0]` is the time of the last input
+// step, `ffmc/dmc/dc[0]` the codes after the last daily step, `rain[0]` the
+// rain accumulated since that step, `temperature/humidity/wind_speed[0]` the
+// weather of the last input step, `rain24h[0]` the rain used by the last
+// daily step. `noon_*` hold the noon weather of the last daily step.
+
+fn valid(value: f32) -> bool {
+    !value.is_nan() && value > NODATAVAL + 1.0
+}
+
+/// Standard (non-DST) UTC offset in hours of the time zone at (lon, lat):
+/// tzf-rs boundaries, IANA base offset from chrono-tz 0.10 (`base_utc_offset`,
+/// so Europe/Dublin and Africa/Casablanca count as UTC+1 as in the tz
+/// database); falls back to the nautical zone `round(lon / 15)` if the zone
+/// is unknown.
+pub fn standard_utc_offset_hours(lon: f32, lat: f32, date: &DateTime<Utc>) -> f32 {
+    use chrono_tz_current::OffsetComponents;
+    let tz_name = TZ_FINDER.get_tz_name(lon as f64, lat as f64);
+    match tz_name.parse::<chrono_tz_current::Tz>() {
+        Ok(tz) => {
+            let offset = tz.offset_from_utc_datetime(&date.naive_utc());
+            offset.base_utc_offset().num_seconds() as f32 / 3600.0
+        }
+        Err(_) => (lon / 15.0).round(),
+    }
+}
+
+/// Local standard noons (UTC instants) in the interval (from, to], oldest first.
+fn local_standard_noons(from: DateTime<Utc>, to: DateTime<Utc>, offset_hours: f32) -> Vec<DateTime<Utc>> {
+    let offset = chrono::Duration::seconds((offset_hours as f64 * 3600.0).round() as i64);
+    let local_to = (to + offset).naive_utc();
+    let mut noon = DateTime::<Utc>::from_naive_utc_and_offset(
+        local_to.date().and_hms_opt(12, 0, 0).expect("valid noon"),
+        Utc,
+    ) - offset;
+    if noon > to {
+        noon -= chrono::Duration::days(1);
+    }
+    let mut noons = Vec::new();
+    while noon > from {
+        noons.push(noon);
+        noon -= chrono::Duration::days(1);
+    }
+    noons.reverse();
+    noons
+}
+
+fn interpolate_or_nearest(previous: f32, current: f32, weight: f64) -> f32 {
+    match (valid(previous), valid(current)) {
+        (true, true) => (previous as f64 + weight * (current as f64 - previous as f64)) as f32,
+        (false, true) => current,
+        (true, false) => previous,
+        (false, false) => NODATAVAL,
+    }
+}
+
+pub fn update_state_cffdrs(
+    state: &mut FWIStateElement,
+    prop: &FWIPropertiesElement,
+    input: &InputElement,
+    time: &DateTime<Utc>,
+) {
+    let last = |values: &Vec<f32>| values.last().copied().filter(|v| valid(*v));
+    let previous_time = state.dates.last().copied();
+    if previous_time.is_some_and(|previous| *time <= previous) {
+        // already processed (input steps before the warm state)
+        return;
+    }
+    let mut ffmc = last(&state.ffmc).unwrap_or(FFMC_INIT) as f64;
+    let mut dmc = last(&state.dmc).unwrap_or(DMC_INIT) as f64;
+    let mut dc = last(&state.dc).unwrap_or(DC_INIT) as f64;
+    let mut accumulated = last(&state.rain).unwrap_or(0.0).max(0.0) as f64;
+    let mut rain24h = state.rain24h.last().copied().unwrap_or(NODATAVAL);
+    let previous_weather = (
+        last(&state.temperature).unwrap_or(NODATAVAL),
+        last(&state.humidity).unwrap_or(NODATAVAL),
+        last(&state.wind_speed).unwrap_or(NODATAVAL),
+    );
+    let rain_in = if valid(input.rain) { input.rain.max(0.0) as f64 } else { 0.0 };
+
+    if let Some(previous) = previous_time {
+        let offset = if prop.std_utc_offset_hours.is_finite() {
+            prop.std_utc_offset_hours
+        } else {
+            (prop.lon / 15.0).round()
+        };
+        let interval = (*time - previous).num_seconds() as f64;
+        let mut cut = previous;
+        for noon in local_standard_noons(previous, *time, offset) {
+            let weight = (noon - previous).num_seconds() as f64 / interval;
+            let portion = rain_in * (noon - cut).num_seconds() as f64 / interval;
+            cut = noon;
+            // rounded to 0.001 mm so that float noise in the accumulation cannot
+            // decide the rain thresholds of the codes (0.5, 1.5, 2.8 mm)
+            let rain_day = ((accumulated + portion) * 1000.0).round() / 1000.0;
+            accumulated = 0.0;
+            let temperature = interpolate_or_nearest(previous_weather.0, input.temperature, weight);
+            let humidity = interpolate_or_nearest(previous_weather.1, input.humidity, weight);
+            let wind_speed = interpolate_or_nearest(previous_weather.2, input.wind_speed, weight);
+            if !(valid(temperature) && valid(humidity) && valid(wind_speed)) {
+                // no weather for this noon: codes unchanged, the day's rain is dropped
+                continue;
+            }
+            let offset_duration = chrono::Duration::seconds((offset as f64 * 3600.0).round() as i64);
+            let month = (noon + offset_duration).month();
+            (ffmc, dmc, dc) = super::cffdrs::daily_codes(
+                ffmc,
+                dmc,
+                dc,
+                temperature as f64,
+                humidity as f64,
+                wind_speed as f64 / 1000.0, // m/h -> km/h
+                rain_day,
+                prop.lat as f64,
+                month,
+            );
+            rain24h = rain_day as f32;
+            state.noon_temperature = temperature;
+            state.noon_humidity = humidity;
+            state.noon_wind_speed = wind_speed;
+        }
+        accumulated += rain_in * (*time - cut).num_seconds() as f64 / interval;
+    } else {
+        // cold start without a warm-state time: start accumulating from here
+        accumulated += rain_in;
+    }
+
+    state.dates = vec![*time];
+    state.ffmc = vec![ffmc as f32];
+    state.dmc = vec![dmc as f32];
+    state.dc = vec![dc as f32];
+    state.rain = vec![accumulated as f32];
+    state.temperature = vec![input.temperature];
+    state.humidity = vec![input.humidity];
+    state.wind_speed = vec![input.wind_speed];
+    state.rain24h = vec![rain24h];
+}
+
+pub fn get_output_cffdrs(
+    state: &mut FWIStateElement,
+    _prop: &FWIPropertiesElement,
+    _time: &DateTime<Utc>,
+) -> OutputElement {
+    use super::cffdrs;
+    let last = |values: &Vec<f32>, default: f32| values.last().copied().filter(|v| valid(*v)).unwrap_or(default);
+    let ffmc = last(&state.ffmc, FFMC_INIT);
+    let dmc = last(&state.dmc, DMC_INIT);
+    let dc = last(&state.dc, DC_INIT);
+    let moisture = cffdrs::ffmc_to_moisture(ffmc as f64);
+    let bui = cffdrs::buildup_index(dmc as f64, dc as f64);
+    let (isi, fwi, ifwi) = if valid(state.noon_wind_speed) {
+        let isi = cffdrs::initial_spread_index(ffmc as f64, state.noon_wind_speed as f64 / 1000.0);
+        let fwi = cffdrs::fire_weather_index(isi, bui);
+        (isi as f32, fwi as f32, compute_ifwi(fwi as f32))
+    } else {
+        (NODATAVAL, NODATAVAL, NODATAVAL)
+    };
+    OutputElement {
+        ffmc,
+        dffm: (moisture / (100.0 + moisture) * 100.0) as f32,
+        dmc,
+        dc,
+        isi,
+        bui: bui as f32,
+        fwi,
+        ifwi,
+        rain: state.rain24h.last().copied().unwrap_or(NODATAVAL),
+        humidity: state.noon_humidity,
+        temperature: state.noon_temperature,
+        wind_speed: if valid(state.noon_wind_speed) {
+            state.noon_wind_speed / 3600.0
+        } else {
+            NODATAVAL
+        },
+        ..OutputElement::default()
+    }
+}
+
+#[cfg(test)]
+mod cffdrs_step_tests {
+    use super::*;
+
+    fn utc(s: &str) -> DateTime<Utc> {
+        DateTime::parse_from_rfc3339(s).unwrap().with_timezone(&Utc)
+    }
+
+    fn state_at(time: &str, ffmc: f32, dmc: f32, dc: f32, rain: f32) -> FWIStateElement {
+        FWIStateElement {
+            dates: vec![utc(time)],
+            ffmc: vec![ffmc],
+            dmc: vec![dmc],
+            dc: vec![dc],
+            rain: vec![rain],
+            humidity: vec![NODATAVAL],
+            temperature: vec![NODATAVAL],
+            wind_speed: vec![NODATAVAL],
+            rain24h: vec![NODATAVAL],
+            noon_temperature: NODATAVAL,
+            noon_humidity: NODATAVAL,
+            noon_wind_speed: NODATAVAL,
+        }
+    }
+
+    fn prop(lat: f32, offset: f32) -> FWIPropertiesElement {
+        FWIPropertiesElement { lon: offset * 15.0, lat, std_utc_offset_hours: offset }
+    }
+
+    fn input(temperature: f32, humidity: f32, wind_kmh: f32, rain: f32) -> InputElement {
+        InputElement { temperature, humidity, wind_speed: wind_kmh * 1000.0, rain, ..InputElement::default() }
+    }
+
+    #[test]
+    fn noons_in_half_open_interval() {
+        // UTC+4: local standard noon is 08:00 UTC
+        let n = local_standard_noons(utc("2026-11-03T21:00:00Z"), utc("2026-11-04T08:00:00Z"), 4.0);
+        assert_eq!(n, vec![utc("2026-11-04T08:00:00Z")]);
+        let n = local_standard_noons(utc("2026-11-04T08:00:00Z"), utc("2026-11-05T07:00:00Z"), 4.0);
+        assert!(n.is_empty(), "the start of the interval is excluded");
+        let n = local_standard_noons(utc("2026-11-03T00:00:00Z"), utc("2026-11-05T12:00:00Z"), -5.0);
+        assert_eq!(n, vec![utc("2026-11-03T17:00:00Z"), utc("2026-11-04T17:00:00Z")]);
+        // UTC+13: noon at 23:00 UTC of the previous day
+        let n = local_standard_noons(utc("2026-11-03T23:00:00Z"), utc("2026-11-04T02:00:00Z"), 13.0);
+        assert!(n.is_empty());
+        let n = local_standard_noons(utc("2026-11-03T22:00:00Z"), utc("2026-11-04T02:00:00Z"), 13.0);
+        assert_eq!(n, vec![utc("2026-11-03T23:00:00Z")]);
+    }
+
+    #[test]
+    fn daily_step_at_noon_uses_noon_weather_and_24h_rain() {
+        // 3-hourly steps, noon at 12 UTC (offset 0); warm state at 00 UTC with 1 mm accumulated
+        let p = prop(45.0, 0.0);
+        let mut s = state_at("2026-07-01T00:00:00Z", 85.0, 6.0, 15.0, 1.0);
+        for (h, t) in [(3, 15.0), (6, 18.0), (9, 21.0), (12, 24.0)] {
+            update_state_cffdrs(&mut s, &p, &input(t, 40.0, 20.0, 3.0), &utc(&format!("2026-07-01T{h:02}:00:00Z")));
+        }
+        let expected = super::super::cffdrs::daily_codes(85.0, 6.0, 15.0, 24.0, 40.0, 20.0, 13.0, 45.0, 7);
+        assert_eq!(s.rain24h[0], 13.0, "1 mm carried + 4 steps of 3 mm");
+        assert_eq!(s.rain[0], 0.0);
+        assert!((s.ffmc[0] as f64 - expected.0).abs() < 1e-4);
+        assert!((s.dmc[0] as f64 - expected.1).abs() < 1e-4);
+        assert!((s.dc[0] as f64 - expected.2).abs() < 1e-4);
+        assert_eq!(s.noon_temperature, 24.0);
+        // no further noon before 15 UTC: codes unchanged, rain accumulates
+        let ffmc = s.ffmc[0];
+        update_state_cffdrs(&mut s, &p, &input(25.0, 40.0, 20.0, 2.0), &utc("2026-07-01T15:00:00Z"));
+        assert_eq!(s.ffmc[0], ffmc);
+        assert_eq!(s.rain[0], 2.0);
+    }
+
+    #[test]
+    fn noon_inside_a_step_splits_rain_and_interpolates() {
+        // offset +1.5 h: noon at 10:30 UTC, inside the 09-12 step
+        let p = prop(45.0, 1.5);
+        let mut s = state_at("2026-07-01T09:00:00Z", 85.0, 6.0, 15.0, 0.25);
+        s.temperature = vec![20.0];
+        s.humidity = vec![50.0];
+        s.wind_speed = vec![10_000.0];
+        update_state_cffdrs(&mut s, &p, &input(30.0, 30.0, 30.0, 3.0), &utc("2026-07-01T12:00:00Z"));
+        assert_eq!(s.rain24h[0], 1.75, "0.25 carried + half of the 3 mm step");
+        assert!((s.rain[0] - 1.5).abs() < 1e-6, "the other half is carried to the next day");
+        assert!((s.noon_temperature - 25.0).abs() < 1e-5);
+        assert!((s.noon_humidity - 40.0).abs() < 1e-5);
+        assert!((s.noon_wind_speed - 20_000.0).abs() < 1e-2);
+        let expected = super::super::cffdrs::daily_codes(85.0, 6.0, 15.0, 25.0, 40.0, 20.0, 1.75, 45.0, 7);
+        assert!((s.dmc[0] as f64 - expected.1).abs() < 1e-4);
+    }
+
+    #[test]
+    fn steps_before_the_warm_state_are_ignored_and_restart_is_exact() {
+        let p = prop(42.0, 4.0);
+        let steps: Vec<(DateTime<Utc>, InputElement)> = (1..=24)
+            .map(|k| {
+                let t = utc("2026-11-03T00:00:00Z") + chrono::Duration::hours(3 * k);
+                (t, input(5.0 + (k % 8) as f32, 60.0 + (k % 5) as f32 * 5.0, 12.0, if k % 3 == 0 { 1.2 } else { 0.0 }))
+            })
+            .collect();
+        let mut continuous = state_at("2026-11-03T00:00:00Z", 80.0, 20.0, 200.0, 0.0);
+        for (t, i) in &steps {
+            update_state_cffdrs(&mut continuous, &p, i, t);
+        }
+        // restart from a snapshot taken after step 8 (scalars only, as the warm state stores them)
+        let mut first = state_at("2026-11-03T00:00:00Z", 80.0, 20.0, 200.0, 0.0);
+        for (t, i) in &steps[..8] {
+            update_state_cffdrs(&mut first, &p, i, t);
+        }
+        let mut restarted = state_at(
+            &first.dates[0].to_rfc3339(), first.ffmc[0], first.dmc[0], first.dc[0], first.rain[0],
+        );
+        for (t, i) in &steps {
+            update_state_cffdrs(&mut restarted, &p, i, t); // the first 8 are skipped
+        }
+        assert_eq!(restarted.ffmc, continuous.ffmc);
+        assert_eq!(restarted.dmc, continuous.dmc);
+        assert_eq!(restarted.dc, continuous.dc);
+        assert_eq!(restarted.rain, continuous.rain);
+    }
+
+    #[test]
+    fn missing_noon_weather_keeps_codes() {
+        let p = prop(45.0, 0.0);
+        let mut s = state_at("2026-07-01T09:00:00Z", 85.0, 6.0, 15.0, 0.0);
+        update_state_cffdrs(&mut s, &p, &input(NODATAVAL, 40.0, 20.0, 1.0), &utc("2026-07-01T12:00:00Z"));
+        assert_eq!((s.ffmc[0], s.dmc[0], s.dc[0]), (85.0, 6.0, 15.0));
+        let out = get_output_cffdrs(&mut s, &p, &utc("2026-07-01T12:00:00Z"));
+        assert_eq!(out.fwi, NODATAVAL);
+    }
+}

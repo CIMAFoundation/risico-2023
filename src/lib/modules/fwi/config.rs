@@ -1,7 +1,7 @@
 use chrono::{DateTime, Utc};
 use super::functions::{
-    update_state_legacy, update_state_sliding,
-    get_output_legacy, get_output_sliding
+    update_state_legacy, update_state_sliding, update_state_cffdrs,
+    get_output_legacy, get_output_sliding, get_output_cffdrs
 };
 use super::models::{
     FWIStateElement, FWIPropertiesElement
@@ -27,6 +27,10 @@ impl FWIModelConfig {
                 update_state_fn = update_state_legacy;
                 get_output_fn = get_output_legacy;
 
+            }
+            "cffdrs" => {
+                update_state_fn = update_state_cffdrs;
+                get_output_fn = get_output_cffdrs;
             }
             "sliding_window" => {
                 update_state_fn = update_state_sliding;

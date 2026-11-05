@@ -127,6 +127,10 @@ pub struct FWIConfigBuilder {
     pub warm_state_lag_days: Option<i64>,
     pub output_types: Vec<OutputTypeConfig>,
     pub output_time_resolution: Option<u32>,
+    /// Hours added to the run date before applying `output_time_resolution`
+    /// (e.g. 12 with a resolution of 24 writes the daily maps at 12:00 UTC).
+    #[serde(default)]
+    pub output_time_offset: Option<i64>,
     pub model_version: String,
 }
 
