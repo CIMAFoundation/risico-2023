@@ -793,17 +793,25 @@ fn valid(value: f32) -> bool {
 }
 
 /// Standard (non-DST) UTC offset in hours of the time zone at (lon, lat):
-/// tzf-rs boundaries, IANA base offset from chrono-tz 0.10 (`base_utc_offset`,
-/// so Europe/Dublin and Africa/Casablanca count as UTC+1 as in the tz
-/// database); falls back to the nautical zone `round(lon / 15)` if the zone
-/// is unknown.
+/// tzf-rs boundaries, IANA rules from chrono-tz 0.10, standard offset = the
+/// smaller of the UTC offsets on 15 January and 15 July of the run year (so
+/// Europe/Dublin, whose tz rules call summer time "standard" and use a negative
+/// winter DST, gets UTC+0 like the rest of the zones without DST in winter);
+/// falls back to the nautical zone `round(lon / 15)` if the zone is unknown.
 pub fn standard_utc_offset_hours(lon: f32, lat: f32, date: &DateTime<Utc>) -> f32 {
     use chrono_tz_current::OffsetComponents;
     let tz_name = TZ_FINDER.get_tz_name(lon as f64, lat as f64);
     match tz_name.parse::<chrono_tz_current::Tz>() {
         Ok(tz) => {
-            let offset = tz.offset_from_utc_datetime(&date.naive_utc());
-            offset.base_utc_offset().num_seconds() as f32 / 3600.0
+            let total = |month: u32| {
+                let t = Utc
+                    .with_ymd_and_hms(date.year(), month, 15, 12, 0, 0)
+                    .single()
+                    .expect("valid mid-month date");
+                let offset = tz.offset_from_utc_datetime(&t.naive_utc());
+                (offset.base_utc_offset() + offset.dst_offset()).num_seconds()
+            };
+            total(1).min(total(7)) as f32 / 3600.0
         }
         Err(_) => (lon / 15.0).round(),
     }
@@ -991,6 +999,17 @@ mod cffdrs_step_tests {
 
     fn input(temperature: f32, humidity: f32, wind_kmh: f32, rain: f32) -> InputElement {
         InputElement { temperature, humidity, wind_speed: wind_kmh * 1000.0, rain, ..InputElement::default() }
+    }
+
+    #[test]
+    fn standard_offsets_ignore_dst() {
+        let date = utc("2026-11-04T00:00:00Z");
+        assert_eq!(standard_utc_offset_hours(44.8, 41.7, &date), 4.0); // Tbilisi
+        assert_eq!(standard_utc_offset_hours(12.5, 41.9, &date), 1.0); // Rome (CET)
+        assert_eq!(standard_utc_offset_hours(-6.26, 53.35, &date), 0.0); // Dublin (negative DST in the tz rules)
+        assert_eq!(standard_utc_offset_hours(151.2, -33.87, &date), 10.0); // Sydney (DST in November)
+        assert_eq!(standard_utc_offset_hours(-74.0, 40.7, &date), -5.0); // New York
+        assert_eq!(standard_utc_offset_hours(-51.7, 64.18, &date), -2.0); // Nuuk (since 2023)
     }
 
     #[test]

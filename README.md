@@ -191,7 +191,7 @@ FWI model versions:
 - `cffdrs`: the canonical daily Canadian FWI System (Van Wagner 1987; equations
   and constants of the cffdrs R package, `src/lib/modules/fwi/cffdrs.rs`, tested
   against its published fixtures). The daily step runs at each cell's local
-  *standard* noon (tzf-rs time zone, IANA base offset, no DST), with
+  *standard* noon (tzf-rs time zone, IANA rules, no DST), with
   temperature, humidity and wind interpolated linearly between the input steps
   around noon and the rain accumulated since the previous noon. The snapshot
   keeps the codes and the rain accumulated since the last noon, so a restart is
