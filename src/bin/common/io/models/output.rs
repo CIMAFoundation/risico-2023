@@ -9,7 +9,6 @@ use risico::{
     constants::NODATAVAL,
     models::output::{Output, OutputVariableName},
 };
-use serde_derive::{Deserialize, Serialize};
 
 #[cfg(feature = "gdal")]
 use crate::common::io::writers::write_to_geotiff;
@@ -26,80 +25,64 @@ use crate::common::{
 
 use super::grid::{ClusterMode, Grid, RegularGrid};
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct OutputVariable {
-    internal_name: OutputVariableName,
-    name: String,
-    cluster_mode: ClusterMode,
-    precision: i32,
-}
+pub use risico::config::OutputVariable;
 
-impl OutputVariable {
-    pub fn new(
-        internal_name: OutputVariableName,
-        name: &str,
-        cluster_mode: ClusterMode,
-        precision: i32,
-    ) -> Self {
-        Self {
-            internal_name,
-            name: name.to_string(),
-            cluster_mode,
-            precision,
-        }
-    }
-
-    pub fn internal_name(&self) -> OutputVariableName {
-        self.internal_name
-    }
-
-    pub fn output_name(&self) -> &str {
-        &self.name
-    }
-
-    /// Resample a chunk of native values onto the output grid.
-    ///
-    /// The values are read in native order and combined in place, so nothing
-    /// domain-sized is allocated: the accumulator is one output grid, whatever
-    /// the domain's size.
-    fn accumulate_chunk(
+/// Resampling of an output variable onto its output grid.
+pub trait OutputVariableExt {
+    fn get_variable_on_grid(
         &self,
-        accumulator: &mut GridAccumulator,
-        values: &[f32],
-        positions: ChunkPositions<'_>,
+        output: &dyn NativeOutputSource,
         lats: &[f32],
         lons: &[f32],
         grid: &RegularGrid,
-    ) {
-        let mut accumulate = |value: f32, position: usize| {
-            if value == NODATAVAL {
-                return;
-            }
-            if let Some(index) = grid.index(&lats[position], &lons[position]) {
-                accumulator.add(index, value, self.cluster_mode);
-            }
-        };
+        parallelism: usize,
+    ) -> Result<Option<Array1<f32>>, RISICOError>;
+}
 
-        match positions {
-            ChunkPositions::Contiguous(offset) => {
-                for (cell, &value) in values.iter().enumerate() {
-                    accumulate(value, offset + cell);
-                }
+/// Resample a chunk of native values onto the output grid.
+///
+/// The values are read in native order and combined in place, so nothing
+/// domain-sized is allocated: the accumulator is one output grid, whatever
+/// the domain's size.
+fn accumulate_chunk(
+    cluster_mode: ClusterMode,
+    accumulator: &mut GridAccumulator,
+    values: &[f32],
+    positions: ChunkPositions<'_>,
+    lats: &[f32],
+    lons: &[f32],
+    grid: &RegularGrid,
+) {
+    let mut accumulate = |value: f32, position: usize| {
+        if value == NODATAVAL {
+            return;
+        }
+        if let Some(index) = grid.index(&lats[position], &lons[position]) {
+            accumulator.add(index, value, cluster_mode);
+        }
+    };
+
+    match positions {
+        ChunkPositions::Contiguous(offset) => {
+            for (cell, &value) in values.iter().enumerate() {
+                accumulate(value, offset + cell);
             }
-            ChunkPositions::Indexed(positions) => {
-                for (&value, &position) in values.iter().zip(positions) {
-                    accumulate(value, position);
-                }
+        }
+        ChunkPositions::Indexed(positions) => {
+            for (&value, &position) in values.iter().zip(positions) {
+                accumulate(value, position);
             }
         }
     }
+}
 
+impl OutputVariableExt for OutputVariable {
     /// Resample this variable's whole native output onto the output grid.
     ///
     /// Chunks are shared out over `parallelism` accumulators, so the memory
     /// this costs is bounded by the output grid and the largest chunk rather
     /// than by the domain.
-    pub fn get_variable_on_grid(
+    fn get_variable_on_grid(
         &self,
         output: &dyn NativeOutputSource,
         lats: &[f32],
@@ -107,7 +90,7 @@ impl OutputVariable {
         grid: &RegularGrid,
         parallelism: usize,
     ) -> Result<Option<Array1<f32>>, RISICOError> {
-        if !output.has_variable(self.internal_name) {
+        if !output.has_variable(self.internal_name()) {
             return Ok(None);
         }
         let n_pixels = grid.nrows * grid.ncols;
@@ -117,22 +100,22 @@ impl OutputVariable {
         let accumulator = (0..slots)
             .into_par_iter()
             .map(|slot| -> Result<GridAccumulator, RISICOError> {
-                let mut accumulator = GridAccumulator::new(n_pixels, self.cluster_mode);
+                let mut accumulator = GridAccumulator::new(n_pixels, self.cluster_mode());
                 let mut buffer = Vec::new();
                 for chunk in (slot..chunks).step_by(slots) {
-                    let positions = output.read_chunk(self.internal_name, chunk, &mut buffer)?;
-                    self.accumulate_chunk(&mut accumulator, &buffer, positions, lats, lons, grid);
+                    let positions = output.read_chunk(self.internal_name(), chunk, &mut buffer)?;
+                    accumulate_chunk(self.cluster_mode(), &mut accumulator, &buffer, positions, lats, lons, grid);
                 }
                 Ok(accumulator)
             })
             .try_reduce(GridAccumulator::empty, |left, right| {
-                Ok(left.merge(right, self.cluster_mode))
+                Ok(left.merge(right, self.cluster_mode()))
             })?;
 
         Ok(Some(accumulator.finish(
             n_pixels,
-            self.cluster_mode,
-            f32::powi(10.0, self.precision),
+            self.cluster_mode(),
+            f32::powi(10.0, self.precision()),
         )))
     }
 }
@@ -387,10 +370,10 @@ impl OutputType {
             .iter()
             .map(|var| {
                 OutputVariable::new(
-                    var.internal_name,
-                    &var.name,
-                    var.cluster_mode,
-                    var.precision,
+                    var.internal_name(),
+                    var.output_name(),
+                    var.cluster_mode(),
+                    var.precision(),
                 )
             })
             .collect();
@@ -447,7 +430,7 @@ impl OutputType {
     ) -> Result<(), RISICOError> {
         debug!(
             "Writing variable {} for {}, {}",
-            variable.name, self.name, self.format
+            variable.output_name(), self.name, self.format
         );
         let values = variable.get_variable_on_grid(output, lats, lons, &self.grid, parallelism)?;
         let Some(values) = values else {
@@ -461,7 +444,7 @@ impl OutputType {
         );
         debug!(
             "Done writing variable {} for {}, {}",
-            variable.name, self.name, self.format
+            variable.output_name(), self.name, self.format
         );
         result
     }

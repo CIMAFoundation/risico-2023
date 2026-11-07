@@ -11,6 +11,7 @@ edition = "2021"
 [features]
 # build-binary must be enabled in order to build the binaries
 build-binary = [
+    "config",
     "dep:log",
     "dep:clap",
     "dep:pretty_env_logger",
@@ -26,6 +27,9 @@ build-binary = [
     "dep:serde_json",
     "dep:nc4-stream",
 ]
+
+# The `configuration.yml` schema (risico::config), usable without the runner.
+config = ["dep:serde_yaml", "dep:log"]
 
 gdal_bindgen = ["gdal", "gdal/bindgen"]
 gdal = ["dep:gdal"]

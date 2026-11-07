@@ -1,7 +1,6 @@
 use std::{
     collections::HashMap,
     error::Error,
-    str::FromStr,
     sync::{Arc, Mutex},
 };
 
@@ -13,192 +12,14 @@ use ndarray::Array1;
 use netcdf_reader::{NcAttrValue, NcFile, NcSliceInfo, NcSliceInfoElem, NcType, NcVariable};
 
 use risico::models::input::InputVariableName;
-use serde;
-use serde_derive::{Deserialize, Serialize};
 use std::fs;
-use strum::IntoEnumIterator;
 
 use crate::common::io::models::grid::{CellIndexes, Grid, IrregularGrid};
 use rayon::prelude::*;
 
 use super::prelude::InputHandler;
 
-#[derive(Clone, Debug, Serialize, Deserialize)]
-pub struct VariableEntry {
-    pub name: String,        // variable name in netcdf file
-    pub offset: Option<i64>, // offset in seconds to be aplied in the variable time line
-}
-
-impl VariableEntry {
-    pub fn new(name: String, offset: Option<i64>) -> Self {
-        VariableEntry { name, offset }
-    }
-}
-
-// Define a helper struct for deserializing the `variable_map` in the desired YAML format.
-#[derive(Debug, Deserialize)]
-struct VariableMapEntry {
-    internal_name: String,
-    name: String,
-    offset: Option<i64>,
-}
-
-#[derive(Clone, Debug, Serialize)]
-pub struct NetCdfInputConfiguration {
-    pub variable_map: HashMap<InputVariableName, VariableEntry>,
-    pub lat_name: String,
-    pub lon_name: String,
-    pub time_name: String,
-    pub coords_dims: Option<(String, String)>,
-    pub time_units: Option<String>,
-}
-
-impl Default for NetCdfInputConfiguration {
-    fn default() -> Self {
-        let mut variable_map: HashMap<InputVariableName, VariableEntry> = HashMap::new();
-        InputVariableName::iter().for_each(|var| {
-            if variable_map.contains_key(&var) {
-                return;
-            }
-            warn!("Variable {} not found in configuration", &var);
-            variable_map.insert(var, VariableEntry::new(var.to_string(), Some(0)));
-        });
-
-        NetCdfInputConfiguration {
-            variable_map,
-            lat_name: "latitude".into(),
-            lon_name: "longitude".into(),
-            time_name: "time".into(),
-            coords_dims: None,
-            time_units: None,
-        }
-    }
-}
-
-// Custom implementation for deserializing `NetCdfInputConfiguration`.
-impl<'de> serde::Deserialize<'de> for NetCdfInputConfiguration {
-    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-    where
-        D: serde::Deserializer<'de>,
-    {
-        // Deserialize into an intermediate structure to capture the YAML format.
-        #[derive(Deserialize)]
-        struct IntermediateConfig {
-            lat_name: String,
-            lon_name: String,
-            time_name: String,
-            coords_dims: Option<(String, String)>,
-            time_units: Option<String>,
-            variable_map: Vec<VariableMapEntry>,
-        }
-
-        // Deserialize as an `IntermediateConfig` and convert it to `NetCdfInputConfiguration`.
-        let intermediate = IntermediateConfig::deserialize(deserializer)?;
-
-        // Convert the vector of `VariableMapEntry` into a `HashMap`.
-        let variable_map: HashMap<InputVariableName, VariableEntry> = intermediate
-            .variable_map
-            .into_iter()
-            .filter_map(|entry| {
-                if let Ok(internal_name) = InputVariableName::from_str(&entry.internal_name) {
-                    Some((internal_name, VariableEntry::new(entry.name, entry.offset)))
-                } else {
-                    None
-                }
-            })
-            .collect();
-
-        Ok(NetCdfInputConfiguration {
-            variable_map,
-            lat_name: intermediate.lat_name,
-            lon_name: intermediate.lon_name,
-            time_name: intermediate.time_name,
-            coords_dims: intermediate.coords_dims,
-            time_units: intermediate.time_units,
-        })
-    }
-}
-
-impl<T> From<T> for NetCdfInputConfiguration
-where
-    T: Into<String>,
-{
-    /// extracts the configruation from a string of key:value pairs
-    /// example:
-    ///
-    fn from(s: T) -> Self {
-        let string: String = s.into();
-        let parts: Vec<&str> = string.split(',').collect();
-        let raw_variable_map: HashMap<String, String> = parts
-            .iter()
-            .map(|part| {
-                let kv: Vec<&str> = part.split(':').collect();
-                let key = kv[0].trim().to_owned();
-                let value = kv[1].trim().to_owned();
-                (key, value)
-            })
-            .collect();
-
-        let lat_name = raw_variable_map
-            .get("latitude")
-            .cloned()
-            .unwrap_or_else(|| "latitude".to_owned());
-
-        let lon_name = raw_variable_map
-            .get("longitude")
-            .cloned()
-            .unwrap_or_else(|| "longitude".to_owned());
-
-        let time_name = raw_variable_map
-            .get("time")
-            .cloned()
-            .unwrap_or_else(|| "time".to_owned());
-
-        let coords_dims = raw_variable_map.get("coords_dims").map(|s| {
-            let parts: Vec<&str> = s.split(',').collect();
-            (parts[0].to_owned(), parts[1].to_owned())
-        });
-
-        let mut variable_map: HashMap<InputVariableName, VariableEntry> = raw_variable_map
-            .iter()
-            .filter(|(k, _)| *k == "variable_map")
-            .filter_map(|(k, v)| {
-                if let Ok(var) = InputVariableName::from_str(k) {
-                    let parts: Vec<&str> = v.split(';').collect();
-                    let name = parts[0].to_owned();
-                    let offset = if parts.len() > 1 {
-                        parts[1].parse::<i64>().ok()
-                    } else {
-                        None
-                    };
-                    let entry = VariableEntry::new(name, offset);
-                    Some((var, entry))
-                } else {
-                    warn!("Variable {} not recognized", k);
-                    None
-                }
-            })
-            .collect();
-
-        // add defaults if missing
-        InputVariableName::iter().for_each(|var| {
-            if variable_map.contains_key(&var) {
-                return;
-            }
-            warn!("Variable {} not found in configuration", &var);
-            variable_map.insert(var, VariableEntry::new(var.to_string(), Some(0)));
-        });
-
-        NetCdfInputConfiguration {
-            variable_map,
-            lat_name,
-            lon_name,
-            time_name,
-            coords_dims,
-            time_units: None,
-        }
-    }
-}
+pub use risico::config::NetCdfInputConfiguration;
 
 pub struct NetCdfFileInputRecord {
     file: String,
@@ -658,6 +479,7 @@ impl InputHandler for NetCdfInputHandler {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use risico::config::VariableEntry;
     use nc4_stream::{DataType, Nc4Writer, VariableOptions};
     use std::path::{Path, PathBuf};
 

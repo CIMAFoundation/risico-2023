@@ -329,6 +329,12 @@ impl From<RISICOError> for String {
     }
 }
 
+impl From<risico::config::ConfigError> for RISICOError {
+    fn from(error: risico::config::ConfigError) -> Self {
+        RISICOError { msg: error.message().to_string() }
+    }
+}
+
 impl From<&str> for RISICOError {
     fn from(msg: &str) -> Self {
         RISICOError { msg: msg.into() }
