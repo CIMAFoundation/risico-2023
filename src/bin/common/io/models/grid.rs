@@ -4,22 +4,13 @@ use itertools::izip;
 use ndarray::Array1;
 use rayon::prelude::*;
 use rstar::{primitives::GeomWithData, RTree};
-use serde_derive::{Deserialize, Serialize};
 
-use strum_macros::{Display, EnumString};
 
 use risico::constants::NODATAVAL;
 
 use crate::common::{config::builder::read_config, helpers::RISICOError};
 
-#[derive(Debug, PartialEq, Eq, Hash, Copy, Clone, EnumString, Display, Serialize, Deserialize)]
-#[strum(ascii_case_insensitive)]
-pub enum ClusterMode {
-    Mean,
-    Median,
-    Min,
-    Max,
-}
+pub use risico::config::ClusterMode;
 
 pub trait Grid: Sync + Send {
     fn index(&self, lat: &f32, lon: &f32) -> Option<usize>;

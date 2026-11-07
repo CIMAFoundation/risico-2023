@@ -23,7 +23,7 @@ use risico::version::LONG_VERSION;
 mod rischio_runtime_imports {
     pub use super::common::{
         config::{
-            builder::{ConfigBuilderType, ConfigContainer, StreamingExecutionConfig},
+            builder::{BuildConfig, ConfigBuilderType, ConfigContainer, StreamingExecutionConfig},
             models::{ExecutionDecision, OutputWriter, TileModelRuntime, TiledModelConfig},
         },
         helpers::{get_input, RISICOError},

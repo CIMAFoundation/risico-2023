@@ -5,7 +5,7 @@ use std::error::Error;
 use chrono::{DateTime, NaiveDateTime, Utc};
 use clap::Parser;
 
-use common::config::builder::{ConfigBuilderType, ConfigContainer};
+use common::config::builder::{BuildConfig, ConfigBuilderType, ConfigContainer};
 use common::config::models::{ExecutionDecision, TileModelRuntime};
 use common::process::format_bytes;
 
