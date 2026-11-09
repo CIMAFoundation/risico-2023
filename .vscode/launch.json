@@ -13,7 +13,6 @@
                     "build",
                     "--bin",
                     "risico-2023",
-                    // "--features=build-binary,static_deps",
                 ]
             },
             "args": [

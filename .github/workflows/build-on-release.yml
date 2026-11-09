@@ -5,38 +5,41 @@ on:
     types: [published]
 
 jobs:
-  # build-with-musl:
-  #   name: release x86_64-unknown-linux-musl
-  #   runs-on: ubuntu-latest
-  #   steps:
-  #     - name: checkout repo
-  #       uses: actions/checkout@master
-
-  #     - name: Compile and release
-  #       uses: rust-build/rust-build.action@v1.4.5
-  #       env:
-  #         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-  #       with:
-  #         RUSTTARGET: x86_64-unknown-linux-musl
-  #         EXTRA_FILES: "README.md"
-  #         FEATURES: "build-binary"
-
-  build-with-linux-gnu:
-    name: release x86_64-unknown-linux-gnu
+  build-with-musl:
+    name: release x86_64-unknown-linux-musl
     runs-on: ubuntu-latest
     steps:
       - name: checkout repo
-        uses: actions/checkout@master
+        uses: actions/checkout@v4
 
-      - name: Build with docker
+      # NetCDF and HDF5 are pure Rust; the only C code left is the vendored
+      # zstd used by the Zarr writer, which musl-gcc compiles. The result is a
+      # fully static binary that runs on any x86_64 Linux regardless of glibc.
+      - name: install musl toolchain
         run: |
-          ./build-with-docker.sh
+          sudo apt-get update
+          sudo apt-get install -y musl-tools
+
+      - name: install rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: x86_64-unknown-linux-musl
+
+      - name: cache cargo
+        uses: Swatinem/rust-cache@v2
+
+      - name: build
+        run: cargo build --release --features build-binary --bin risico-2023 --target x86_64-unknown-linux-musl
+
+      - name: check the binary is static
+        run: |
+          file target/x86_64-unknown-linux-musl/release/risico-2023
+          ! ldd target/x86_64-unknown-linux-musl/release/risico-2023 2>&1 | grep -q '=>'
 
       - name: Add file to release
         uses: meeDamian/github-release@2.0
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
-          files: risico-2023-linux-gnu:target/x86_64-unknown-linux-gnu/release/risico-2023
-          #risico-2023-config-converter-linux-gnu:target/x86_64-unknown-linux-gnu/release/risico-2023-config-converter
+          files: risico-2023-linux-musl:target/x86_64-unknown-linux-musl/release/risico-2023
           tag: ${{ github.ref_name }}
           allow_override: true

@@ -16,6 +16,18 @@ libraries are needed: NetCDF I/O is pure Rust. Only the optional
 cargo build --release --bin risico-2023
 ```
 
+The release workflow publishes a fully static `x86_64-unknown-linux-musl`
+binary that runs on any x86_64 Linux regardless of the glibc version. The same
+build works locally on Linux with the `musl-tools` package installed:
+
+```bash
+rustup target add x86_64-unknown-linux-musl
+cargo build --release --bin risico-2023 --target x86_64-unknown-linux-musl
+```
+
+`./build-with-docker.sh` still builds a glibc-linked binary inside an Ubuntu
+16.04 container when one is needed.
+
 The executable takes a run date, a configuration file, and an input source:
 
 ```bash
