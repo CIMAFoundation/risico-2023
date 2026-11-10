@@ -336,13 +336,29 @@ impl OutputType {
         run_date: &DateTime<Utc>,
         palettes: &PaletteMap,
     ) -> Result<Self, RISICOError> {
-        let grid_path = &output_type_def.grid_path;
         // let internal_name = &output_type_def.internal_name;
         let name = &output_type_def.name;
         let path = &output_type_def.path;
         let format = &output_type_def.format;
 
-        let grid = RegularGrid::from_txt_file(grid_path)?;
+        let grid = match (&output_type_def.grid, &output_type_def.grid_path) {
+            (Some(grid), None) => RegularGrid::new(
+                grid.nrows,
+                grid.ncols,
+                grid.min_lat,
+                grid.min_lon,
+                grid.max_lat,
+                grid.max_lon,
+            ),
+            (None, Some(grid_path)) => RegularGrid::from_txt_file(grid_path)?,
+            _ => {
+                return Err(format!(
+                    "output {}: give exactly one of grid and grid_path",
+                    output_type_def.internal_name
+                )
+                .into())
+            }
+        };
 
         let writer: Box<dyn Writer> = match format.as_str() {
             "ZBIN" => Box::new(ZBinWriter::new(path, name, run_date)),

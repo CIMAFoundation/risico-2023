@@ -642,6 +642,11 @@ impl ConfigContainer {
     pub fn parse(contents: &str) -> Result<Self, ConfigError> {
         let conf: Self = serde_yaml::from_str(contents).map_err(|err| err.to_string())?;
         conf.streaming.validate()?;
+        for model in &conf.models {
+            for output in model.output_types() {
+                output.validate()?;
+            }
+        }
         Ok(conf)
     }
 
@@ -650,12 +655,42 @@ impl ConfigContainer {
     }
 }
 
+/// A regular latitude/longitude output grid: `nrows` x `ncols` cell centres
+/// from the minimum to the maximum coordinates, both included.
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
+pub struct GridConfig {
+    pub nrows: usize,
+    pub ncols: usize,
+    pub min_lat: f32,
+    pub max_lat: f32,
+    pub min_lon: f32,
+    pub max_lon: f32,
+}
+
+impl GridConfig {
+    pub fn validate(&self) -> Result<(), ConfigError> {
+        if self.nrows < 2 || self.ncols < 2 {
+            return Err("output grid needs at least 2 rows and 2 columns".into());
+        }
+        if !(self.max_lat > self.min_lat && self.max_lon > self.min_lon) {
+            return Err("output grid maximum coordinates must exceed the minimum ones".into());
+        }
+        Ok(())
+    }
+}
+
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct OutputTypeConfig {
     pub internal_name: String,
     pub name: String,
     pub path: String,
-    pub grid_path: String,
+    /// The output grid written in the configuration. Exactly one of `grid`
+    /// and `grid_path` is given.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub grid: Option<GridConfig>,
+    /// Legacy text grid file (`GRIDNROWS=`, `MINLAT=`, ...), still accepted.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub grid_path: Option<String>,
     pub format: String,
     /// Compression level: deflate 0 to 9 for NETCDF, zstd 0 to 22 for ZARR,
     /// 0 for none. The NetCDF library takes one call at a time, so every
@@ -668,6 +703,43 @@ pub struct OutputTypeConfig {
 
 fn default_compression_level() -> i32 {
     7
+}
+
+impl OutputTypeConfig {
+    pub fn validate(&self) -> Result<(), ConfigError> {
+        match (&self.grid, &self.grid_path) {
+            (Some(grid), None) => grid
+                .validate()
+                .map_err(|err| format!("output {}: {err}", self.internal_name).into()),
+            (None, Some(_)) => Ok(()),
+            (Some(_), Some(_)) => Err(format!(
+                "output {}: give either grid or grid_path, not both",
+                self.internal_name
+            )
+            .into()),
+            (None, None) => {
+                Err(format!("output {}: no grid (grid or grid_path)", self.internal_name).into())
+            }
+        }
+    }
+}
+
+impl ConfigBuilderType {
+    /// The output types of the model, whatever its type.
+    pub fn output_types(&self) -> &[OutputTypeConfig] {
+        match self {
+            ConfigBuilderType::RISICO(m) => &m.output_types,
+            ConfigBuilderType::FWI(m) => &m.output_types,
+            ConfigBuilderType::Mark5(m) => &m.output_types,
+            ConfigBuilderType::KBDI(m) => &m.output_types,
+            ConfigBuilderType::Angstrom(m) => &m.output_types,
+            ConfigBuilderType::Fosberg(m) => &m.output_types,
+            ConfigBuilderType::Nesterov(m) => &m.output_types,
+            ConfigBuilderType::Sharples(m) => &m.output_types,
+            ConfigBuilderType::Orieux(m) => &m.output_types,
+            ConfigBuilderType::Hdw(m) => &m.output_types,
+        }
+    }
 }
 
 #[cfg(test)]
@@ -774,6 +846,59 @@ scratch_directory: /scratch/risico
         let invalid: StreamingExecutionConfig =
             serde_yaml::from_str("tile_concurrency: 0").unwrap();
         assert!(invalid.validate().is_err());
+    }
+
+    fn output_yaml(grid: &str) -> String {
+        format!(
+            r#"
+models:
+  - type: FWI
+    model_name: FWIGEORGIA
+    model_version: cffdrs
+    static_data:
+      type: geotiff
+      domain_mask: /data/domain.tif
+    warm_state:
+      type: netcdf
+      directory: /state
+    output_types:
+      - internal_name: FWI
+        name: FWIGEORGIA
+        path: /out
+        format: ZBIN
+{grid}
+        variables: []
+palettes: {{}}
+"#
+        )
+    }
+
+    #[test]
+    fn output_grids_are_written_inline_or_as_a_legacy_file() {
+        let inline = ConfigContainer::parse(&output_yaml(
+            "        grid: {nrows: 254, ncols: 674, min_lat: 41.05, max_lat: 43.589999999999996, min_lon: 40.0, max_lon: 46.74}",
+        ))
+        .expect("inline grid");
+        let grid = inline.models[0].output_types()[0].grid.clone().unwrap();
+        assert_eq!((grid.nrows, grid.ncols), (254, 674));
+        assert_eq!(grid.max_lat, "43.589999999999996".parse::<f32>().unwrap());
+
+        let legacy = ConfigContainer::parse(&output_yaml("        grid_path: /grid/GRID.txt"))
+            .expect("legacy grid file");
+        assert_eq!(
+            legacy.models[0].output_types()[0].grid_path.as_deref(),
+            Some("/grid/GRID.txt")
+        );
+
+        for bad in [
+            "",
+            "        grid_path: /g.txt\n        grid: {nrows: 2, ncols: 2, min_lat: 0, max_lat: 1, min_lon: 0, max_lon: 1}",
+            "        grid: {nrows: 1, ncols: 2, min_lat: 0, max_lat: 1, min_lon: 0, max_lon: 1}",
+            "        grid: {nrows: 2, ncols: 2, min_lat: 1, max_lat: 0, min_lon: 0, max_lon: 1}",
+        ] {
+            let yaml = output_yaml(bad);
+            assert!(ConfigContainer::parse(&yaml).is_err(), "should be rejected: {bad}");
+        }
     }
 
     #[test]
