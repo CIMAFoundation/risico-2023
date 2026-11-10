@@ -698,7 +698,7 @@ fn main() -> Result<(), Box<dyn Error>> {
     let date = NaiveDateTime::parse_from_str(&args.date, "%Y%m%d%H%M")
         .map_err(|_| format!("Could not parse run date '{}'", args.date))?;
     let date = DateTime::from_naive_utc_and_offset(date, Utc);
-    let configs = ConfigContainer::from_file(&args.config_path)
+    let configs = ConfigContainer::load(&args.config_path)
         .map_err(|error| format!("Failed to load config: {error}"))?;
     let mut input_handler = get_input_handler(&args.input_path, &configs)?;
     info!("Input files:\n{}", input_handler.info_input());
