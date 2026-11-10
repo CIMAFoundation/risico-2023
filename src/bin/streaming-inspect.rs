@@ -107,7 +107,7 @@ fn main() -> Result<(), Box<dyn Error>> {
     let args = Args::parse();
     let date = NaiveDateTime::parse_from_str(&args.date, "%Y%m%d%H%M")?;
     let date = DateTime::from_naive_utc_and_offset(date, Utc);
-    let mut configs = ConfigContainer::load(&args.config)?;
+    let mut configs = ConfigContainer::from_file(&args.config)?;
     if let Some(value) = args.tile_height {
         configs.streaming.tile_height = value;
     }

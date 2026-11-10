@@ -305,29 +305,6 @@ called; native forecast output is the disk-backed portion of the pipeline.
 
 ### Configuration
 
-Paths in `configuration.yml` may be relative. They are resolved against the
-directory that holds the configuration file, not the working directory, so a
-chain directory can describe itself without repeating its absolute location.
-Absolute paths are used as they are. Palettes can come from one shared mapping
-file, whose own relative paths are resolved against its directory. Entries
-under `palettes` win over that file:
-
-```yaml
-models:
-  - type: RISICO
-    static_data:
-      type: geotiff
-      domain_mask: STATIC/geotiff/domain_mask.tif   # <chain>/STATIC/...
-    warm_state:
-      type: netcdf
-      directory: STATE0-NC
-    output_types:
-      - path: OUTPUT-NC
-        grid_path: GRID/GRID.txt
-        # ...
-palette_file: ../PALETTE/palettes.yml   # V: RISICO_V.pal, I: RISICO_I.pal, ...
-```
-
 The optional `streaming` section tunes the mandatory tiled runner:
 
 ```yaml

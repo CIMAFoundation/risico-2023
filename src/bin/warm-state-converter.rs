@@ -92,7 +92,7 @@ fn convert_config(args: ConfigArgs) -> Result<(), RISICOError> {
         .config
         .to_str()
         .ok_or_else(|| format!("config path is not valid UTF-8: {}", args.config.display()))?;
-    let config = ConfigContainer::load(path)?;
+    let config = ConfigContainer::from_file(path)?;
     for model in config.models {
         match model {
             ConfigBuilderType::RISICO(model) if model.model_name == args.model_name => {

@@ -7,7 +7,6 @@
 
 use std::collections::HashMap;
 use std::fmt::Display;
-use std::path::{Path, PathBuf};
 use std::str::FromStr;
 
 use log::warn;
@@ -610,171 +609,16 @@ fn parse_byte_size(text: &str) -> Result<u64, ConfigError> {
     Ok((amount * multiplier as f64) as u64)
 }
 
-/// The whole `configuration.yml`.
-///
-/// Paths in it may be relative: [`ConfigContainer::load`] resolves them
-/// against the directory of the configuration file, so a chain can write
-/// `STATIC/slope.tif` or `../PALETTE/palettes.yml` instead of repeating its
-/// absolute location. Absolute paths are used as they are.
 #[derive(Debug, Serialize, Deserialize)]
 pub struct ConfigContainer {
     pub models: Vec<ConfigBuilderType>,
-    /// Shared palette mapping (variable name -> palette file), a YAML file
-    /// whose relative paths are resolved against its own directory. Entries
-    /// of `palettes` win over it.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub palette_file: Option<String>,
-    #[serde(default, skip_serializing_if = "HashMap::is_empty")]
     pub palettes: PaletteMap,
     pub netcdf_input_configuration: Option<NetCdfInputConfiguration>,
     #[serde(default)]
     pub streaming: StreamingExecutionConfig,
 }
 
-/// Makes `path` absolute against `base` when it is relative and not empty.
-fn resolve_path(base: &Path, path: &mut String) {
-    if !path.is_empty() && Path::new(path.as_str()).is_relative() {
-        *path = base.join(path.as_str()).to_string_lossy().into_owned();
-    }
-}
-
-fn resolve_optional(base: &Path, path: &mut Option<String>) {
-    if let Some(path) = path {
-        resolve_path(base, path);
-    }
-}
-
-fn resolve_outputs(base: &Path, outputs: &mut [OutputTypeConfig]) {
-    for output in outputs {
-        resolve_path(base, &mut output.path);
-        resolve_path(base, &mut output.grid_path);
-    }
-}
-
-fn resolve_static(base: &Path, static_data: &mut StaticDataConfig) {
-    let StaticDataConfig::GeoTiff {
-        domain_mask,
-        slope,
-        aspect,
-        vegetation_id,
-        vegetation_catalog,
-        ppf_summer,
-        ppf_winter,
-    } = static_data;
-    resolve_path(base, domain_mask);
-    for path in [
-        slope,
-        aspect,
-        vegetation_id,
-        vegetation_catalog,
-        ppf_summer,
-        ppf_winter,
-    ] {
-        resolve_optional(base, path);
-    }
-}
-
-fn resolve_warm_state(base: &Path, warm_state: &mut WarmStateConfig) {
-    let WarmStateConfig::NetCdf { directory, .. } = warm_state;
-    resolve_path(base, directory);
-}
-
-/// The absolute directory holding `file`.
-fn absolute_directory(file: &Path) -> Result<PathBuf, ConfigError> {
-    let directory = file.parent().unwrap_or(Path::new(""));
-    if directory.is_absolute() {
-        return Ok(directory.to_path_buf());
-    }
-    let cwd = std::env::current_dir()
-        .map_err(|err| format!("Cannot read the current directory: {err}"))?;
-    Ok(cwd.join(directory))
-}
-
 impl ConfigContainer {
-    /// Reads, validates and resolves a configuration file: relative paths
-    /// become absolute against the file's directory and the shared palette
-    /// file is merged into `palettes`. This is what the runners use; tools
-    /// that write the file back use [`ConfigContainer::from_file`].
-    pub fn load(config_file: &str) -> Result<Self, ConfigError> {
-        let mut conf = Self::from_file(config_file)?;
-        let base = absolute_directory(Path::new(config_file))?;
-        conf.resolve_paths(&base)?;
-        Ok(conf)
-    }
-
-    /// Makes every relative path absolute against `base` and merges the
-    /// shared palette file into `palettes`, inline entries winning.
-    pub fn resolve_paths(&mut self, base: &Path) -> Result<(), ConfigError> {
-        for model in &mut self.models {
-            match model {
-                ConfigBuilderType::RISICO(m) => {
-                    resolve_static(base, &mut m.static_data);
-                    resolve_warm_state(base, &mut m.warm_state);
-                    resolve_outputs(base, &mut m.output_types);
-                }
-                ConfigBuilderType::FWI(m) => {
-                    resolve_static(base, &mut m.static_data);
-                    resolve_warm_state(base, &mut m.warm_state);
-                    resolve_outputs(base, &mut m.output_types);
-                }
-                ConfigBuilderType::Mark5(m) => {
-                    resolve_path(base, &mut m.cells_file_path);
-                    resolve_path(base, &mut m.warm_state_path);
-                    resolve_outputs(base, &mut m.output_types);
-                }
-                ConfigBuilderType::KBDI(m) => {
-                    resolve_path(base, &mut m.cells_file_path);
-                    resolve_path(base, &mut m.warm_state_path);
-                    resolve_outputs(base, &mut m.output_types);
-                }
-                ConfigBuilderType::Nesterov(m) => {
-                    resolve_path(base, &mut m.cells_file_path);
-                    resolve_path(base, &mut m.warm_state_path);
-                    resolve_outputs(base, &mut m.output_types);
-                }
-                ConfigBuilderType::Orieux(m) => {
-                    resolve_path(base, &mut m.cells_file_path);
-                    resolve_path(base, &mut m.warm_state_path);
-                    resolve_outputs(base, &mut m.output_types);
-                }
-                ConfigBuilderType::Angstrom(m) => {
-                    resolve_path(base, &mut m.cells_file_path);
-                    resolve_outputs(base, &mut m.output_types);
-                }
-                ConfigBuilderType::Fosberg(m) => {
-                    resolve_path(base, &mut m.cells_file_path);
-                    resolve_outputs(base, &mut m.output_types);
-                }
-                ConfigBuilderType::Sharples(m) => {
-                    resolve_path(base, &mut m.cells_file_path);
-                    resolve_outputs(base, &mut m.output_types);
-                }
-                ConfigBuilderType::Hdw(m) => {
-                    resolve_path(base, &mut m.cells_file_path);
-                    resolve_outputs(base, &mut m.output_types);
-                }
-            }
-        }
-        resolve_optional(base, &mut self.streaming.scratch_directory);
-
-        for path in self.palettes.values_mut() {
-            resolve_path(base, path);
-        }
-        if let Some(file) = &mut self.palette_file {
-            resolve_path(base, file);
-            let contents = std::fs::read_to_string(file.as_str())
-                .map_err(|err| format!("Cannot open palette file {file}: {err}"))?;
-            let shared: PaletteMap = serde_yaml::from_str(&contents)
-                .map_err(|err| format!("Cannot parse palette file {file}: {err}"))?;
-            let palette_base = absolute_directory(Path::new(file.as_str()))?;
-            for (name, mut path) in shared {
-                resolve_path(&palette_base, &mut path);
-                self.palettes.entry(name).or_insert(path);
-            }
-        }
-        Ok(())
-    }
-
     pub fn from_file(config_file: &str) -> Result<ConfigContainer, ConfigError> {
         if config_file.ends_with(".yaml") || config_file.ends_with(".yml") {
             Self::from_yaml(config_file)
@@ -930,83 +774,6 @@ scratch_directory: /scratch/risico
         let invalid: StreamingExecutionConfig =
             serde_yaml::from_str("tile_concurrency: 0").unwrap();
         assert!(invalid.validate().is_err());
-    }
-
-    #[test]
-    fn relative_paths_resolve_against_the_configuration_directory() {
-        let dir = std::env::temp_dir().join(format!("risico-relpaths-{}", std::process::id()));
-        let chain = dir.join("CHAIN");
-        let palettes = dir.join("PALETTE");
-        std::fs::create_dir_all(&chain).unwrap();
-        std::fs::create_dir_all(&palettes).unwrap();
-        std::fs::write(
-            palettes.join("palettes.yml"),
-            "V: RISICO_V.pal\nI: /abs/RISICO_I.pal\n",
-        )
-        .unwrap();
-        let config = chain.join("configuration.yml");
-        std::fs::write(
-            &config,
-            r#"
-models:
-  - type: RISICO
-    model_name: CHAIN
-    model_version: v2025
-    static_data:
-      type: geotiff
-      domain_mask: STATIC/domain_mask.tif
-      slope: /elsewhere/slope.tif
-    warm_state:
-      type: netcdf
-      directory: STATE0-NC
-    output_types:
-      - internal_name: CHAIN
-        name: CHAIN
-        path: OUTPUT-NC
-        grid_path: GRID/GRID.txt
-        format: NETCDF
-        variables: []
-    output_time_resolution: 3
-palette_file: ../PALETTE/palettes.yml
-palettes:
-  I: own_I.pal
-"#,
-        )
-        .unwrap();
-
-        let raw = ConfigContainer::from_file(config.to_str().unwrap()).unwrap();
-        assert_eq!(raw.palettes.len(), 1, "from_file keeps the file as written");
-
-        let conf = ConfigContainer::load(config.to_str().unwrap()).unwrap();
-        let ConfigBuilderType::RISICO(model) = &conf.models[0] else {
-            panic!("RISICO model expected");
-        };
-        let StaticDataConfig::GeoTiff {
-            domain_mask, slope, ..
-        } = &model.static_data;
-        assert_eq!(
-            domain_mask,
-            &chain.join("STATIC/domain_mask.tif").to_string_lossy()
-        );
-        assert_eq!(slope.as_deref(), Some("/elsewhere/slope.tif"));
-        let WarmStateConfig::NetCdf { directory, .. } = &model.warm_state;
-        assert_eq!(directory, &chain.join("STATE0-NC").to_string_lossy());
-        assert_eq!(
-            model.output_types[0].path,
-            chain.join("OUTPUT-NC").to_string_lossy()
-        );
-        assert_eq!(
-            model.output_types[0].grid_path,
-            chain.join("GRID/GRID.txt").to_string_lossy()
-        );
-        let shared_v = chain.join("../PALETTE").join("RISICO_V.pal");
-        assert_eq!(conf.palettes["V"], shared_v.to_string_lossy());
-        assert_eq!(
-            conf.palettes["I"],
-            chain.join("own_I.pal").to_string_lossy()
-        );
-
-        std::fs::remove_dir_all(&dir).unwrap();
     }
 
     #[test]
