@@ -5,12 +5,21 @@ use super::functions::{
 
 type RosFnType = fn(f32, f32, f32, f32, f32, f32, f32, f32, f32, f32) -> (f32, f32);
 
+/// Default bounds, in hours, of the time step used to update the fine fuel
+/// moisture: the gridded runs are hourly or coarser.
+pub const DEFAULT_DT_BOUNDS_HOURS: (f32, f32) = (1.0, 72.0);
+
 /// configuration structure for model config
 /// can be used to store functions and constants
 #[derive(Debug)]
 pub struct RISICOModelConfig {
     pub model_version: String,
     pub use_t_effect: bool,
+    /// Bounds `(min, max)`, in hours, the time step between two inputs is
+    /// clamped to before updating the fine fuel moisture.
+    /// Defaults to [`DEFAULT_DT_BOUNDS_HOURS`]; point runs on sub-hourly
+    /// observations lower the minimum so a 10 minute step counts as 1/6 h.
+    pub dt_bounds_hours: (f32, f32),
     ffmc_no_rain_fn: fn(f32, f32, f32, f32, f32, f32, f32) -> f32,
     ffmc_rain_fn: fn(f32, f32, f32) -> f32,
     ros_fn: RosFnType,
@@ -67,11 +76,27 @@ impl RISICOModelConfig {
         RISICOModelConfig {
             model_version: model_version_str.to_owned(),
             use_t_effect: false,
+            dt_bounds_hours: DEFAULT_DT_BOUNDS_HOURS,
             ffmc_no_rain_fn,
             ffmc_rain_fn,
             ros_fn,
             meteo_index_fn,
         }
+    }
+
+    /// Set the bounds, in hours, of the moisture update time step.
+    pub fn with_dt_bounds_hours(mut self, min: f32, max: f32) -> Self {
+        assert!(
+            min >= 0.0 && min <= max,
+            "invalid dt bounds [{min}, {max}] hours"
+        );
+        self.dt_bounds_hours = (min, max);
+        self
+    }
+
+    /// Clamp a time step, in hours, to [`Self::dt_bounds_hours`].
+    pub fn clamp_dt_hours(&self, dt: f32) -> f32 {
+        dt.clamp(self.dt_bounds_hours.0, self.dt_bounds_hours.1)
     }
 
     #[allow(non_snake_case, clippy::too_many_arguments)]

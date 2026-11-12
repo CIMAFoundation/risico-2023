@@ -233,7 +233,7 @@ impl RISICOState {
 
     #[allow(non_snake_case)]
     fn update_moisture(&mut self, props: &RISICOProperties, input: &Input, dt: f32) {
-        let dt = dt.clamp(1.0, 72.0);
+        let dt = self.config.clamp_dt_hours(dt);
 
         Zip::from(&mut self.data)
             // .and(&self.snow_cover)
@@ -336,4 +336,65 @@ pub struct RISICOCellPropertiesContainer {
     pub slopes: Vec<f32>,
     pub aspects: Vec<f32>,
     pub vegetations: Vec<Arc<RISICOVegetation>>,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::modules::risico::config::DEFAULT_DT_BOUNDS_HOURS;
+    use crate::models::input::InputElement;
+    use chrono::{Duration, TimeZone};
+
+    fn single_cell() -> RISICOProperties {
+        let container = RISICOCellPropertiesContainer {
+            lons: vec![9.0],
+            lats: vec![44.0],
+            slopes: vec![0.0],
+            aspects: vec![0.0],
+            vegetations: vec![Arc::new(RISICOVegetation::default())],
+        };
+        RISICOProperties::new(container, HashMap::new(), vec![0.0], vec![0.0])
+    }
+
+    /// dffm after one dry 10 minute step starting from saturation.
+    fn dffm_after_10_minutes(config: RISICOModelConfig) -> f32 {
+        let props = single_cell();
+        let t0 = Utc.with_ymd_and_hms(2026, 7, 1, 12, 0, 0).unwrap();
+        let warm = RISICOWarmState {
+            dffm: 40.0,
+            ..RISICOWarmState::default()
+        };
+        let mut state = RISICOState::new(&[warm], &t0, config);
+        let input = Input {
+            time: t0 + Duration::minutes(10),
+            data: Array1::from_vec(vec![InputElement {
+                temperature: 30.0,
+                humidity: 20.0,
+                wind_speed: 3.0 * 3600.0,
+                wind_dir: 0.0,
+                rain: 0.0,
+                ..InputElement::default()
+            }]),
+        };
+        state.update(&props, &input);
+        state.data[0].dffm
+    }
+
+    #[test]
+    fn default_dt_bounds_count_a_sub_hourly_step_as_one_hour() {
+        let config = RISICOModelConfig::new("legacy");
+        assert_eq!(config.dt_bounds_hours, DEFAULT_DT_BOUNDS_HOURS);
+        let one_hour = RISICOModelConfig::new("legacy").clamp_dt_hours(1.0 / 6.0);
+        assert_eq!(one_hour, 1.0);
+    }
+
+    #[test]
+    fn lower_dt_bound_lets_a_10_minute_step_dry_less() {
+        let hourly = dffm_after_10_minutes(RISICOModelConfig::new("legacy"));
+        let sub_hourly = dffm_after_10_minutes(
+            RISICOModelConfig::new("legacy").with_dt_bounds_hours(0.0, 72.0),
+        );
+        assert!(sub_hourly > hourly, "{sub_hourly} should be wetter than {hourly}");
+        assert!(sub_hourly < 40.0);
+    }
 }
