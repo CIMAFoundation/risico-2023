@@ -1,8 +1,6 @@
 use chrono::{DateTime, Utc};
-#[cfg(feature = "gdal")]
-use gdal::raster::{Buffer, RasterCreationOptions};
-#[cfg(feature = "gdal")]
-use gdal::spatial_ref::SpatialRef;
+use geotiff_ndarray::ArrayView2;
+use geotiff_writer::{Compression, GeoTiffBuilder, GeoTransform, Predictor, TiffVariant};
 
 use libflate::gzip::{self, Encoder};
 use log::warn;
@@ -144,23 +142,26 @@ pub fn write_to_pngwjson(
     Ok(())
 }
 
-#[cfg(feature = "gdal")]
-pub fn write_to_geotiff(
-    file: &str,
-    grid: &RegularGrid,
-    values: &[f32],
-) -> Result<(), gdal::errors::GdalError> {
-    // Open a GDAL driver for GeoTIFF files
-    let driver = gdal::DriverManager::get_driver_by_name(&"GTiff")?;
-
-    let options =
-        RasterCreationOptions::from_iter(["COMPRESS=LZW", "PROFILE=GDALGeoTIFF", "BIGTIFF=YES"]);
-    let mut dataset = driver.create_with_band_type_with_options::<f32, &str>(
-        file, grid.ncols, grid.nrows, 1, &options,
-    )?;
-
-    // Set the geo-transform for the dataset
-    let geo_transform = [
+/// Write a model output grid as a single-band EPSG:4326 GeoTIFF.
+///
+/// `values` are stored south row first, as the model grids are; the file is
+/// written north-up.
+pub fn write_to_geotiff(file: &str, grid: &RegularGrid, values: &[f32]) -> Result<(), RISICOError> {
+    let (width, height) = (grid.ncols, grid.nrows);
+    if values.len() != width * height {
+        return Err(format!(
+            "cannot write {file}: {} samples for a {width}x{height} grid",
+            values.len()
+        )
+        .into());
+    }
+    let north_up: Vec<f32> = values
+        .chunks_exact(width)
+        .rev()
+        .flatten()
+        .copied()
+        .collect();
+    let transform = [
         grid.min_lon as f64,
         grid.step_lon as f64,
         0.0,
@@ -168,39 +169,15 @@ pub fn write_to_geotiff(
         0.0,
         -grid.step_lat as f64,
     ];
-    dataset.set_geo_transform(&geo_transform)?;
-
-    // Set the Coordinate Reference System for the dataset
-    let proj_wkt = "+proj=longlat +datum=WGS84 +no_defs";
-    dataset.set_projection(proj_wkt)?;
-
-    // Get a reference to the first band
-    let mut band = dataset.rasterband(1)?;
-    band.set_no_data_value(Some(NODATAVAL.into()))?;
-
-    // Create a buffer with some data to write to the band
-    let mut data = vec![];
-    for row in (0..grid.nrows).rev() {
-        for col in 0..grid.ncols {
-            let index = (row * grid.ncols + col) as usize;
-            let val = values[index] as f32;
-            data.push(val);
-        }
-    }
-    let size = (grid.ncols, grid.nrows);
-    let mut buffer = Buffer::new(size, data);
-
-    // Write the data to the band
-    band.write((0, 0), size, &mut buffer)?;
-
-    Ok(())
+    let builder = georeferenced_builder(file, width, height, &transform, 4326, NODATAVAL)?
+        .compression(Compression::Lzw)
+        .tiff_variant(TiffVariant::BigTiff);
+    write_band(file, &builder, width, height, &north_up)
 }
 
-/// Write an already north-up regular grid through GDAL.
+/// Write an already north-up regular grid as a single-band GeoTIFF.
 ///
-/// This is used by offline conversion tools. Runtime static-data loading does
-/// not depend on GDAL.
-#[cfg(feature = "gdal")]
+/// Used by the offline static-data converter.
 #[allow(dead_code)]
 pub fn write_north_up_geotiff(
     file: &str,
@@ -218,38 +195,53 @@ pub fn write_north_up_geotiff(
         )
         .into());
     }
+    let builder = georeferenced_builder(file, width, height, transform, epsg, nodata)?
+        .compression(Compression::Deflate)
+        .predictor(Predictor::FloatingPoint)
+        .tile_size(256, 256)
+        .tiff_variant(TiffVariant::Auto);
+    write_band(file, &builder, width, height, values)
+}
 
-    let driver = gdal::DriverManager::get_driver_by_name("GTiff")
-        .map_err(|error| format!("cannot load GDAL GTiff driver: {error}"))?;
-    let options = RasterCreationOptions::from_iter([
-        "COMPRESS=DEFLATE",
-        "PREDICTOR=3",
-        "TILED=YES",
-        "BIGTIFF=IF_SAFER",
-    ]);
-    let mut dataset = driver
-        .create_with_band_type_with_options::<f32, _>(file, width, height, 1, &options)
-        .map_err(|error| format!("cannot create GeoTIFF {file}: {error}"))?;
-    dataset
-        .set_geo_transform(transform)
-        .map_err(|error| format!("cannot georeference {file}: {error}"))?;
-    let spatial_reference = SpatialRef::from_epsg(epsg)
-        .map_err(|error| format!("cannot create EPSG:{epsg} reference: {error}"))?;
-    dataset
-        .set_spatial_ref(&spatial_reference)
-        .map_err(|error| format!("cannot set CRS on {file}: {error}"))?;
-    let mut band = dataset
-        .rasterband(1)
-        .map_err(|error| format!("cannot access band in {file}: {error}"))?;
-    band.set_no_data_value(Some(nodata as f64))
-        .map_err(|error| format!("cannot set nodata on {file}: {error}"))?;
-    let mut buffer = Buffer::new((width, height), values.to_vec());
-    band.write((0, 0), (width, height), &mut buffer)
-        .map_err(|error| format!("cannot write pixels to {file}: {error}"))?;
-    dataset
-        .flush_cache()
-        .map_err(|error| format!("cannot flush {file}: {error}"))?;
-    Ok(())
+/// A single-band builder with the CRS, a corner-based affine transform and
+/// the nodata value set.
+fn georeferenced_builder(
+    file: &str,
+    width: usize,
+    height: usize,
+    transform: &[f64; 6],
+    epsg: u32,
+    nodata: f32,
+) -> Result<GeoTiffBuilder, RISICOError> {
+    let width = u32::try_from(width).map_err(|_| format!("cannot write {file}: too many columns"))?;
+    let height = u32::try_from(height).map_err(|_| format!("cannot write {file}: too many rows"))?;
+    let epsg = u16::try_from(epsg).map_err(|_| format!("cannot write {file}: invalid EPSG:{epsg}"))?;
+    let [origin_x, pixel_width, skew_x, origin_y, skew_y, pixel_height] = *transform;
+    Ok(GeoTiffBuilder::new(width, height)
+        .epsg(epsg)
+        .transform(GeoTransform {
+            origin_x,
+            pixel_width,
+            skew_x,
+            origin_y,
+            skew_y,
+            pixel_height,
+        })
+        .nodata(&nodata.to_string()))
+}
+
+fn write_band(
+    file: &str,
+    builder: &GeoTiffBuilder,
+    width: usize,
+    height: usize,
+    values: &[f32],
+) -> Result<(), RISICOError> {
+    let data = ArrayView2::from_shape((height, width), values)
+        .map_err(|error| format!("cannot write {file}: {error}"))?;
+    builder
+        .write_2d(file, data)
+        .map_err(|error| format!("cannot write GeoTIFF {file}: {error}").into())
 }
 
 /// One NetCDF-4 output file of the model: the streaming writer plus the two
@@ -416,3 +408,87 @@ where
     })
 }
 
+
+#[cfg(test)]
+mod tests {
+    use std::path::PathBuf;
+
+    use super::*;
+    use crate::common::io::static_data::geotiff::{RasterLayerReader, STATIC_NODATA};
+    use crate::common::io::streaming::GridWindow;
+
+    fn scratch(name: &str) -> PathBuf {
+        let dir = std::env::temp_dir().join(format!("risico-geotiff-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        dir.join(name)
+    }
+
+    fn read_all(reader: &RasterLayerReader) -> Vec<f32> {
+        reader
+            .read_window(GridWindow {
+                row: 0,
+                col: 0,
+                height: reader.grid.height,
+                width: reader.grid.width,
+            })
+            .unwrap()
+    }
+
+    #[test]
+    fn north_up_geotiff_round_trips() {
+        // Not a multiple of the 256-pixel tile, so edge tiles are partial.
+        let (width, height) = (300, 270);
+        let transform = [6.5, 0.01, 0.0, 47.25, 0.0, -0.02];
+        let mut values: Vec<f32> = (0..width * height).map(|i| i as f32 * 0.25).collect();
+        values[17] = STATIC_NODATA;
+        let path = scratch("north-up.tif");
+
+        write_north_up_geotiff(
+            path.to_str().unwrap(),
+            width,
+            height,
+            &transform,
+            4326,
+            &values,
+            STATIC_NODATA,
+        )
+        .unwrap();
+
+        let reader = RasterLayerReader::open(&path).unwrap();
+        assert_eq!((reader.grid.width, reader.grid.height), (width, height));
+        assert_eq!(reader.grid.epsg, 4326);
+        for (read, expected) in reader.grid.transform.iter().zip(transform) {
+            assert!((read - expected).abs() < 1.0e-12, "{read} != {expected}");
+        }
+        assert!(reader.is_nodata(STATIC_NODATA));
+        assert_eq!(read_all(&reader), values);
+    }
+
+    #[test]
+    fn output_geotiff_is_written_north_up() {
+        let grid = RegularGrid::new(3, 4, 40.0, 10.0, 41.0, 11.5);
+        // South row first, as the model stores its grids.
+        let values: Vec<f32> = (0..12).map(|i| i as f32).collect();
+        let path = scratch("output.tif");
+
+        write_to_geotiff(path.to_str().unwrap(), &grid, &values).unwrap();
+
+        let reader = RasterLayerReader::open(&path).unwrap();
+        assert_eq!((reader.grid.width, reader.grid.height), (4, 3));
+        assert_eq!(reader.grid.epsg, 4326);
+        let expected = [
+            grid.min_lon as f64,
+            grid.step_lon as f64,
+            0.0,
+            grid.max_lat as f64,
+            0.0,
+            -grid.step_lat as f64,
+        ];
+        for (read, expected) in reader.grid.transform.iter().zip(expected) {
+            assert!((read - expected).abs() < 1.0e-9, "{read} != {expected}");
+        }
+        assert!(reader.is_nodata(NODATAVAL));
+        let north_first: Vec<f32> = [8., 9., 10., 11., 4., 5., 6., 7., 0., 1., 2., 3.].to_vec();
+        assert_eq!(read_all(&reader), north_first);
+    }
+}

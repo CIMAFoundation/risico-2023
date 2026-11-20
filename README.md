@@ -8,9 +8,8 @@ This project is ongoing. We welcome contributions and feedback.
 
 ### Compiling and running the model
 
-Compile the production binary using Cargo. No native NetCDF or HDF5
-libraries are needed: NetCDF I/O is pure Rust. Only the optional
-`static-converter` (feature `gdal`) links a C library, GDAL.
+Compile the production binary using Cargo. No native C libraries are needed:
+NetCDF and GeoTIFF I/O are pure Rust.
 
 ```bash
 cargo build --release --bin risico-2023
@@ -271,8 +270,8 @@ For each configured model, execution proceeds as follows:
    plane-oriented, little-endian output scratch file and, when the state is
    on disk, checkpoint its updated state.
 5. After all tiles complete that timestamp, resample its native
-   variables onto each configured output grid, encode NETCDF, ZBIN, PNGWJSON,
-   or, in a GDAL-enabled build, GEOTIFF output, and remove the scratch file.
+   variables onto each configured output grid, encode NETCDF, ZBIN, ZARR,
+   PNGWJSON or GEOTIFF output, and remove the scratch file.
    Independent output variables may be postprocessed in parallel, and the
    whole step may run in the background while the next timestamp is stepped.
 6. Assemble any scheduled warm-state records in canonical model-cell order and
@@ -355,8 +354,8 @@ Output resolution does not affect numerical model execution: interpolation,
 clustering, precision rounding, and encoding happen only during the
 postprocessing stage.
 
-Output types are written as `ZBIN`, `NETCDF`, `ZARR`, `PNGWJSON` or, in a
-GDAL-enabled build, `GEOTIFF`; any other `format` is a configuration error.
+Output types are written as `ZBIN`, `NETCDF`, `ZARR`, `PNGWJSON` or `GEOTIFF`;
+any other `format` is a configuration error.
 `ZARR` writes one Zarr v3 store per variable (`<path>/<name>.zarr`) with the
 same `time`, `latitude` and `longitude` axes as the NetCDF output, one
 zstd-compressed chunk per timestamp, replacing any store left by an earlier
@@ -426,30 +425,22 @@ after confirming that no process is using it.
 
 ## Static and warm-state conversion
 
-Convert existing regular-grid static files with the offline GDAL-based utility.
-Runtime reading remains pure Rust and does not require GDAL. The converter
+Convert existing regular-grid static files with the offline `static-converter`
+utility, which writes single-band EPSG:4326 GeoTIFF layers. The converter
 detects, per axis, whether legacy bounds represent outer edges or cell centres;
 this accommodates the conventions used by the deployed grids.
 
 ```console
-cargo run --features gdal --bin static-converter -- risico \
+cargo run --release --bin static-converter -- risico \
   --cells /share/risico/RISICO2023/STATIC/risico2023_input_1km.txt \
   --grid /share/risico/RISICO2023/GRID/input_1km_GRID.txt \
   --output /opt/risico/RISICO2023/STATIC/geotiff
 
-cargo run --features gdal --bin static-converter -- fwi \
+cargo run --release --bin static-converter -- fwi \
   --cells /share/risico/FWIWORLD/STATIC/FWI_world.txt \
   --grid /share/risico/FWIWORLD/GRID/GRID.txt \
   --output /opt/risico/FWIWORLD/STATIC/geotiff
 ```
-
-Use `--features gdal_bindgen` instead of `--features gdal` when the installed
-GDAL version has no bindings bundled by `gdal-sys`. This requires libclang and
-does not guarantee compatibility with newer GDAL APIs: `gdal` 0.19 does not
-compile against GDAL 3.13. Use a supported GDAL version (for example, 3.6.2)
-with `--features gdal` in that case. When GDAL is outside the system development
-paths, configure `GDAL_LIB_DIR` and `GDAL_VERSION`, or point `PKG_CONFIG_PATH`
-to its `gdal.pc`.
 
 The converter checks that cells are unique and in the canonical north-to-south,
 west-to-east order. This keeps legacy state rows aligned during a progressive

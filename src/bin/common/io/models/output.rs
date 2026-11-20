@@ -10,7 +10,6 @@ use risico::{
     models::output::{Output, OutputVariableName},
 };
 
-#[cfg(feature = "gdal")]
 use crate::common::io::writers::write_to_geotiff;
 
 use crate::common::{
@@ -370,8 +369,7 @@ impl OutputType {
                 run_date,
                 output_type_def.compression_level,
             )),
-            #[cfg(feature = "gdal")]
-            "GEOTIFF" => Box::new(GeotiffWriter::new(path, name, run_date)),
+                        "GEOTIFF" => Box::new(GeotiffWriter::new(path, name, run_date)),
             other => {
                 return Err(format!(
                     "output type {name} has unknown format {other}; \
@@ -722,13 +720,11 @@ impl Writer for PngWriter {
     }
 }
 
-#[cfg(feature = "gdal")]
 pub struct GeotiffWriter {
     path: PathBuf,
     name: String,
     run_date: DateTime<Utc>,
 }
-#[cfg(feature = "gdal")]
 impl GeotiffWriter {
     pub fn new(path: &str, name: &str, run_date: &DateTime<Utc>) -> Self {
         GeotiffWriter {
@@ -738,7 +734,6 @@ impl GeotiffWriter {
         }
     }
 }
-#[cfg(feature = "gdal")]
 impl Writer for GeotiffWriter {
     fn prepare(
         &mut self,
