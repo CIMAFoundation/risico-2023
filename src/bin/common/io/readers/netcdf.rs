@@ -14,7 +14,7 @@ use netcdf_reader::{NcAttrValue, NcFile, NcSliceInfo, NcSliceInfoElem, NcType, N
 use risico::models::input::InputVariableName;
 use std::fs;
 
-use crate::common::io::models::grid::{CellIndexes, Grid, IrregularGrid};
+use crate::common::io::models::grid::{grid_from_coordinates, CellIndexes, Grid};
 use rayon::prelude::*;
 
 use super::prelude::InputHandler;
@@ -25,8 +25,31 @@ pub struct NetCdfFileInputRecord {
     file: String,
     timeline: Array1<DateTime<Utc>>,
     variables: Vec<InputVariableName>,
-    grid: IrregularGrid,
-    indexes: Option<CellIndexes>,
+    /// Position of this file's grid in `NetCdfInputHandler::grids`.
+    grid: usize,
+}
+
+/// The coordinates of one input file, before they are matched against the
+/// grids already seen.
+struct FileCoordinates {
+    nrows: usize,
+    ncols: usize,
+    lats: Vec<f32>,
+    lons: Vec<f32>,
+}
+
+impl FileCoordinates {
+    /// Bit-exact identity of the coordinates, so files written on the same
+    /// grid share one grid and one set of indexes.
+    fn key(&self) -> (usize, usize, Vec<u32>) {
+        let bits = self
+            .lats
+            .iter()
+            .chain(&self.lons)
+            .map(|value| value.to_bits())
+            .collect();
+        (self.nrows, self.ncols, bits)
+    }
 }
 
 /// Read a whole variable as `i64`, converting from whatever numeric type it
@@ -143,7 +166,7 @@ fn extract_time(
 fn register_nc_file(
     file: &str,
     config: &NetCdfInputConfiguration,
-) -> Result<Option<NetCdfFileInputRecord>, Box<dyn Error>> {
+) -> Result<Option<(NetCdfFileInputRecord, FileCoordinates)>, Box<dyn Error>> {
     let nc_file = NcFile::open(file)?;
 
     let lats_var = nc_file
@@ -234,20 +257,21 @@ fn register_nc_file(
         (None, nrows, ncols)
     };
 
-    let nc_lats = Array1::from_vec(read_f32_values(&nc_file, lats_var, selection.as_ref())?);
-    let nc_lons = Array1::from_vec(read_f32_values(&nc_file, lons_var, selection.as_ref())?);
-
-    let grid = IrregularGrid::new(nrows, ncols, nc_lats, nc_lons);
+    let coordinates = FileCoordinates {
+        nrows,
+        ncols,
+        lats: read_f32_values(&nc_file, lats_var, selection.as_ref())?,
+        lons: read_f32_values(&nc_file, lons_var, selection.as_ref())?,
+    };
 
     let record = NetCdfFileInputRecord {
         file: file.to_owned(),
         timeline,
         variables,
-        grid,
-        indexes: None,
+        grid: 0,
     };
 
-    Ok(Some(record))
+    Ok(Some((record, coordinates)))
 }
 
 /// read a slice of a variable from a netcdf file
@@ -280,14 +304,20 @@ fn read_variable_from_file(
 
 pub struct NetCdfInputHandler {
     records: Vec<NetCdfFileInputRecord>,
+    /// One grid per distinct set of coordinates: a run usually reads
+    /// hundreds of files written on a handful of grids.
+    grids: Vec<Box<dyn Grid>>,
     config: NetCdfInputConfiguration,
     source_values: Mutex<HashMap<(String, String, usize), Arc<Array1<f32>>>>,
+    /// Per registered selection, the indexes on each grid in `grids`.
     coordinate_registry: Vec<Vec<CellIndexes>>,
 }
 
 impl NetCdfInputHandler {
     pub fn new(path: &str, config: &NetCdfInputConfiguration) -> Result<Self, Box<dyn Error>> {
         let mut records = Vec::new();
+        let mut grids = Vec::new();
+        let mut grid_ids: HashMap<(usize, usize, Vec<u32>), usize> = HashMap::new();
 
         // Iterate over the files in the specified directory
         for entry in fs::read_dir(path)? {
@@ -303,7 +333,16 @@ impl NetCdfInputHandler {
 
             // Call the inspect_nc_file function to build the record
             match register_nc_file(&file_path_str, config) {
-                Ok(Some(record)) => {
+                Ok(Some((mut record, coordinates))) => {
+                    record.grid = *grid_ids.entry(coordinates.key()).or_insert_with(|| {
+                        grids.push(grid_from_coordinates(
+                            coordinates.nrows,
+                            coordinates.ncols,
+                            Array1::from_vec(coordinates.lats),
+                            Array1::from_vec(coordinates.lons),
+                        ));
+                        grids.len() - 1
+                    });
                     records.push(record);
                 }
                 Ok(None) => {
@@ -315,8 +354,15 @@ impl NetCdfInputHandler {
             }
         }
 
+        debug!(
+            "{} NetCDF input files on {} distinct grids",
+            records.len(),
+            grids.len()
+        );
+
         Ok(NetCdfInputHandler {
             records,
+            grids,
             config: config.clone(),
             source_values: Mutex::new(HashMap::new()),
             coordinate_registry: Vec::new(),
@@ -377,7 +423,7 @@ impl InputHandler for NetCdfInputHandler {
         var: InputVariableName,
         date: &DateTime<Utc>,
     ) -> Option<Array1<f32>> {
-        for (record_index, record) in self.records.iter().enumerate() {
+        for record in &self.records {
             let time_index = record.timeline.iter().position(|t| t == date);
 
             if time_index.is_none() || !record.variables.contains(&var) {
@@ -417,9 +463,8 @@ impl InputHandler for NetCdfInputHandler {
                     let indexes = self
                         .coordinate_registry
                         .get(selection)
-                        .and_then(|selections| selections.get(record_index))
-                        .or(record.indexes.as_ref())
-                        .expect("indexes should be set");
+                        .and_then(|by_grid| by_grid.get(record.grid))
+                        .expect("coordinates should be registered");
                     let data =
                         indexes.gather(values.as_slice().expect("source values are contiguous"));
                     return Some(data);
@@ -445,9 +490,9 @@ impl InputHandler for NetCdfInputHandler {
         lons: &[f32],
     ) -> Result<usize, Box<dyn Error>> {
         let indexes = self
-            .records
+            .grids
             .iter()
-            .map(|record| record.grid.indexes(lats, lons))
+            .map(|grid| grid.indexes(lats, lons))
             .collect();
         let selection = self.coordinate_registry.len();
         self.coordinate_registry.push(indexes);
@@ -589,6 +634,32 @@ mod tests {
             .get_values(selection, InputVariableName::T, &timeline[0])
             .unwrap();
         assert_eq!(cached.to_vec(), vec![15.0, 10.0]);
+
+        fs::remove_dir_all(directory).unwrap();
+    }
+
+    #[test]
+    fn files_on_the_same_grid_share_one_grid() {
+        let directory = temporary_directory("netcdf-shared-grid");
+        write_input_file(&directory.join("first.nc"));
+        write_input_file(&directory.join("second.nc"));
+
+        let mut config = NetCdfInputConfiguration::default();
+        config.variable_map.insert(
+            InputVariableName::T,
+            VariableEntry::new("T2".into(), Some(0)),
+        );
+        let mut handler = NetCdfInputHandler::new(directory.to_str().unwrap(), &config).unwrap();
+        assert_eq!(handler.records.len(), 2);
+        assert_eq!(handler.grids.len(), 1);
+
+        let selection = handler.register_coordinates(&[45.0], &[9.0]).unwrap();
+        assert_eq!(handler.coordinate_registry[selection].len(), 1);
+        let timeline = handler.get_timeline();
+        let temperature = handler
+            .get_values(selection, InputVariableName::T, &timeline[0])
+            .unwrap();
+        assert_eq!(temperature.to_vec(), vec![14.0]);
 
         fs::remove_dir_all(directory).unwrap();
     }

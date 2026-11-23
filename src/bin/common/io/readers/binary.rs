@@ -17,7 +17,7 @@ use std::{
 use crate::common::io::models::grid::Grid;
 use rayon::prelude::*;
 
-use crate::common::io::models::grid::{CellIndexes, IrregularGrid, RegularGrid};
+use crate::common::io::models::grid::{grid_from_coordinates, CellIndexes, RegularGrid};
 
 use super::prelude::InputHandler;
 
@@ -74,12 +74,7 @@ pub fn read_grid_from_file(file: &str) -> Result<Box<dyn Grid>, io::Error> {
         0 => {
             let lats = read_array_from_file(&mut decoder, len)?;
             let lons = read_array_from_file(&mut decoder, len)?;
-            Box::new(IrregularGrid::new(
-                nrows as usize,
-                ncols as usize,
-                lats,
-                lons,
-            ))
+            grid_from_coordinates(nrows as usize, ncols as usize, lats, lons)
         }
         1 => {
             let mut min_lat: [u8; 4] = [0; 4];
