@@ -390,7 +390,7 @@ fn publish_snapshot(
             .file_name()
             .and_then(|name| name.to_str())
             .unwrap_or("state.nc"),
-        std::process::id()
+        crate::common::process::process_id()
     ));
     write(&temporary)?;
     fs::File::open(&temporary)
@@ -489,7 +489,7 @@ fn create_grid_file(
 }
 
 fn open_grid_file(path: &Path, model: &str, model_version: &str) -> Result<NcFile, RISICOError> {
-    let file = NcFile::open(path)
+    let file = crate::common::io::open_netcdf(path)
         .map_err(|error| format!("cannot open NetCDF snapshot {}: {error}", path.display()))?;
     let schema: i32 = int_attribute(&file, "state_schema_version")?
         .try_into()
@@ -765,7 +765,7 @@ fn is_fill(value: f32) -> bool {
 }
 
 fn snapshot_time(path: &Path) -> Result<DateTime<Utc>, RISICOError> {
-    let file = NcFile::open(path).map_err(|error| format!("cannot open NetCDF snapshot: {error}"))?;
+    let file = crate::common::io::open_netcdf(path).map_err(|error| format!("cannot open NetCDF snapshot: {error}"))?;
     let timestamp = int_attribute(&file, "state_time")?;
     DateTime::from_timestamp(timestamp, 0)
         .ok_or_else(|| format!("invalid state_time {timestamp}").into())

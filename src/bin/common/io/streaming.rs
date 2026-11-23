@@ -1,7 +1,28 @@
 use std::fs::{File, OpenOptions};
 use std::io;
 use std::ops::Range;
+#[cfg(unix)]
 use std::os::unix::fs::FileExt;
+#[cfg(not(unix))]
+trait FileExt {
+    fn read_exact_at(&self, buf: &mut [u8], offset: u64) -> io::Result<()>;
+    fn write_all_at(&self, buf: &[u8], offset: u64) -> io::Result<()>;
+}
+#[cfg(not(unix))]
+impl FileExt for File {
+    fn read_exact_at(&self, buf: &mut [u8], offset: u64) -> io::Result<()> {
+        use std::io::{Read, Seek, SeekFrom};
+        let mut file = self;
+        file.seek(SeekFrom::Start(offset))?;
+        file.read_exact(buf)
+    }
+    fn write_all_at(&self, buf: &[u8], offset: u64) -> io::Result<()> {
+        use std::io::{Seek, SeekFrom, Write};
+        let mut file = self;
+        file.seek(SeekFrom::Start(offset))?;
+        file.write_all(buf)
+    }
+}
 use std::path::{Path, PathBuf};
 
 use risico::models::output::{Output, OutputVariableName};

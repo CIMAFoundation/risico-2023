@@ -185,3 +185,16 @@ mod tests {
             .starts_with("step 2.0s, postprocess 0.2s, warm state "));
     }
 }
+
+/// The process id, for naming scratch and temporary files. WASI has no
+/// processes: each instance runs alone in its own sandbox, so it is 0 there.
+pub fn process_id() -> u32 {
+    #[cfg(target_os = "wasi")]
+    {
+        0
+    }
+    #[cfg(not(target_os = "wasi"))]
+    {
+        std::process::id()
+    }
+}

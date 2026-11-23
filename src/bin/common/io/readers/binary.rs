@@ -62,7 +62,8 @@ where
 }
 
 pub fn read_grid_from_file(file: &str) -> Result<Box<dyn Grid>, io::Error> {
-    let input = File::open(file).unwrap_or_else(|_| panic!("Can't open file: {}", file));
+    let input =
+        File::open(file).unwrap_or_else(|error| panic!("Can't open file: {}: {error}", file));
 
     let input = io::BufReader::new(input);
     let mut decoder = gzip::Decoder::new(input)?;
@@ -116,7 +117,8 @@ where
 /// read a file and returns Grid and Vector of data
 /// Grid is a struct with the following fields:
 pub fn read_values_from_file(file: &str) -> Result<Array1<f32>, io::Error> {
-    let input = File::open(file).unwrap_or_else(|_| panic!("Can't open file: {}", file));
+    let input =
+        File::open(file).unwrap_or_else(|error| panic!("Can't open file: {}: {error}", file));
 
     let input = io::BufReader::new(input);
     let mut decoder = gzip::Decoder::new(input)?;

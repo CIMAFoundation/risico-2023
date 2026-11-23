@@ -167,7 +167,7 @@ fn register_nc_file(
     file: &str,
     config: &NetCdfInputConfiguration,
 ) -> Result<Option<(NetCdfFileInputRecord, FileCoordinates)>, Box<dyn Error>> {
-    let nc_file = NcFile::open(file)?;
+    let nc_file = crate::common::io::open_netcdf(file)?;
 
     let lats_var = nc_file
         .variable(&config.lat_name)
@@ -280,7 +280,7 @@ fn read_variable_from_file(
     variable: &str,
     time_index: usize,
 ) -> Result<Array1<f32>, Box<dyn Error>> {
-    let nc_file = NcFile::open(file)?;
+    let nc_file = crate::common::io::open_netcdf(file)?;
 
     let var = nc_file
         .variable(variable)

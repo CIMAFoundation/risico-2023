@@ -68,6 +68,19 @@ struct TileOutcome {
     output: Option<(DateTime<Utc>, NativeOutputScratch)>,
 }
 
+/// The system temporary directory. WASI has none, so there it is `$TMPDIR`
+/// or `/tmp` inside the host's preopened filesystem.
+fn temp_base() -> PathBuf {
+    #[cfg(target_os = "wasi")]
+    {
+        PathBuf::from(std::env::var("TMPDIR").unwrap_or_else(|_| "/tmp".to_string()))
+    }
+    #[cfg(not(target_os = "wasi"))]
+    {
+        std::env::temp_dir()
+    }
+}
+
 fn create_run_scratch(
     execution: &StreamingExecutionConfig,
     model_name: &str,
@@ -77,7 +90,7 @@ fn create_run_scratch(
         .scratch_directory
         .as_ref()
         .map(PathBuf::from)
-        .unwrap_or_else(|| std::env::temp_dir().join("risico-streaming"));
+        .unwrap_or_else(|| temp_base().join("risico-streaming"));
     fs::create_dir_all(&base).map_err(|error| {
         format!(
             "cannot create streaming scratch directory {}: {error}",
@@ -90,7 +103,7 @@ fn create_run_scratch(
         "{}-{}-{}-{}",
         model_name.to_ascii_lowercase(),
         run_date.format("%Y%m%dT%H%M%S"),
-        std::process::id(),
+        crate::common::process::process_id(),
         sequence
     ));
     fs::create_dir(&run).map_err(|error| {
@@ -352,6 +365,10 @@ where
         output_bytes,
     )?;
     log_execution_decision(model_name, &decision);
+    // WASI has no threads: rayon runs everything on the calling thread.
+    #[cfg(target_os = "wasi")]
+    let tile_pool: Option<rayon::ThreadPool> = None;
+    #[cfg(not(target_os = "wasi"))]
     let tile_pool = match decision.tile_concurrency {
         None => None,
         Some(threads) => Some(

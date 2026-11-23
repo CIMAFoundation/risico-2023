@@ -18,7 +18,6 @@ use crate::common::{
     io::{
         streaming::TiledNativeOutputs,
         writers::{create_nc4_file, write_to_pngwjson, write_to_zbin_file, Nc4Output},
-        zarr::ZarrWriter,
     },
 };
 
@@ -363,13 +362,14 @@ impl OutputType {
             "ZBIN" => Box::new(ZBinWriter::new(path, name, run_date)),
             "PNGWJSON" => Box::new(PngWriter::new(path, name, palettes, run_date)),
             "NETCDF" => Box::new(NetcdfWriter::new(path, output_type_def.compression_level)),
-            "ZARR" => Box::new(ZarrWriter::new(
+            #[cfg(not(target_os = "wasi"))]
+            "ZARR" => Box::new(crate::common::io::zarr::ZarrWriter::new(
                 path,
                 name,
                 run_date,
                 output_type_def.compression_level,
             )),
-                        "GEOTIFF" => Box::new(GeotiffWriter::new(path, name, run_date)),
+            "GEOTIFF" => Box::new(GeotiffWriter::new(path, name, run_date)),
             other => {
                 return Err(format!(
                     "output type {name} has unknown format {other}; \
