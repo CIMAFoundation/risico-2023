@@ -3,7 +3,7 @@
 Besides RISICO, `risico-2023` computes the Canadian Fire Weather Index System and eight more fire
 danger indices used in different countries. They all read the same weather inputs, so one run can
 compare them on the same domain. The [interactive demo](demo.md) runs all of them on one cell,
-side by side.
+side by side, and [References](references.md) lists the publication behind each.
 
 Each model is one entry of the configuration's `models` list; its `type` selects the model. The
 variable names in the tables are the `internal_name`s an output lists (see
@@ -33,7 +33,9 @@ the vapour pressure deficit are derived from what is given (see [Input Data](inp
 Civil Protection. RISICO follows the moisture of the dead fine fuel hour by
 hour, drying it with temperature, humidity and wind and wetting it with rain, and turns it into
 the rate of spread and the intensity a fire would have in the vegetation of each cell, corrected
-for wind and slope (see [How RISICO Works](concepts.md#what-risico-computes)).
+for wind and slope (see [How RISICO Works](concepts.md#what-risico-computes)). The model is
+described by Fiorucci et al. (2008) and, in its current version, by Perello et al. (2025): see
+[References](references.md#risico).
 
 Model versions (`model_version`):
 
@@ -65,7 +67,8 @@ The weather the model actually used can be written too: `temperature` (°C), `hu
 `type: FWI`. The Canadian Forest Fire Weather Index System (Van Wagner, 1987), the most widely
 used fire danger rating system in the world. Three moisture codes track the drying of fuel
 layers of increasing depth, and three indices combine them with wind into a rating of fire
-behaviour. FWI is a daily index, computed from the weather at noon.
+behaviour. FWI is a daily index, computed from the weather at noon. See
+[References](references.md#canadian-fire-weather-index-system).
 
 Model versions (`model_version`):
 
