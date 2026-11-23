@@ -11,8 +11,9 @@
   <div class="hero__actions">
     <a class="md-button md-button--primary" href="demo/">Try it in your browser</a>
     <a class="md-button" href="getting-started/">Get started</a>
-    <a class="md-button" href="indices/">Fire danger indices</a>
-    <a class="md-button" href="configuration/">Configuration</a>
+    <a class="md-button" href="cli/">CLI usage</a>
+    <a class="md-button" href="programmatic/">Developer guide</a>
+    <a class="md-button" href="api/risico/index.html">API reference</a>
   </div>
 </div>
 
@@ -27,6 +28,8 @@
   memory stays bounded however large the domain ([Tiled streaming execution](execution.md)).
 - **Pure-Rust I/O**: NetCDF and legacy `zbin` inputs, NetCDF / GeoTIFF / Zarr / PNG outputs,
   GeoTIFF static data and NetCDF warm state, with no native C libraries.
+- **A Rust library**: the models without the runner, to embed in other programs
+  ([Programmatic workflow](programmatic.md), [API reference](api-reference.md)).
 - **A WebAssembly build**: the same binary compiled for `wasm32-wasip1`, which powers the
   [interactive demo](demo.md).
 

@@ -15,29 +15,50 @@ use super::{
     functions::{get_output_fn, update_moisture_fn},
 };
 
+/// The static properties of one RISICO cell.
 #[derive(Debug, Clone)]
 pub struct RISICOPropertiesElement {
+    /// Longitude [°]
     pub lon: f32,
+    /// Latitude [°]
     pub lat: f32,
+    /// Terrain slope [rad]
     pub slope: f32,
+    /// Terrain aspect, the direction the slope faces [rad]
     pub aspect: f32,
+    /// Summer probability-of-fire-presence weight, used by `VPPF`/`IPPF`
     pub ppf_summer: f32,
+    /// Winter probability-of-fire-presence weight
     pub ppf_winter: f32,
+    /// Fuel parameters of the cell's vegetation class
     pub vegetation: Arc<RISICOVegetation>,
 }
 
+/// The fuel parameters of a vegetation class: one row of the vegetation
+/// catalogue (`p_vegetazione.csv`). [`NODATAVAL`] marks a parameter the class
+/// does not have.
 #[allow(non_snake_case)]
 #[derive(Debug)]
 pub struct RISICOVegetation {
+    /// Identifier, as in the vegetation-id layer
     pub id: String,
+    /// Dead fine fuel load
     pub d0: f32,
+    /// Live fuel load
     pub d1: f32,
+    /// Higher heating value [kJ/kg]
     pub hhv: f32,
+    /// Live fuel moisture
     pub umid: f32,
+    /// Base rate of spread [m/h]
     pub v0: f32,
+    /// Response time of the dead fine fuel moisture [h]
     pub T0: f32,
+    /// Saturation moisture of the dead fine fuel [%]
     pub sat: f32,
+    /// Description
     pub name: String,
+    /// Whether satellite NDVI modulates the live fuel
     pub use_ndvi: bool,
 }
 
@@ -58,9 +79,12 @@ impl Default for RISICOVegetation {
     }
 }
 
+/// The memory of one RISICO cell between runs: the dead fine fuel moisture
+/// and the last snow and satellite values with their timestamps.
 #[allow(non_snake_case)]
 #[derive(Debug, Clone)]
 pub struct RISICOWarmState {
+    /// Dead fine fuel moisture [%]
     pub dffm: f32,
     pub snow_cover: f32,
     pub snow_cover_time: f32,
@@ -102,8 +126,10 @@ pub struct RISICOStateElement {
     pub NDWI_TIME: f32,
 }
 
+/// The running RISICO state of a set of cells.
 #[derive(Debug)]
 pub struct RISICOState {
+    /// Time of the last update
     pub time: DateTime<Utc>,
     pub data: Array1<RISICOStateElement>,
     len: usize,
@@ -111,8 +137,8 @@ pub struct RISICOState {
 }
 
 impl RISICOState {
+    /// Create the state of `warm_state.len()` cells at `time`.
     #[allow(dead_code, non_snake_case)]
-    /// Create a new state.
     pub fn new(warm_state: &[RISICOWarmState], time: &DateTime<Utc>, config: RISICOModelConfig) -> RISICOState {
         let data = Array1::from_vec(
             warm_state
@@ -258,7 +284,8 @@ impl RISICOState {
         Output::new(*time, output_data)
     }
 
-    /// Update the state of the cells.
+    /// Advance the state to `input.time`, applying the weather in `input`.
+    /// The time step is the difference from the previous update.
     pub fn update(&mut self, props: &RISICOProperties, input: &Input) {
         let new_time = &input.time;
         let dt = new_time.signed_duration_since(self.time).num_seconds() as f32 / 3600.0;
@@ -268,11 +295,14 @@ impl RISICOState {
         self.update_moisture(props, input, dt);
     }
 
+    /// Compute the outputs (`dffm`, `V`, `I`, `W`, `contrT`, ...) at the
+    /// current time. `input` must be the input of the last update.
     pub fn output(&self, props: &RISICOProperties, input: &Input) -> Output {
         self.get_output(props, input)
     }
 }
 
+/// The static properties of a set of RISICO cells.
 #[derive(Debug)]
 pub struct RISICOProperties {
     pub data: Array1<RISICOPropertiesElement>,
@@ -281,6 +311,8 @@ pub struct RISICOProperties {
 }
 
 impl RISICOProperties {
+    /// Build the properties of `props.lons.len()` cells. The PPF vectors are
+    /// aligned with the cells; pass `1.0` where PPF is not used.
     pub fn new(
         props: RISICOCellPropertiesContainer,
         vegetations_dict: HashMap<String, Arc<RISICOVegetation>>,
@@ -330,6 +362,7 @@ impl RISICOProperties {
     }
 }
 
+/// Per-cell columns for [`RISICOProperties::new`]. Slope and aspect in radians.
 pub struct RISICOCellPropertiesContainer {
     pub lons: Vec<f32>,
     pub lats: Vec<f32>,

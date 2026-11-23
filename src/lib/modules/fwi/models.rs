@@ -9,6 +9,7 @@ use super::{
 };
 
 // CELLS PROPERTIES
+/// The static properties of one FWI cell.
 #[derive(Debug, Clone)]
 pub struct FWIPropertiesElement {
     pub lon: f32,
@@ -19,18 +20,22 @@ pub struct FWIPropertiesElement {
     pub std_utc_offset_hours: f32,
 }
 
+/// The static properties of a set of FWI cells.
 #[derive(Debug)]
 pub struct FWIProperties {
     pub data: Array1<FWIPropertiesElement>,
     pub len: usize,
 }
 
+/// Per-cell coordinates for [`FWIProperties::new`].
 pub struct FWICellPropertiesContainer {
     pub lons: Vec<f32>,
     pub lats: Vec<f32>,
 }
 
 impl FWIProperties {
+    /// Build the properties of the cells. Call
+    /// [`compute_standard_offsets`](Self::compute_standard_offsets) before running.
     pub fn new(props: FWICellPropertiesContainer) -> Self {
         let data: Array1<FWIPropertiesElement> = props
             .lons
@@ -49,6 +54,8 @@ impl FWIProperties {
 
     /// Fill `std_utc_offset_hours` from the time zone of every cell
     /// (tzf-rs boundaries, chrono-tz rules evaluated at `date`).
+    /// Resolve each cell's standard UTC offset (from its time zone at `date`):
+    /// the FWI daily step happens at local standard noon.
     pub fn compute_standard_offsets(&mut self, date: &DateTime<Utc>) {
         for prop in self.data.iter_mut() {
             prop.std_utc_offset_hours = standard_utc_offset_hours(prop.lon, prop.lat, date);
@@ -63,6 +70,8 @@ impl FWIProperties {
 }
 
 // WARM STATE
+/// The memory of one FWI cell: a short history of daily moisture codes and
+/// rain, one entry per date.
 #[allow(non_snake_case)]
 #[derive(Debug, Clone, Default)]
 pub struct FWIWarmState {
@@ -94,6 +103,7 @@ pub struct FWIStateElement {
 }
 
 
+/// The running FWI state of a set of cells.
 #[derive(Debug)]
 pub struct FWIState {
     pub time: DateTime<Utc>,
@@ -103,8 +113,8 @@ pub struct FWIState {
 }
 
 impl FWIState {
+    /// Create the state of `warm_state.len()` cells at `time`.
     #[allow(dead_code, non_snake_case)]
-    /// Create a new state.
     pub fn new(
         warm_state: &[FWIWarmState],
         time: &DateTime<Utc>,
@@ -172,12 +182,15 @@ impl FWIState {
     }
 
     /// Update the state of the cells
+    /// Advance the state to `input.time` with one hour of weather.
     pub fn update(&mut self, props: &FWIProperties, input: &Input) {
         let new_time = &input.time;
         self.time = *new_time;
         self.update_state(props, input);
     }
 
+    /// Compute the codes and indices (`ffmc`, `dmc`, `dc`, `isi`, `bui`,
+    /// `fwi`, `ifwi`) at the current time.
     pub fn output(&mut self, props: &FWIProperties) -> Output {
         self.get_output(props)
     }

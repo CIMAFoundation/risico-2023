@@ -20,18 +20,26 @@ extra:
 
 nav:
   - Home: index.md
+  - User Guide:
+      - Getting Started: getting-started.md
+      - CLI Usage: cli.md
+      - Configuration: configuration.md
+      - Fire Danger Indices: indices.md
+      - Tiled Streaming Execution: execution.md
+      - Converting Legacy Data: conversion.md
+  - Developer Guide:
+      - Programmatic Workflow: programmatic.md
+      - API Reference: api-reference.md
+      - Building the Web Demo: web-demo.md
   - Interactive Demo: demo.md
-  - Getting Started: getting-started.md
-  - Fire Danger Indices: indices.md
-  - Configuration: configuration.md
-  - Tiled Streaming Execution: execution.md
-  - Converting Legacy Data: conversion.md
-  - Using the Crate: library.md
-  - Building the Web Demo: web-demo.md
 
 markdown_extensions:
   - admonition
+  - def_list
   - attr_list
+  - pymdownx.emoji:
+      emoji_index: !!python/name:material.extensions.emoji.twemoji
+      emoji_generator: !!python/name:material.extensions.emoji.to_svg
   - md_in_html
   - tables
   - toc:

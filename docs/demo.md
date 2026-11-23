@@ -24,6 +24,45 @@ Three levels, from a single cell to the whole country:
   style="width:100%; min-height:1500px; border:1px solid var(--md-default-fg-color--lightest); border-radius:10px;">
 </iframe>
 
+## What it does
+
+### 1 · One cell, your weather
+
+Click any cell of the Italian domain: the panel shows its vegetation, slope and aspect from
+the static layers. Set a weather scenario (start date, length, mean temperature and daily
+range, humidity, wind, a rain event) and, if you like, override the vegetation class, slope
+and aspect. **Run all indices** runs the ten models on that cell.
+
+![Cell selection and weather scenario](img/demo/cell-scenario.jpg)
+
+The results come as interactive charts, grouped by model: the weather actually used,
+RISICO hourly (fine fuel moisture, rate of spread, intensity, wind and temperature effects),
+the FWI moisture codes and behaviour indices, and every other index.
+
+![Weather and RISICO charts](img/demo/cell-charts-risico.jpg)
+
+![FWI and other indices](img/demo/cell-charts-indices.jpg)
+
+### 2 · One cell, real weather
+
+The same cell with hourly analysis and forecast from Open-Meteo: a spin-up on up to two
+weeks of past weather, then up to a week of forecast. The dashed line marks now.
+
+![Real weather from Open-Meteo](img/demo/live-weather.jpg)
+
+### 3 · Italy at 1 km
+
+RISICO and FWI on every cell of the domain. When the run ends, pick a variable and move
+through time with the slider; the legend uses the operational palettes.
+
+![RISICO rate of spread over Italy](img/demo/map-risico.jpg)
+
+![Fire Weather Index over Italy](img/demo/map-fwi.jpg)
+
+Click a cell for its full series of the selected variable:
+
+![Series of one cell](img/demo/map-popup.jpg)
+
 !!! note "About this demo"
     The run is **single-threaded**, since `wasm32` has no threads; the native build processes tiles in
     parallel. Every run starts from default moisture (`on_missing: defaults`) and spins up on the past

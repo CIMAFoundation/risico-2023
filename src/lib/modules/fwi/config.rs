@@ -18,6 +18,8 @@ pub struct FWIModelConfig {
 }
 
 impl FWIModelConfig {
+    /// The formulation for `model_version`: `legacy`, `cffdrs` or
+    /// `sliding_window`.
     pub fn new(model_version_str: &str) -> Self {
         let update_state_fn: fn(&mut FWIStateElement, &FWIPropertiesElement, &InputElement, &DateTime<Utc>);
         let get_output_fn: fn(&mut FWIStateElement, &FWIPropertiesElement, &DateTime<Utc>) -> OutputElement;

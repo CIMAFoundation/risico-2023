@@ -370,6 +370,7 @@ fn get_derived(a: &f32, b: &f32, c: Option<&f32>) -> f32 {
     r
 }
 
+/// The outputs of a model at one timestamp, one [`OutputElement`] per cell.
 pub struct Output {
     pub time: DateTime<Utc>,
     pub data: Array1<OutputElement>,
@@ -386,6 +387,8 @@ impl Output {
         Array1::from_vec(vec)
     }
 
+    /// The values of `variable` on every cell, or `None` for a variable the
+    /// output does not carry.
     pub fn get(&self, variable: &OutputVariableName) -> Option<Array1<f32>> {
         use OutputVariableName::*;
         match variable {

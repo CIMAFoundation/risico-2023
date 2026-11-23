@@ -43,6 +43,12 @@ jobs:
           cargo build --release --target wasm32-wasip1 --bin risico-2023
           cp target/wasm32-wasip1/release/risico-2023.wasm docs/demo/
 
+      # API reference of the risico library, served under /api/.
+      - name: Build the API reference
+        run: |
+          cargo doc --no-deps --lib
+          cp -r target/doc docs/api
+
       - name: Set up Python
         uses: actions/setup-python@v5
         with:

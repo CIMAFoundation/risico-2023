@@ -53,7 +53,9 @@ impl Default for InputElement {
     }
 }
 
+/// The weather of one timestamp, one [`InputElement`] per cell.
 pub struct Input {
+    /// Valid time of the weather
     pub time: DateTime<Utc>,
     pub data: Array1<InputElement>,
 }

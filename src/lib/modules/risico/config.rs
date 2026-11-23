@@ -27,6 +27,8 @@ pub struct RISICOModelConfig {
 }
 
 impl RISICOModelConfig {
+    /// The formulation for `model_version`: `legacy`, `v2023` or `v2025`.
+    /// Any other value falls back to `legacy`.
     pub fn new(model_version_str: &str) -> Self {
         let ffmc_no_rain_fn: fn(f32, f32, f32, f32, f32, f32, f32) -> f32;
         let ffmc_rain_fn: fn(f32, f32, f32) -> f32;
