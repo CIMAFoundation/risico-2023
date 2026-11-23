@@ -273,8 +273,6 @@
       
         
       
-        
-      
     
     
     
@@ -587,28 +585,6 @@
   
 </li>
       
-        <li class="md-nav__item">
-  <a href="#static-converter" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        static-converter
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#warm-state-converter" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        warm-state-converter
-      
-    </span>
-  </a>
-  
-</li>
-      
     </ul>
   
 </nav>
@@ -633,34 +609,6 @@
     
   
     Large Domains and Performance
-  
-
-    
-  </span>
-  
-  
-
-      </a>
-    </li>
-  
-
-              
-            
-              
-                
-  
-  
-  
-  
-    <li class="md-nav__item">
-      <a href="../conversion/" class="md-nav__link">
-        
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    Converting Legacy Data
   
 
     
@@ -974,28 +922,6 @@
   
 </li>
       
-        <li class="md-nav__item">
-  <a href="#static-converter" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        static-converter
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#warm-state-converter" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        warm-state-converter
-      
-    </span>
-  </a>
-  
-</li>
-      
     </ul>
   
 </nav>
@@ -1017,7 +943,7 @@
 
 
 <h1 id="cli-usage">CLI Usage<a class="headerlink" href="#cli-usage" title="Permanent link">&para;</a></h1>
-<p>The repository builds four commands:</p>
+<p>The repository builds two commands:</p>
 <table>
 <thead>
 <tr>
@@ -1034,19 +960,9 @@
 <td><code>streaming-inspect</code></td>
 <td>Validate a configuration and print its tile plan, without running</td>
 </tr>
-<tr>
-<td><code>static-converter</code></td>
-<td>Convert the text static data of the previous RISICO implementation to GeoTIFF layers</td>
-</tr>
-<tr>
-<td><code>warm-state-converter</code></td>
-<td>Convert the text warm states of the previous RISICO implementation to NetCDF snapshots</td>
-</tr>
 </tbody>
 </table>
-<p>Most users need only <code>risico-2023</code>. The two converters are for existing installations of the
-previous RISICO implementation (see <a href="../conversion/">Converting Legacy Data</a>).</p>
-<div class="highlight"><pre><span></span><code>cargo<span class="w"> </span>build<span class="w"> </span>--release<span class="w"> </span>--bins<span class="w">    </span><span class="c1"># builds all four in target/release/</span>
+<div class="highlight"><pre><span></span><code>cargo<span class="w"> </span>build<span class="w"> </span>--release<span class="w"> </span>--bin<span class="w"> </span>risico-2023<span class="w"> </span>--bin<span class="w"> </span>streaming-inspect
 </code></pre></div>
 <p>Every command prints its usage with <code>--help</code>.</p>
 <h2 id="risico-2023"><code>risico-2023</code><a class="headerlink" href="#risico-2023" title="Permanent link">&para;</a></h2>
@@ -1072,9 +988,8 @@ snapshot.</dd>
 <dd>A YAML configuration: the models to run, their static data, warm state and outputs
 (see <a href="../configuration/">Configuration</a>).</dd>
 <dt><code>INPUT_PATH</code></dt>
-<dd>Either a <strong>directory</strong> of NetCDF weather files (every <code>.nc</code> file in it is read, see
-<a href="../input-data/#weather-inputs">Input Data</a>) or a <strong>text file</strong> listing <code>.zbin</code> files of the
-previous RISICO implementation, one per line.</dd>
+<dd>A directory of NetCDF weather files: every <code>.nc</code> file in it is read (see
+<a href="../input-data/#weather-inputs">Input Data</a>).</dd>
 </dl>
 <h3 id="example">Example<a class="headerlink" href="#example" title="Permanent link">&para;</a></h3>
 <div class="highlight"><pre><span></span><code>./target/release/risico-2023<span class="w"> </span><span class="se">\</span>
@@ -1118,49 +1033,15 @@ configuration, or to try other tile sizes.</p>
 
 Arguments:
   &lt;DATE&gt;    Model date in YYYYMMDDHHMM form
-  &lt;CONFIG&gt;  YAML or legacy text configuration
+  &lt;CONFIG&gt;  YAML configuration
 
 Options:
       --tile-height &lt;TILE_HEIGHT&gt;        Override raster tile height
       --tile-width &lt;TILE_WIDTH&gt;          Override raster tile width
-      --cells-per-tile &lt;CELLS_PER_TILE&gt;  Override legacy cells per tile
+      --cells-per-tile &lt;CELLS_PER_TILE&gt;  Override cells per batch for models reading a cell file
 </code></pre></div>
 <div class="highlight"><pre><span></span><code>./target/release/streaming-inspect<span class="w"> </span><span class="m">202607010000</span><span class="w"> </span>configuration.yml<span class="w"> </span>--tile-height<span class="w"> </span><span class="m">256</span><span class="w"> </span>--tile-width<span class="w"> </span><span class="m">256</span>
 </code></pre></div>
-<h2 id="static-converter"><code>static-converter</code><a class="headerlink" href="#static-converter" title="Permanent link">&para;</a></h2>
-<p>Converts the legacy regular-grid static files to the aligned GeoTIFF layers the model
-reads (see <a href="../conversion/">Converting Legacy Data</a>).</p>
-<div class="highlight"><pre><span></span><code>Usage: static-converter risico [OPTIONS] --cells &lt;CELLS&gt; --grid &lt;GRID&gt; --output &lt;OUTPUT&gt;
-      --cells &lt;CELLS&gt;    RISICO cell file: lon lat slope aspect vegetation
-      --grid &lt;GRID&gt;      Legacy grid file (GRIDNROWS=, MINLAT=, ...)
-      --output &lt;OUTPUT&gt;  Destination directory for the GeoTIFF layers
-      --ppf &lt;PPF&gt;        Optional legacy two-column summer/winter PPF file
-
-Usage: static-converter fwi --cells &lt;CELLS&gt; --grid &lt;GRID&gt; --output &lt;OUTPUT&gt;
-      --cells &lt;CELLS&gt;    FWI cell file: lon lat
-      --grid &lt;GRID&gt;      Legacy grid file
-      --output &lt;OUTPUT&gt;  Destination directory for the domain mask
-</code></pre></div>
-<h2 id="warm-state-converter"><code>warm-state-converter</code><a class="headerlink" href="#warm-state-converter" title="Permanent link">&para;</a></h2>
-<p>Converts legacy text warm states to NetCDF snapshots, validated against a domain mask.</p>
-<div class="highlight"><pre><span></span><code>Usage: warm-state-converter config [OPTIONS] --config &lt;CONFIG&gt; --model-name &lt;MODEL_NAME&gt; --legacy-prefix &lt;LEGACY_PREFIX&gt;
-      --config &lt;CONFIG&gt;                Migrated YAML configuration containing GeoTIFF and NetCDF warm-state settings
-      --model-name &lt;MODEL_NAME&gt;        `model_name` of the model entry to convert, as it appears in the config file
-      --legacy-prefix &lt;LEGACY_PREFIX&gt;  Legacy filename prefix, or a directory when files are named only by timestamp
-      --latest-only                    Convert only the newest legacy snapshot
-      --overwrite                      Replace an existing NetCDF snapshot with the same timestamp
-
-Usage: warm-state-converter risico|fwi [OPTIONS] --legacy-prefix &lt;LEGACY_PREFIX&gt; --domain-mask &lt;DOMAIN_MASK&gt; --output &lt;OUTPUT&gt; --model-version &lt;MODEL_VERSION&gt;
-      --legacy-prefix &lt;LEGACY_PREFIX&gt;  Legacy filename prefix, or a directory when files are named only by timestamp
-      --domain-mask &lt;DOMAIN_MASK&gt;      GeoTIFF domain mask used to validate cell count and define the output grid
-      --output &lt;OUTPUT&gt;                Destination directory for NetCDF snapshots
-      --model-version &lt;MODEL_VERSION&gt;  Model version stored in and validated against each snapshot
-      --latest-only                    Convert only the newest legacy snapshot
-      --overwrite                      Replace an existing NetCDF snapshot with the same timestamp
-</code></pre></div>
-<p>The <code>config</code> form takes paths and model metadata from a configuration that already points
-at the GeoTIFF static data and the NetCDF warm-state directory; the <code>risico</code> and <code>fwi</code>
-forms take them explicitly.</p>
 
 
 

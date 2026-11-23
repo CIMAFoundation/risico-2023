@@ -273,8 +273,6 @@
       
         
       
-        
-      
     
     
     
@@ -650,34 +648,6 @@
     
   
     Large Domains and Performance
-  
-
-    
-  </span>
-  
-  
-
-      </a>
-    </li>
-  
-
-              
-            
-              
-                
-  
-  
-  
-  
-    <li class="md-nav__item">
-      <a href="../conversion/" class="md-nav__link">
-        
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    Converting Legacy Data
   
 
     
@@ -1289,7 +1259,7 @@ one format, on one grid, into one directory:</p>
 </tr>
 <tr>
 <td><code>format</code></td>
-<td><code>NETCDF</code>, <code>GEOTIFF</code>, <code>ZARR</code>, <code>PNGWJSON</code> or <code>ZBIN</code>, <a href="#formats">below</a></td>
+<td><code>NETCDF</code>, <code>GEOTIFF</code>, <code>ZARR</code> or <code>PNGWJSON</code>, <a href="#formats">below</a></td>
 </tr>
 <tr>
 <td><code>compression_level</code></td>
@@ -1298,10 +1268,6 @@ one format, on one grid, into one directory:</p>
 <tr>
 <td><code>grid</code></td>
 <td>The output grid: <code>nrows</code> × <code>ncols</code> cell centres from <code>min_lat</code>/<code>min_lon</code> to <code>max_lat</code>/<code>max_lon</code>, both included</td>
-</tr>
-<tr>
-<td><code>grid_path</code></td>
-<td>Instead of <code>grid</code>: a text grid file of the previous RISICO implementation</td>
 </tr>
 <tr>
 <td><code>variables</code></td>
@@ -1365,10 +1331,6 @@ hour, <code>24</code> once a day at the hour of the run date (shifted by <code>o
 <tr>
 <td><code>PNGWJSON</code></td>
 <td>One coloured PNG image per variable and output time, with a JSON file describing its georeference, for web maps. Needs a palette per variable.</td>
-</tr>
-<tr>
-<td><code>ZBIN</code></td>
-<td>The binary format of the previous RISICO implementation</td>
 </tr>
 </tbody>
 </table>
