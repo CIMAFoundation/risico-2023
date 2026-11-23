@@ -404,6 +404,17 @@
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
+  <a href="#try-it-with-the-sample-data" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Try it with the sample data
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#netcdf-inputs" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -814,6 +825,17 @@
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
+  <a href="#try-it-with-the-sample-data" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Try it with the sample data
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#netcdf-inputs" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -883,6 +905,29 @@ one is needed.</p>
 </code></pre></div>
 <p>The input source is either a directory containing NetCDF inputs or a text file listing legacy
 <code>.zbin</code> inputs.</p>
+<h3 id="try-it-with-the-sample-data">Try it with the sample data<a class="headerlink" href="#try-it-with-the-sample-data" title="Permanent link">&para;</a></h3>
+<p>The repository ships a small, ready-to-run case under <code>docs/demo/data/</code>: the static layers of a
+1 km cut-out of the Italian domain around Liguria, one month of hourly weather (July 2025) as a
+NetCDF input on the same area, and a configuration that runs RISICO and FWI on them:</p>
+<div class="highlight"><pre><span></span><code>docs/demo/data/
+├── static/                    domain mask, slope, aspect, vegetation id, PPF, vegetation catalogue
+└── sample/
+    ├── configuration.yml      RISICO (hourly) and FWI (daily), NetCDF outputs
+    └── input/
+        └── weather-2025-07.nc T, H, W, D, P, SNOW on a 0.125° grid, 744 hours
+</code></pre></div>
+<div class="highlight"><pre><span></span><code>cargo<span class="w"> </span>build<span class="w"> </span>--release<span class="w"> </span>--bin<span class="w"> </span>risico-2023
+<span class="nb">cd</span><span class="w"> </span>docs/demo/data/sample
+../../../../target/release/risico-2023<span class="w"> </span><span class="m">202507010000</span><span class="w"> </span>configuration.yml<span class="w"> </span>input/
+</code></pre></div>
+<p>The run starts from default moisture (<code>on_missing: defaults</code>), takes about 20 seconds and writes
+one NetCDF file per variable under <code>output/RISICO/</code> and <code>output/FWI/</code>, and the daily warm state
+under <code>state/</code>. Run it again with a later date, for example <code>202507150000</code>, and each model starts
+from the warm state saved on that day. The same files are online: the
+<a href="../demo/data/sample/input/weather-2025-07.nc">weather input</a> and the
+<a href="../demo/data/sample/configuration.yml">configuration</a>.</p>
+<p>The weather comes from the <a href="https://open-meteo.com">Open-Meteo</a> historical forecast archive
+(CC BY 4.0); <code>docs/demo/tools/make_sample_weather.py</code> rebuilds it for any period.</p>
 <h3 id="netcdf-inputs">NetCDF inputs<a class="headerlink" href="#netcdf-inputs" title="Permanent link">&para;</a></h3>
 <p>Every <code>.nc</code> file in the input directory is inspected. By default a file provides <code>latitude</code> and
 <code>longitude</code> on two dimensions, a <code>time</code> axis and any of the input variables below, named as in the

@@ -99,6 +99,8 @@
   .cell-info dd { margin: 0; }
   .controls { display: none; flex-direction: column; gap: 8px; }
   .controls.visible { display: flex; }
+  .controls [data-source] { display: flex; flex-direction: column; gap: 8px; }
+  .controls [data-source][hidden] { display: none; }
   label.field { display: grid; grid-template-columns: 1fr auto; gap: 2px 8px; align-items: center; font-size: 13px; }
   label.field input[type="range"], label.field select, label.field input[type="date"] { grid-column: 1 / -1; width: 100%; }
   label.field output { color: var(--muted); font-variant-numeric: tabular-nums; }
@@ -160,8 +162,8 @@
 <div class="app">
   <nav class="tabs" role="tablist">
     <button class="tab" role="tab" data-mode="scenario" aria-selected="true">1 · One cell, your weather<small>no data to download</small></button>
-    <button class="tab" role="tab" data-mode="live" aria-selected="false">2 · One cell, real weather<small>Open-Meteo analysis + forecast</small></button>
-    <button class="tab" role="tab" data-mode="map" aria-selected="false">3 · Liguria at 1 km<small>Open-Meteo, 16 000 cells</small></button>
+    <button class="tab" role="tab" data-mode="live" aria-selected="false">2 · One cell, real weather<small>July 2025 or today's forecast</small></button>
+    <button class="tab" role="tab" data-mode="map" aria-selected="false">3 · Liguria at 1 km<small>16 000 cells, July 2025 or today</small></button>
   </nav>
 
   <div class="main">
@@ -203,18 +205,43 @@
       </div>
 
       <div class="controls" data-for="live">
-        <label class="field">Spin-up (past days) <output id="lv-past-v"></output><input type="range" id="lv-past" min="2" max="60" value="14" /></label>
-        <label class="field">Forecast days <output id="lv-fc-v"></output><input type="range" id="lv-fc" min="1" max="10" value="7" /></label>
-        <p class="note">Hourly 2 m temperature, humidity, 10 m wind, rain and snow depth from
-          <a href="https://open-meteo.com" target="_blank" rel="noopener">Open-Meteo</a>, requested by your browser.
-          The model starts from default moisture and spins up on the past days.</p>
+        <label class="field">Weather
+          <select id="lv-source">
+            <option value="sample" selected>July 2025 sample (bundled NetCDF)</option>
+            <option value="forecast">Today: Open-Meteo analysis + forecast</option>
+          </select></label>
+        <div data-source="sample">
+          <label class="field">From July <output id="lv-from-v"></output><input type="range" id="lv-from" min="1" max="30" value="1" /></label>
+          <label class="field">Days <output id="lv-days-v"></output><input type="range" id="lv-days" min="2" max="31" value="31" /></label>
+          <p class="note">Hourly weather of July 2025 over Liguria, bundled with this page as a NetCDF file
+            (<a href="data/sample/input/weather-2025-07.nc" download>download</a>), from the
+            <a href="https://open-meteo.com" target="_blank" rel="noopener">Open-Meteo</a> historical archive.</p>
+        </div>
+        <div data-source="forecast">
+          <label class="field">Spin-up (past days) <output id="lv-past-v"></output><input type="range" id="lv-past" min="2" max="60" value="14" /></label>
+          <label class="field">Forecast days <output id="lv-fc-v"></output><input type="range" id="lv-fc" min="1" max="10" value="7" /></label>
+          <p class="note">Hourly 2 m temperature, humidity, 10 m wind, rain and snow depth from
+            <a href="https://open-meteo.com" target="_blank" rel="noopener">Open-Meteo</a>, requested by your browser.</p>
+        </div>
+        <p class="note">The model starts from default moisture and spins up on the first days.</p>
       </div>
 
       <div class="controls" data-for="map">
-        <label class="field">Spin-up (past days) <output id="mp-past-v"></output><input type="range" id="mp-past" min="1" max="5" value="2" /></label>
-        <label class="field">Forecast days <output id="mp-fc-v"></output><input type="range" id="mp-fc" min="1" max="4" value="3" /></label>
+        <label class="field">Weather
+          <select id="mp-source">
+            <option value="sample" selected>July 2025 sample (bundled NetCDF)</option>
+            <option value="forecast">Today: Open-Meteo analysis + forecast</option>
+          </select></label>
+        <div data-source="sample">
+          <label class="field">From July <output id="mp-from-v"></output><input type="range" id="mp-from" min="1" max="30" value="1" /></label>
+          <label class="field">Days <output id="mp-days-v"></output><input type="range" id="mp-days" min="2" max="31" value="7" /></label>
+        </div>
+        <div data-source="forecast">
+          <label class="field">Spin-up (past days) <output id="mp-past-v"></output><input type="range" id="mp-past" min="1" max="5" value="2" /></label>
+          <label class="field">Forecast days <output id="mp-fc-v"></output><input type="range" id="mp-fc" min="1" max="4" value="3" /></label>
+        </div>
         <p class="note">RISICO and FWI on every 1 km cell of a Liguria cut-out of the Italian domain, with
-          hourly Open-Meteo weather on a 0.125° grid. Hourly maps; the run takes about half a minute.</p>
+          hourly weather on a 0.125° grid. Hourly maps.</p>
       </div>
 
       <button class="run" id="run">Run RISICO</button>
