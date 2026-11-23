@@ -6,12 +6,14 @@ The repository builds four commands:
 | --- | --- |
 | `risico-2023` | Run the models of a configuration on a set of weather inputs |
 | `streaming-inspect` | Validate a configuration and print its tile plan, without running |
-| `static-converter` | Convert legacy RISICO/FWI cell files to GeoTIFF static layers |
-| `warm-state-converter` | Convert legacy warm-state files to NetCDF snapshots |
+| `static-converter` | Convert the text static data of the previous RISICO implementation to GeoTIFF layers |
+| `warm-state-converter` | Convert the text warm states of the previous RISICO implementation to NetCDF snapshots |
+
+Most users need only `risico-2023`. The two converters are for existing installations of the
+previous RISICO implementation (see [Converting Legacy Data](conversion.md)).
 
 ```bash
-cargo build --release --bins
-ls target/release/{risico-2023,streaming-inspect,static-converter,warm-state-converter}
+cargo build --release --bins    # builds all four in target/release/
 ```
 
 Every command prints its usage with `--help`.
@@ -34,8 +36,10 @@ Options:
 ### Arguments
 
 `DATE`
-:   The run date, in UTC. Each model loads the newest warm-state snapshot at or before it
-    (within `max_age_hours`) and starts from there. The weather inputs must start after it.
+:   The run date, in UTC. Each model starts from the warm-state snapshot of the day before
+    (see [Configuration](configuration.md#warm-state)), and output times are counted from it.
+    Every timestamp of the inputs is processed, so give inputs that start after that
+    snapshot.
 
 `CONFIG_PATH`
 :   A YAML configuration: the models to run, their static data, warm state and outputs
@@ -43,8 +47,8 @@ Options:
 
 `INPUT_PATH`
 :   Either a **directory** of NetCDF weather files (every `.nc` file in it is read, see
-    [Getting Started](getting-started.md#netcdf-inputs)) or a **text file** listing legacy
-    `.zbin` files, one per line.
+    [Input Data](input-data.md#weather-inputs)) or a **text file** listing `.zbin` files of the
+    previous RISICO implementation, one per line.
 
 ### Example
 
@@ -58,7 +62,7 @@ Options:
 A run reads the static data and warm state of every model, then streams the inputs one
 timestamp at a time through each tile of each model, writing outputs at the configured
 hours and the warm state at `warm_state_hour` (see
-[Tiled Streaming Execution](execution.md)).
+[Large Domains and Performance](execution.md)).
 
 ### Environment
 

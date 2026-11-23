@@ -1,13 +1,16 @@
-# Tiled Streaming Execution
+# Large Domains and Performance
 
-Tiled streaming is the only production execution path. The former
-whole-domain `run_*` loops and the runtime `enabled` switch have been removed.
-The same runner is used by RISICO, FWI, Mark5, KBDI, Angstrom, Fosberg,
-Nesterov, Sharples, Orieux, and HDW.
+`risico-2023` runs domains of any size, from a few cells to a continent, in bounded memory.
+The defaults suit most runs; this page explains how a run is organised and how to tune it when
+the domain is large or the machine is small.
 
-## Pipeline
+## How a run is organised
 
-For each configured model, execution proceeds as follows:
+A run never holds the whole domain's time series in memory. It splits the domain into
+rectangular **tiles** and goes through the weather one timestamp at a time; at each timestamp
+it steps every tile, then writes that timestamp's outputs. Every model uses the same runner.
+
+In detail, for each configured model:
 
 1. Build a spatial tile plan, gather every tile's immutable properties once,
    seed every tile's live state from the warm state, and register each tile's
@@ -27,7 +30,7 @@ For each configured model, execution proceeds as follows:
    Independent output variables may be postprocessed in parallel, and the
    whole step may run in the background while the next timestamp is stepped.
 6. Assemble any scheduled warm-state records in canonical model-cell order and
-   write the configured legacy or NetCDF snapshot, in the same background
+   write the model's NetCDF (or, for the text-file indices, text) snapshot, in the same background
    step as the output.
 
 Raster-backed models use clipped rectangular windows and omit empty windows.
@@ -35,8 +38,8 @@ A window holding fewer than a quarter of a full tile's cells, as coastal and
 border windows do, is merged with a neighbour in its tile row, never beyond a
 full tile's worth of cells. Tiles are then ordered largest first so the
 work-stealing pool spends the tail of each timestep on the small ones.
-Models configured with legacy cell files use bounded batches in configured
-cell order. Both enter the same runner and model-adapter interface.
+Models that read their cells from a text file use batches of cells in file
+order instead of windows. Both enter the same runner and model-adapter interface.
 
 Meteorological input grids may be regular or curvilinear. Curvilinear grids
 retain nearest-neighbour R-tree lookup. Because source meteorological fields
@@ -56,7 +59,7 @@ called; native forecast output is the disk-backed portion of the pipeline.
 
 ## Configuration
 
-The optional `streaming` section tunes the mandatory tiled runner:
+The optional top-level `streaming` section of the configuration tunes the runner:
 
 ```yaml
 streaming:
@@ -69,8 +72,8 @@ streaming:
   scratch_directory: /var/tmp/risico
 ```
 
-Defaults are `512 × 512` for raster tiles and 1,048,576 cells for legacy cell
-batches. `scratch_directory` defaults to a `risico-streaming` directory below
+Defaults are `512 × 512` for raster tiles and 1,048,576 cells for batches of
+text-file cells. `scratch_directory` defaults to a `risico-streaming` directory below
 the operating system's temporary directory. Tile dimensions and
 `cells_per_tile` must be greater than zero.
 
@@ -108,30 +111,11 @@ postprocessing stage.
 
 See [Configuration](configuration.md#outputs) for the output formats.
 
-NetCDF input files and warm-state snapshots are read with the pure-Rust
-`netcdf-reader` crate and snapshots are written with `nc4-stream`, so the
-build needs neither libnetcdf nor libhdf5.
-
 Allow scratch capacity for approximately four bytes multiplied by active model
 cells and configured native variables, plus, when the state is on disk, the
 serialized live-state checkpoints and filesystem overhead. An output timestamp is held on disk
 only until it is postprocessed and removed; with `overlap_postprocess` that
 can be two timestamps at once.
-
-## Running
-
-Run a configuration directly with:
-
-```console
-./target/release/risico-2023 \
-  202607230000 \
-  /share/risico/RISICO2023/configuration.yml \
-  /path/to/generated-input-list.txt
-```
-
-The configured output and warm-state paths are live destinations. For
-development tests, copy the configuration and redirect those paths, plus
-`streaming.scratch_directory`, to a temporary directory.
 
 ## Inspecting a configuration
 

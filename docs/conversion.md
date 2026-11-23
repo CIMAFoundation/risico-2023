@@ -1,5 +1,17 @@
 # Converting Legacy Data
 
+!!! info "Only for existing RISICO installations"
+    This page is for operators of the previous RISICO implementation, whose static data,
+    grids and warm states are text files. New setups prepare GeoTIFF static data directly
+    (see [Input Data](input-data.md#static-data)) and can skip it.
+
+The previous implementation describes the land as a text file of cells (`lon lat slope aspect
+vegetation` per line) with a separate grid file, and saves its warm state as text files. The
+two converters below turn them, once, into the GeoTIFF layers and NetCDF snapshots this version
+reads.
+
+## Static data
+
 Convert existing regular-grid static files with the offline `static-converter`
 utility, which writes single-band EPSG:4326 GeoTIFF layers. The converter
 detects, per axis, whether legacy bounds represent outer edges or cell centres;

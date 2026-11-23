@@ -54,6 +54,7 @@ impl From<&str> for ConfigError {
 #[strum(ascii_case_insensitive)]
 pub enum ClusterMode {
     Mean,
+    /// Not implemented yet: an output using it stops the run.
     Median,
     Min,
     Max,
@@ -68,7 +69,8 @@ pub struct OutputVariable {
     pub name: String,
     /// How the native cells in one output pixel are combined.
     pub cluster_mode: ClusterMode,
-    /// Decimal digits kept: values are rounded to a multiple of 10^-precision.
+    /// Rounding: values are rounded to a multiple of 10^precision, so `-1`
+    /// keeps one decimal and `0` rounds to units.
     pub precision: i32,
 }
 
@@ -99,7 +101,8 @@ impl OutputVariable {
         self.cluster_mode
     }
 
-    /// Decimal digits kept: values are rounded to a multiple of 10^-precision.
+    /// Rounding: values are rounded to a multiple of 10^precision, so `-1`
+    /// keeps one decimal and `0` rounds to units.
     pub fn precision(&self) -> i32 {
         self.precision
     }

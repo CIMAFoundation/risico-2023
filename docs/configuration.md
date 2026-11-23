@@ -1,150 +1,209 @@
 # Configuration
 
-RISICO and FWI configure their static data and warm state as aligned, single-band
-GeoTIFF layers and NetCDF snapshots. This is the only supported layout: the older
-cell/PPF/vegetation-ID text files and plain-text warm-state files are no longer
-readable directly by the model binary, and configuration files must be YAML (the
-older whole-file `.txt` key/value format is no longer supported). Existing
-deployments convert once with `static-converter` and `warm-state-converter`
-(see [Converting legacy data](conversion.md)) before switching their configuration over.
+A run is described by one YAML file: which models to run, where their data are and which
+outputs to write. This page is the reference of that file. The
+[sample configuration](demo/data/sample/configuration.yml) is a complete, working example to
+start from.
+
+## Structure
+
+```yaml
+models:                       # required: the models to run, one entry each
+  - type: RISICO
+    ...
+  - type: FWI
+    ...
+palettes: {}                  # required: colour palettes for PNG outputs ({} if none)
+netcdf_input_configuration:   # optional: names used in the weather files
+  ...
+streaming:                    # optional: memory and performance tuning
+  ...
+```
+
+| Key | Content | See |
+|---|---|---|
+| `models` | List of model entries | [below](#models) |
+| `palettes` | Map from output variable name to a palette file, for `PNGWJSON` outputs | [Outputs](#png-palettes) |
+| `netcdf_input_configuration` | Variable, coordinate and time names of the weather files, when they differ from the defaults | [Input Data](input-data.md#other-variable-names) |
+| `streaming` | Tile size, memory budget, scratch directory | [Large Domains and Performance](execution.md#configuration) |
+
+Relative paths are resolved from the directory the command is run in.
+
+## Models
+
+A RISICO entry, with every key:
 
 ```yaml
 models:
   - type: RISICO
-    model_name: RISICO2023
+    model_name: RISICO
     model_version: v2025
     static_data:
       type: geotiff
-      domain_mask: /opt/risico/static/domain_mask.tif
-      slope: /opt/risico/static/slope.tif
-      aspect: /opt/risico/static/aspect.tif
-      vegetation_id: /opt/risico/static/vegetation_id.tif
-      vegetation_catalog: /opt/risico/static/p_vegetazione.csv
-      ppf_summer: null
-      ppf_winter: null
+      domain_mask: static/domain_mask.tif
+      slope: static/slope.tif
+      aspect: static/aspect.tif
+      vegetation_id: static/vegetation_id.tif
+      vegetation_catalog: static/p_vegetazione.csv
+      ppf_summer: static/ppf_summer.tif      # optional, with ppf_winter
+      ppf_winter: static/ppf_winter.tif
     warm_state:
       type: netcdf
-      directory: /opt/risico/state-nc
+      directory: state/RISICO
       max_age_hours: 120
       on_missing: error
     warm_state_hour: 0
+    warm_state_lag_days: 1
     output_time_resolution: 1
-    output_types: []
+    output_types:
+      - ...                                  # see Outputs
 ```
 
-The domain mask defines the grid and active cells. All layers must be north-up,
-unrotated EPSG:4326 rasters with identical dimensions and affine transforms.
-Slope and aspect are stored in degrees. A non-zero, non-nodata mask pixel is
-active. PPF layers must either both be configured or both omitted.
+| Key | Meaning | Default |
+|---|---|---|
+| `type` | The model: `RISICO`, `FWI`, or one of the [other indices](indices.md#other-indices) | required |
+| `model_name` | A name for the entry, used in the logs | required |
+| `model_version` | The formulation, see [Fire Danger Indices](indices.md) | required (RISICO, FWI and some others) |
+| `static_data` | The land data, [below](#static-data) | required (RISICO, FWI) |
+| `warm_state` | Where snapshots are read and written, [below](#warm-state) | required (RISICO, FWI) |
+| `warm_state_hour` | Hour of the day (UTC) at which a snapshot is saved | `0` |
+| `warm_state_lag_days` | How many days before the run date the snapshot to start from is | `1` |
+| `output_time_resolution` | Hours between two written outputs, counted from the run date | required for RISICO; `24` for FWI |
+| `output_time_offset` | FWI only: hours from the run date of the first daily output | `0` |
+| `output_types` | The outputs, [below](#outputs) | required |
 
-NetCDF snapshots store every state field as a georeferenced `y, x` grid. The files
-include longitude and latitude coordinate axes, EPSG and affine-transform metadata,
-and fill values outside the active domain. On load, state is sampled onto the
-configured domain with nearest-neighbour sampling, so a snapshot can survive a
-compatible grid-resolution change. A target active cell that maps outside the
-snapshot or onto a fill pixel makes that snapshot invalid. Snapshots are also
-validated against the model version, written through a temporary file, and
-atomically renamed. A run with no valid NetCDF snapshot follows `on_missing`
-directly: `defaults` seeds the run with default state, `error` stops the run.
-There is no automatic fallback to a legacy text state; convert existing legacy
-warm state once with `warm-state-converter` (below) before switching a
-deployment over.
+The other indices take `cells_file_path` (their cells, see
+[Input Data](input-data.md#cell-files-for-the-other-indices)) instead of `static_data`, and
+`warm_state_path` (a file name prefix) instead of `warm_state` when they have a memory.
 
-FWI uses the same domain-mask and warm-state configuration, without the
-RISICO-specific layers:
+An FWI entry needs only the domain mask:
 
 ```yaml
-models:
   - type: FWI
-    model_name: FWIWORLD
-    model_version: legacy
+    model_name: FWI
+    model_version: cffdrs
     static_data:
       type: geotiff
-      domain_mask: /opt/risico/static/domain_mask.tif
+      domain_mask: static/domain_mask.tif
     warm_state:
       type: netcdf
-      directory: /opt/risico/state-nc
-      max_age_hours: 120
-      on_missing: error
-    warm_state_hour: 0
-    output_types: []
+      directory: state/FWI
+      on_missing: defaults
+    output_time_resolution: 24
+    output_time_offset: 12
+    output_types:
+      - ...
 ```
 
-FWI model versions:
+### Static data
 
-- `cffdrs`: the canonical daily Canadian FWI System (Van Wagner 1987; equations
-  and constants of the cffdrs R package, `src/lib/modules/fwi/cffdrs.rs`, tested
-  against its published fixtures). The daily step runs at each cell's local
-  *standard* noon (tzf-rs time zone, IANA rules, no DST), with
-  temperature, humidity and wind interpolated linearly between the input steps
-  around noon and the rain accumulated since the previous noon. The snapshot
-  keeps the codes and the rain accumulated since the last noon, so a restart is
-  exact. Write one map per day after the latest noon of the domain with
-  `output_time_resolution: 24` and `output_time_offset` (hours from the run
-  date, e.g. `12` for domains whose standard offsets are all >= 0).
-- `legacy`: the port used by FWI-ITALIA-ICON/IFS (civil-time noon, daily step
-  computed when the output is written; kept unchanged).
-- `sliding_window`: rolling 24 h windows.
+`static_data` lists the GeoTIFF layers described in [Input Data](input-data.md#static-data).
+`type` is always `geotiff`; `domain_mask` is required, the RISICO layers are required for
+RISICO, and the two PPF layers are optional but go together. The domain mask defines the grid
+the model computes on and the cells it computes.
 
-FWI snapshots preserve each cell's complete moisture/rain history as
-`history, y, x` grids plus a `history_count` grid. Legacy-model snapshots use one
-scalar observation per pixel, matching the deployed `rain ffmc dmc dc` warm-state
-representation. The fallback reader accepts both the current five-column history
-text format and the deployed four-column scalar format.
+### Warm state
 
-Existing legacy snapshots can be converted before cutover: see [Converting legacy data](conversion.md).
+| Key | Meaning | Default |
+|---|---|---|
+| `type` | Always `netcdf` | required |
+| `directory` | Directory of the snapshots; created if missing | required |
+| `max_age_hours` | Oldest snapshot accepted, in hours before the time searched | `120` |
+| `on_missing` | What to do when no snapshot is found: `error` stops the run, `defaults` starts from default values | `error` |
+
+A snapshot is saved at `warm_state_hour` of every day the run goes through, as
+`<directory>/RISICO_YYYYMMDDTHHMMSSZ.nc` (or `FWI_...`). Give each model its own directory.
+
+To start, a run looks for the snapshot at the run date minus `warm_state_lag_days`, plus
+`warm_state_hour`; if there is none, it takes the newest older one within `max_age_hours`.
+Snapshots record the model version and are rejected if it differs. They are NetCDF grids with
+latitude and longitude, so they can be opened like any output; when the static grid changes
+resolution, the state is resampled onto the new grid.
+
+Use `on_missing: defaults` for the first run of a new setup, then switch to `error` so that a
+broken chain stops instead of silently restarting from defaults.
 
 ## Outputs
 
-Each model lists its `output_types`: where to write, on which regular grid, in which format,
-and which variables (see [Fire danger indices](indices.md) for the variable names of each model).
-Values are combined over the native cells of each output pixel with `cluster_mode` (`Mean`, `Max`,
-`Min`, ...) and rounded to a multiple of 10<sup>`precision`</sup> (`-1` keeps one decimal).
+Each model lists any number of `output_types`. An output type is a set of variables written in
+one format, on one grid, into one directory:
 
 ```yaml
-    output_time_resolution: 1
     output_types:
-      - internal_name: RISICO2023
-        name: RISICO2023
-        path: /opt/risico/output
+      - internal_name: RISICO
+        name: RISICO
+        path: output/RISICO
         format: NETCDF
-        compression_level: 7
+        compression_level: 4
         grid:
-          nrows: 1200
-          ncols: 1378
-          min_lat: 35.139
-          max_lat: 47.427
-          min_lon: 5.975
-          max_lon: 20.085
+          nrows: 103
+          ncols: 274
+          min_lat: 43.704665
+          max_lat: 44.749078
+          min_lon: 7.403763
+          max_lon: 10.199103
         variables:
-          - internal_name: dffm
-            name: UMB
-            cluster_mode: Min
-            precision: -1
-          - internal_name: V
-            name: V
-            cluster_mode: Max
-            precision: 0
+          - { internal_name: dffm, name: dffm, cluster_mode: Mean, precision: -1 }
+          - { internal_name: V,    name: V,    cluster_mode: Max,  precision: 0 }
 ```
 
-The legacy `grid_path` (a `GRIDNROWS=` / `MINLAT=` text file) is still accepted in place of `grid`.
+| Key | Meaning |
+|---|---|
+| `internal_name`, `name` | Names of the output type, used in logs and file names |
+| `path` | Output directory, created if missing |
+| `format` | `NETCDF`, `GEOTIFF`, `ZARR`, `PNGWJSON` or `ZBIN`, [below](#formats) |
+| `compression_level` | `NETCDF`: deflate level 0–9; `ZARR`: zstd level 0–22. Default `7` |
+| `grid` | The output grid: `nrows` × `ncols` cell centres from `min_lat`/`min_lon` to `max_lat`/`max_lon`, both included |
+| `grid_path` | Instead of `grid`: a text grid file of the previous RISICO implementation |
+| `variables` | The variables to write |
 
-Output types are written as `ZBIN`, `NETCDF`, `ZARR`, `PNGWJSON` or `GEOTIFF`;
-any other `format` is a configuration error.
-`ZARR` writes one Zarr v3 store per variable (`<path>/<name>.zarr`) with the
-same `time`, `latitude` and `longitude` axes as the NetCDF output, one
-zstd-compressed chunk per timestamp, replacing any store left by an earlier
-run. Zarr stores take no global lock, so a timestamp's variables are
-compressed in parallel.
+Each variable has:
 
-NETCDF output types accept a `compression_level` (0 to 9, default 7); for
-`ZARR` the same key is the zstd level (0 to 22). NetCDF-4 files are written
-by the in-repo `nc4-stream` crate (`crates/nc4-stream`), a pure-Rust
-streaming writer: each timestamp's grid is shuffled and deflated on the
-thread that produced it and appended to the file as one chunk, so the
-variables of a timestamp compress in parallel and an open output file costs
-one chunk of memory however long the timeline is. The chunk index and the
-rest of the file metadata are written when the run ends, so output files
-are readable only after a run finishes or fails cleanly. The files have the
-same structure netcdf-c writes (unlimited `time`, one chunk per timestamp,
-dimension scales), so ncdump, xarray and GDAL read them as before.
+| Key | Meaning |
+|---|---|
+| `internal_name` | The model variable, as listed in [Fire Danger Indices](indices.md) |
+| `name` | Its name in the output files |
+| `cluster_mode` | How the model cells falling in one output pixel are combined: `Mean`, `Min` or `Max` |
+| `precision` | Values are rounded to a multiple of 10<sup>precision</sup>: `-1` keeps one decimal, `0` rounds to units, `1` to tens |
+
+The output grid does not have to match the model grid: a coarser grid aggregates cells with
+`cluster_mode`, which is how a 1 km run produces a 5 km map. Use the domain mask's own grid to
+write every cell.
+
+Outputs are written every `output_time_resolution` hours from the run date: `1` writes every
+hour, `24` once a day at the hour of the run date (shifted by `output_time_offset` for FWI).
+
+### Formats
+
+| `format` | What is written |
+|---|---|
+| `NETCDF` | One NetCDF-4 file per variable, `<path>/<name>.nc`, with `time`, `latitude` and `longitude` axes and one map per output time. Readable once the run has finished. |
+| `GEOTIFF` | One GeoTIFF per variable and output time |
+| `ZARR` | One Zarr v3 store per variable, `<path>/<name>.zarr`, same axes as NetCDF |
+| `PNGWJSON` | One coloured PNG image per variable and output time, with a JSON file describing its georeference, for web maps. Needs a palette per variable. |
+| `ZBIN` | The binary format of the previous RISICO implementation |
+
+### PNG palettes
+
+`PNGWJSON` outputs colour each variable with the palette named after the variable's `name`:
+
+```yaml
+palettes:
+  V: palettes/RISICO_V.pal
+  I: palettes/RISICO_I.pal
+```
+
+A palette file has one line per class: the lower bound of the class and the red, green, blue
+and alpha values (0–255), separated by tabs:
+
+```text
+-9999	200	200	200	0
+0	0	153	255	255
+68	0	128	0	255
+104	255	255	0	255
+```
+
+## Checking a configuration
+
+`streaming-inspect` reads a configuration and its static data and warm state and reports what a
+run would do, without reading weather or writing anything (see [CLI Usage](cli.md#streaming-inspect)).

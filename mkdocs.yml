@@ -23,10 +23,12 @@ nav:
   - Home: index.md
   - User Guide:
       - Getting Started: getting-started.md
-      - CLI Usage: cli.md
+      - How RISICO Works: concepts.md
+      - Input Data: input-data.md
       - Configuration: configuration.md
       - Fire Danger Indices: indices.md
-      - Tiled Streaming Execution: execution.md
+      - CLI Usage: cli.md
+      - Large Domains and Performance: execution.md
       - Converting Legacy Data: conversion.md
   - Developer Guide:
       - Programmatic Workflow: programmatic.md

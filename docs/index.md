@@ -4,41 +4,51 @@
   <p class="hero__lead">
     RISICO (<em>Rischio Incendi E Coordinamento</em>) is the wildfire danger forecasting model
     developed by <a href="https://www.cimafoundation.org" target="_blank" rel="noopener">CIMA Research Foundation</a>
-    and used operationally by the Italian Civil Protection. This Rust implementation runs RISICO, the Canadian
-    Fire Weather Index and eight more fire danger indices on gridded weather forecasts, from a single cell up
-    to continental domains.
+    and used operationally by the Italian Civil Protection. From a weather forecast and maps of
+    vegetation and terrain, it computes hour by hour how dry the vegetation is and how fast and
+    how intensely a fire would spread on every cell of a map.
   </p>
   <div class="hero__actions">
     <a class="md-button md-button--primary" href="demo/">Try it in your browser</a>
     <a class="md-button" href="getting-started/">Get started</a>
-    <a class="md-button" href="cli/">CLI usage</a>
+    <a class="md-button" href="concepts/">How it works</a>
     <a class="md-button" href="programmatic/">Developer guide</a>
     <a class="md-button" href="api/risico/index.html">API reference</a>
   </div>
 </div>
 
-## What's included
+## What you can do with it
 
-- **The RISICO model**: dead fine fuel moisture, rate of spread and fireline intensity on every cell,
-  driven by temperature, humidity, wind, rain and snow cover, with vegetation, slope and aspect from
-  static layers.
-- **More indices from the same inputs**: the Canadian FWI System, Keetch–Byram, McArthur Mark 5,
-  Angström, Fosberg, Nesterov, Sharples, Orieux and Hot–Dry–Windy (see [Fire danger indices](indices.md)).
-- **A streaming runner**: every model is processed in spatial tiles, timestamp by timestamp, so
-  memory stays bounded however large the domain ([Tiled streaming execution](execution.md)).
-- **Pure-Rust I/O**: NetCDF and legacy `zbin` inputs, NetCDF / GeoTIFF / Zarr / PNG outputs,
-  GeoTIFF static data and NetCDF warm state, with no native C libraries.
-- **A Rust library**: the models without the runner, to embed in other programs
-  ([Programmatic workflow](programmatic.md), [API reference](api-reference.md)).
-- **A WebAssembly build**: the same binary compiled for `wasm32-wasip1`, which powers the
-  [interactive demo](demo.md).
+- **Forecast fire danger** over a region or a country: run it every day on a weather forecast
+  and get maps of fuel moisture, rate of spread and fireline intensity for the coming days.
+- **Compare indices**: the same run computes the Canadian Fire Weather Index and eight more
+  indices used around the world (Keetch–Byram, McArthur Mark 5, Angström, Fosberg, Nesterov,
+  Sharples, Orieux, Hot–Dry–Windy). See [Fire Danger Indices](indices.md).
+- **Study past seasons**: run it on weather reanalyses or archived forecasts.
+- **Embed the models** in your own Rust program, without the files: see the
+  [Developer Guide](programmatic.md).
 
-## Typical workflow
+## What it is
 
-1. Prepare the static data as aligned GeoTIFF layers: a domain mask, slope, aspect and vegetation
-   (see [Configuration](configuration.md)).
-2. Write a `configuration.yml` listing the models, their warm-state directory and their outputs.
-3. Run `risico-2023 <run date> configuration.yml <input>` on a directory of NetCDF weather inputs
-   (or a list of legacy `zbin` files).
-4. Read the NetCDF (or GeoTIFF, Zarr, PNG) outputs; the warm state written at the configured hour
-   seeds the next day's run.
+`risico-2023` is the current implementation of RISICO, written in Rust:
+
+- one command-line program, with no external libraries to install;
+- NetCDF weather inputs and outputs, GeoTIFF land data, plus GeoTIFF, Zarr and PNG outputs;
+- domains of any size in bounded memory, from one cell to a continent
+  ([Large Domains and Performance](execution.md));
+- a Rust library with the models alone ([API reference](api-reference.md));
+- a WebAssembly build of the same program, which runs the [interactive demo](demo.md) in your
+  browser.
+
+The source code is on [GitHub](https://github.com/CIMAFoundation/risico-2023).
+
+## Where to start
+
+1. **See it**: the [interactive demo](demo.md) runs the real model on one cell or on a map of
+   Liguria, in your browser, with nothing to install.
+2. **Understand it**: [How RISICO Works](concepts.md) explains weather inputs, land data, warm
+   state and outputs.
+3. **Run it**: [Getting Started](getting-started.md) installs the program and runs it on the
+   sample data shipped with the repository.
+4. **Use your data**: [Input Data](input-data.md) and [Configuration](configuration.md)
+   describe how to set up your own domain.
