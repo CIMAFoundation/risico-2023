@@ -66,7 +66,9 @@ def main(start, end, path):
     with netCDF4.Dataset(path, "w", format="NETCDF4") as ds:
         ds.Conventions = "CF-1.8"
         ds.title = f"risico-2023 demo sample weather, Liguria, {start} to {end}"
-        ds.source = "Open-Meteo historical forecast API (https://open-meteo.com), CC BY 4.0"
+        ds.source = "Open-Meteo historical forecast API, https://open-meteo.com"
+        ds.attribution = "Weather data by Open-Meteo.com (https://open-meteo.com)"
+        ds.license = "CC BY 4.0 (https://creativecommons.org/licenses/by/4.0/)"
         ds.createDimension("time", None)
         ds.createDimension("y", ny)
         ds.createDimension("x", nx)

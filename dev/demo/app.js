@@ -266,9 +266,19 @@ for (const prefix of ['lv', 'mp']) {
   update();
 }
 
+const WEATHER_ATTRIBUTION = 'Weather data by <a href="https://open-meteo.com" target="_blank" rel="noopener">Open-Meteo.com</a> (<a href="https://creativecommons.org/licenses/by/4.0/" target="_blank" rel="noopener">CC BY 4.0</a>)';
+
 function setMode(mode) {
   if (state.running) return;
   state.mode = mode;
+  // Open-Meteo weather (sample or live) is shown in modes 2 and 3
+  // (Leaflet counts additions, so add and remove only on a change)
+  const showWeather = mode !== 'scenario';
+  if (showWeather !== state.weatherAttribution) {
+    if (showWeather) map.attributionControl.addAttribution(WEATHER_ATTRIBUTION);
+    else map.attributionControl.removeAttribution(WEATHER_ATTRIBUTION);
+    state.weatherAttribution = showWeather;
+  }
   for (const tab of document.querySelectorAll('.tab')) tab.setAttribute('aria-selected', String(tab.dataset.mode === mode));
   for (const box of document.querySelectorAll('.controls')) box.classList.toggle('visible', box.dataset.for === mode);
   $('run').textContent = mode === 'map' ? 'Run RISICO + FWI over Liguria' : 'Run all indices for this cell';

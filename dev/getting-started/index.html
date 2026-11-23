@@ -926,8 +926,11 @@ under <code>state/</code>. Run it again with a later date, for example <code>202
 from the warm state saved on that day. The same files are online: the
 <a href="../demo/data/sample/input/weather-2025-07.nc">weather input</a> and the
 <a href="../demo/data/sample/configuration.yml">configuration</a>.</p>
-<p>The weather comes from the <a href="https://open-meteo.com">Open-Meteo</a> historical forecast archive
-(CC BY 4.0); <code>docs/demo/tools/make_sample_weather.py</code> rebuilds it for any period.</p>
+<p>The weather comes from the Open-Meteo historical forecast archive: weather data by
+<a href="https://open-meteo.com">Open-Meteo.com</a>, licensed under
+<a href="https://creativecommons.org/licenses/by/4.0/">CC BY 4.0</a>; the file carries the same attribution
+in its <code>attribution</code> and <code>license</code> attributes. <code>docs/demo/tools/make_sample_weather.py</code> rebuilds it
+for any period.</p>
 <h3 id="netcdf-inputs">NetCDF inputs<a class="headerlink" href="#netcdf-inputs" title="Permanent link">&para;</a></h3>
 <p>Every <code>.nc</code> file in the input directory is inspected. By default a file provides <code>latitude</code> and
 <code>longitude</code> on two dimensions, a <code>time</code> axis and any of the input variables below, named as in the
