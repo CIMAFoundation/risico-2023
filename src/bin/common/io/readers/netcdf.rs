@@ -376,7 +376,10 @@ impl NetCdfInputHandler {
     fn open_file(&self, path: &str) -> Result<Arc<NcFile>, Box<dyn Error>> {
         const KEEP_OPEN: usize = 8;
         {
-            let mut files = self.open_files.lock().expect("NetCDF file cache lock is poisoned");
+            let mut files = self
+                .open_files
+                .lock()
+                .expect("NetCDF file cache lock is poisoned");
             if let Some(position) = files.iter().position(|(open, _)| open == path) {
                 let entry = files.remove(position);
                 let file = entry.1.clone();
@@ -385,7 +388,10 @@ impl NetCdfInputHandler {
             }
         }
         let file = Arc::new(crate::common::io::open_netcdf(path)?);
-        let mut files = self.open_files.lock().expect("NetCDF file cache lock is poisoned");
+        let mut files = self
+            .open_files
+            .lock()
+            .expect("NetCDF file cache lock is poisoned");
         if !files.iter().any(|(open, _)| open == path) {
             files.push((path.to_string(), file.clone()));
             if files.len() > KEEP_OPEN {
@@ -395,7 +401,12 @@ impl NetCdfInputHandler {
         Ok(file)
     }
 
-    fn read_variable(&self, path: &str, variable: &str, time_index: usize) -> Result<Array1<f32>, Box<dyn Error>> {
+    fn read_variable(
+        &self,
+        path: &str,
+        variable: &str,
+        time_index: usize,
+    ) -> Result<Array1<f32>, Box<dyn Error>> {
         let file = self.open_file(path)?;
         read_variable_from_file(&file, variable, time_index)
     }
@@ -476,7 +487,9 @@ impl InputHandler for NetCdfInputHandler {
                 .cloned();
             let values = match values {
                 Some(values) => Ok(values),
-                None => self.read_variable(&record.file, variable, time_index).map(Arc::new),
+                None => self
+                    .read_variable(&record.file, variable, time_index)
+                    .map(Arc::new),
             };
 
             match values {
