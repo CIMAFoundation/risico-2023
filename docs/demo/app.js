@@ -735,6 +735,7 @@ async function openMapResult(outputs, outputGrid, weatherTimes) {
   $('map-time').oninput = () => showMapFrame();
   select.value = order.includes('RISICO/V') ? 'RISICO/V' : order[0];
   select.onchange();
+  map.fitBounds([[outputGrid.min_lat, outputGrid.min_lon], [outputGrid.max_lat, outputGrid.max_lon]]);
 }
 
 let frameToken = 0;
