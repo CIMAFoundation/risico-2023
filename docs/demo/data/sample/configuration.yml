@@ -1,0 +1,73 @@
+# Sample configuration: RISICO and FWI on the Liguria cut-out with the
+# July 2025 sample weather. Run from this directory:
+#
+#   risico-2023 202507010000 configuration.yml input/
+#
+# Outputs go to output/, warm states to state/ (both created on demand).
+models:
+  - type: RISICO
+    model_name: RISICO
+    model_version: v2025
+    static_data:
+      type: geotiff
+      domain_mask: ../static/domain_mask.tif
+      slope: ../static/slope.tif
+      aspect: ../static/aspect.tif
+      vegetation_id: ../static/vegetation_id.tif
+      vegetation_catalog: ../static/p_vegetazione.csv
+      ppf_summer: ../static/ppf_summer.tif
+      ppf_winter: ../static/ppf_winter.tif
+    warm_state:
+      type: netcdf
+      directory: state/RISICO
+      on_missing: defaults
+    warm_state_hour: 0
+    output_time_resolution: 1
+    output_types:
+      - internal_name: RISICO
+        name: RISICO
+        path: output/RISICO
+        format: NETCDF
+        compression_level: 4
+        grid: &grid
+          nrows: 103
+          ncols: 274
+          min_lat: 43.704665
+          max_lat: 44.749078
+          min_lon: 7.403763
+          max_lon: 10.199103
+        variables:
+          - { internal_name: dffm, name: dffm, cluster_mode: Mean, precision: -1 }
+          - { internal_name: V, name: V, cluster_mode: Mean, precision: 0 }
+          - { internal_name: I, name: I, cluster_mode: Mean, precision: 0 }
+          - { internal_name: temperature, name: T, cluster_mode: Mean, precision: -1 }
+          - { internal_name: humidity, name: H, cluster_mode: Mean, precision: 0 }
+          - { internal_name: windSpeed, name: WS, cluster_mode: Mean, precision: -1 }
+          - { internal_name: rain, name: P, cluster_mode: Mean, precision: -1 }
+  - type: FWI
+    model_name: FWI
+    model_version: legacy
+    static_data:
+      type: geotiff
+      domain_mask: ../static/domain_mask.tif
+    warm_state:
+      type: netcdf
+      directory: state/FWI
+      on_missing: defaults
+    warm_state_hour: 0
+    output_time_resolution: 24
+    output_types:
+      - internal_name: FWI
+        name: FWI
+        path: output/FWI
+        format: NETCDF
+        compression_level: 4
+        grid: *grid
+        variables:
+          - { internal_name: ffmc, name: ffmc, cluster_mode: Mean, precision: -1 }
+          - { internal_name: dmc, name: dmc, cluster_mode: Mean, precision: -1 }
+          - { internal_name: dc, name: dc, cluster_mode: Mean, precision: -1 }
+          - { internal_name: isi, name: isi, cluster_mode: Mean, precision: -1 }
+          - { internal_name: bui, name: bui, cluster_mode: Mean, precision: -1 }
+          - { internal_name: fwi, name: fwi, cluster_mode: Mean, precision: -1 }
+palettes: {}

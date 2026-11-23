@@ -257,6 +257,15 @@ for (const input of document.querySelectorAll('input[type="range"]')) {
   $('sc-start').value = start.toISOString().slice(0, 10);
 }
 
+for (const prefix of ['lv', 'mp']) {
+  const select = $(`${prefix}-source`);
+  const update = () => {
+    for (const box of select.closest('.controls').querySelectorAll('[data-source]')) box.hidden = box.dataset.source !== select.value;
+  };
+  select.addEventListener('change', update);
+  update();
+}
+
 function setMode(mode) {
   if (state.running) return;
   state.mode = mode;
@@ -398,6 +407,8 @@ function addChart(container, { title, note, times, series, nowLine }) {
         size: 50,
         label: series.find((s) => (s.scale ?? 'y') === scale).unit,
         labelSize: 18,
+        // English number format whatever the browser's language
+        values: (u, splits) => splits.map((v) => (v == null ? '' : v.toLocaleString('en'))),
       })),
     ],
     series: [
@@ -571,6 +582,77 @@ async function runCell(weather, overrides, { nowLine } = {}) {
   setStatus(`${CELL_MODELS.length} models × ${weather.times.length} hours in ${result.seconds.toFixed(1)} s · wasm memory ${(result.memoryBytes / 2 ** 20).toFixed(0)} MB${result.exitCode ? ' · some models failed, see the log' : ''}`, !!result.exitCode);
 }
 
+// ------------------------------------------------------- sample weather ---
+
+// Hourly weather of July 2025 on the 0.125° grid over the domain, bundled as
+// a risico-2023 NetCDF input (see docs/demo/tools/make_sample_weather.py).
+const SAMPLE_URL = new URL('sample/input/weather-2025-07.nc', DATA).href;
+const SAMPLE_START = Date.UTC(2025, 6, 1) / 1000;
+const WEATHER_NAMES = ['T', 'H', 'W', 'D', 'P', 'SNOW'];
+
+async function loadSample() {
+  if (state.sample) return state.sample;
+  setStatus('Loading the July 2025 sample weather…');
+  const response = await fetch(SAMPLE_URL);
+  if (!response.ok) throw new Error(`Could not load the sample weather (${response.status})`);
+  const handle = await openNetcdf(new Uint8Array(await response.arrayBuffer()));
+  try {
+    const [ny, nx] = handle.file.get('latitude').shape;
+    const lat2d = handle.file.get('latitude').value;
+    const lon2d = handle.file.get('longitude').value;
+    state.sample = {
+      lats: Array.from({ length: ny }, (_, y) => lat2d[y * nx]),
+      lons: Array.from({ length: nx }, (_, x) => lon2d[x]),
+      times: toNumbers(handle.file.get('time').value),
+      variables: Object.fromEntries(WEATHER_NAMES.map((name) => [name, Float32Array.from(handle.file.get(name).value)])),
+    };
+  } finally {
+    closeNetcdf(handle);
+  }
+  return state.sample;
+}
+
+/** The sample's hours from July `fromDay` for `days` days, on the whole grid. */
+async function sampleWindow(fromDay, days) {
+  const sample = await loadSample();
+  const start = SAMPLE_START + (fromDay - 1) * 86400;
+  const first = sample.times.findIndex((t) => t >= start);
+  let last = sample.times.findIndex((t) => t >= start + days * 86400);
+  if (last < 0) last = sample.times.length;
+  const size = sample.lats.length * sample.lons.length;
+  return {
+    lats: sample.lats,
+    lons: sample.lons,
+    times: sample.times.slice(first, last),
+    variables: Object.fromEntries(WEATHER_NAMES.map((name) => [name, sample.variables[name].slice(first * size, last * size)])),
+  };
+}
+
+/** One cell's series from a gridded window: bilinear, wind through u/v. */
+function cellSeries(window, lat, lon) {
+  const { lats, lons, times, variables } = window;
+  const ny = lats.length, nx = lons.length;
+  const fy = Math.min(ny - 1.000001, Math.max(0, (lat - lats[0]) / (lats[ny - 1] - lats[0]) * (ny - 1)));
+  const fx = Math.min(nx - 1.000001, Math.max(0, (lon - lons[0]) / (lons[nx - 1] - lons[0]) * (nx - 1)));
+  const y0 = Math.floor(fy), x0 = Math.floor(fx), wy = fy - y0, wx = fx - x0;
+  const weights = [[y0, x0, (1 - wy) * (1 - wx)], [y0, x0 + 1, (1 - wy) * wx], [y0 + 1, x0, wy * (1 - wx)], [y0 + 1, x0 + 1, wy * wx]];
+  const at = (series, t) => weights.reduce((sum, [y, x, w]) => sum + w * series[t * ny * nx + y * nx + x], 0);
+  const rad = Math.PI / 180;
+  const out = { T: [], H: [], W: [], D: [], P: [], SNOW: [] };
+  for (let t = 0; t < times.length; t++) {
+    for (const name of ['T', 'H', 'P', 'SNOW']) out[name].push(at(variables[name], t));
+    let u = 0, v = 0;
+    for (const [y, x, w] of weights) {
+      const i = t * ny * nx + y * nx + x;
+      u -= w * variables.W[i] * Math.sin(variables.D[i] * rad);
+      v -= w * variables.W[i] * Math.cos(variables.D[i] * rad);
+    }
+    out.W.push(Math.hypot(u, v));
+    out.D.push((Math.atan2(-u, -v) / rad + 360) % 360);
+  }
+  return { times, variables: out };
+}
+
 // ------------------------------------------------------------- map mode ---
 
 // Open-Meteo counts every location as a call (600 a minute on the free
@@ -661,17 +743,22 @@ function griddedWeather({ ny, nx, nodeOf }, { times, values }) {
 
 async function runMap() {
   const { grid, layers, active, catalog } = state.statics;
-  const nodes = weatherNodes();
-  setStatus(`Fetching weather for ${nodes.points.length} grid points…`);
-  const fetched = await fetchPoints(nodes.points, {
-    pastDays: +$('mp-past').value,
-    forecastDays: +$('mp-fc').value,
-    onProgress: (done, total) => setStatus(`Fetching weather: ${done} / ${total} grid points`),
-    onWait: (seconds) => setStatus(`Open-Meteo rate limit reached: retrying in ${seconds} s…`),
-  });
-  setStatus('Interpolating the weather to 0.125°…');
-  await new Promise((r) => setTimeout(r, 0));
-  const weather = griddedWeather(nodes, fetched);
+  let weather;
+  if ($('mp-source').value === 'sample') {
+    weather = await sampleWindow(+$('mp-from').value, +$('mp-days').value);
+  } else {
+    const nodes = weatherNodes();
+    setStatus(`Fetching weather for ${nodes.points.length} grid points…`);
+    const fetched = await fetchPoints(nodes.points, {
+      pastDays: +$('mp-past').value,
+      forecastDays: +$('mp-fc').value,
+      onProgress: (done, total) => setStatus(`Fetching weather: ${done} / ${total} grid points`),
+      onWait: (seconds) => setStatus(`Open-Meteo rate limit reached: retrying in ${seconds} s…`),
+    });
+    setStatus('Interpolating the weather to 0.125°…');
+    await new Promise((r) => setTimeout(r, 0));
+    weather = griddedWeather(nodes, fetched);
+  }
   const mask = new Float32Array(active.length);
   active.forEach((a, i) => { mask[i] = a; });
   const b = staticBounds(grid);
@@ -694,7 +781,7 @@ async function runMap() {
   const result = await runModel(run, { totalSteps: weather.times.length * MAP_MODELS.length, onPhase: setStatus });
   if (result.exitCode !== 0) log(`risico-2023 exited with ${result.exitCode}`);
   setStatus('Opening the NetCDF outputs…');
-  await openMapResult(result.outputs, outputGrid, fetched.times);
+  await openMapResult(result.outputs, outputGrid, weather.times);
   setStatus(`2 models × ${weather.times.length} hours × ${active.reduce((n, a) => n + a, 0).toLocaleString('en')} cells in ${result.seconds.toFixed(0)} s · wasm memory ${(result.memoryBytes / 2 ** 20).toFixed(0)} MB`, !!result.exitCode);
 }
 
@@ -731,7 +818,12 @@ async function openMapResult(outputs, outputGrid, weatherTimes) {
     const slider = $('map-time');
     slider.max = entry.times.length - 1;
     const upcoming = entry.times.findIndex((t) => t >= now);
-    slider.value = upcoming >= 0 ? upcoming : entry.times.length - 1;
+    // a past period (the sample) opens on the last early afternoon, when danger peaks
+    let afternoon = entry.times.length - 1;
+    const hourOf = (i) => new Date(entry.times[i] * 1000).getUTCHours();
+    while (afternoon >= 0 && (hourOf(afternoon) < 12 || hourOf(afternoon) > 15)) afternoon--;
+    if (afternoon < 0) afternoon = entry.times.length - 1; // daily outputs
+    slider.value = upcoming >= 0 ? upcoming : afternoon;
     showMapFrame();
   };
   $('map-time').oninput = () => showMapFrame();
@@ -806,11 +898,18 @@ function mapPixelSeries(latlng) {
     legend: { show: false },
     series: [{}, { stroke: '#dd7600', width: 1.75, points: { show: false } }],
   };
-  L.popup({ minWidth: 310, maxWidth: 340 }).setLatLng(latlng).setContent(box).openOn(map);
   const title = document.createElement('strong');
   title.textContent = `${MAP_LABELS[key]} (${entry.units}) at ${latlng.lat.toFixed(2)}°, ${latlng.lng.toFixed(2)}°`;
   box.append(title);
   new uPlot(opts, [entry.times, values], box);
+  const popup = L.popup({ minWidth: 310, maxWidth: 340 }).setLatLng(latlng).setContent(box).openOn(map);
+  // keep the whole popup inside the map, once it is laid out
+  requestAnimationFrame(() => {
+    const element = popup.getElement();
+    if (!element) return;
+    const overflow = map.getContainer().getBoundingClientRect().top + 8 - element.getBoundingClientRect().top;
+    if (overflow > 0) map.panBy([0, -overflow]);
+  });
 }
 
 // ------------------------------------------------------------------ run ---
@@ -829,6 +928,9 @@ $('run').addEventListener('click', async () => {
       await runCell(syntheticWeather(), {
         vegetationId: +$('sc-veg').value, slope: +$('sc-slope').value, aspect: +$('sc-aspect').value,
       });
+    } else if (state.mode === 'live' && $('lv-source').value === 'sample') {
+      const window = await sampleWindow(+$('lv-from').value, +$('lv-days').value);
+      await runCell(cellSeries(window, state.cell.lat, state.cell.lon), {});
     } else if (state.mode === 'live') {
       setStatus('Fetching weather from Open-Meteo…');
       const weather = await fetchCell(state.cell.lat, state.cell.lon, { pastDays: +$('lv-past').value, forecastDays: +$('lv-fc').value });

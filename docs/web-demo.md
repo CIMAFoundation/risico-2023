@@ -42,7 +42,9 @@ buffer, which cut the time spent writing outputs by a factor of five on a run ov
 The static layers the page loads (`docs/demo/data/static/`) are a cut-out of the 1 km Italian domain
 around Liguria (7.40–10.20 °E, 43.70–44.75 °N, 274 × 103 cells): domain mask, slope, aspect,
 vegetation id, PPF and the vegetation catalogue, plus the colour palettes in `docs/demo/data/palettes/`.
-The page reads whatever grid the layers define, so a larger domain only needs other files; for one
+`docs/demo/data/sample/` holds the July 2025 weather the page uses by default (a NetCDF input,
+rebuilt by `docs/demo/tools/make_sample_weather.py`) and a configuration to run it with the
+command-line model. The page reads whatever grid the layers define, so a larger domain only needs other files; for one
 the size of Italy (317 000 cells) set a coarser Open-Meteo grid (`COARSE`, `REFINE` in `app.js`) and
 expect about a minute and 1.1 GB of browser memory.
 

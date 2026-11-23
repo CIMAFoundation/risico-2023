@@ -35,6 +35,37 @@ The executable takes a run date, a configuration file, and an input source:
 The input source is either a directory containing NetCDF inputs or a text file listing legacy
 `.zbin` inputs.
 
+### Try it with the sample data
+
+The repository ships a small, ready-to-run case under `docs/demo/data/`: the static layers of a
+1 km cut-out of the Italian domain around Liguria, one month of hourly weather (July 2025) as a
+NetCDF input on the same area, and a configuration that runs RISICO and FWI on them:
+
+```text
+docs/demo/data/
+├── static/                    domain mask, slope, aspect, vegetation id, PPF, vegetation catalogue
+└── sample/
+    ├── configuration.yml      RISICO (hourly) and FWI (daily), NetCDF outputs
+    └── input/
+        └── weather-2025-07.nc T, H, W, D, P, SNOW on a 0.125° grid, 744 hours
+```
+
+```bash
+cargo build --release --bin risico-2023
+cd docs/demo/data/sample
+../../../../target/release/risico-2023 202507010000 configuration.yml input/
+```
+
+The run starts from default moisture (`on_missing: defaults`), takes about 20 seconds and writes
+one NetCDF file per variable under `output/RISICO/` and `output/FWI/`, and the daily warm state
+under `state/`. Run it again with a later date, for example `202507150000`, and each model starts
+from the warm state saved on that day. The same files are online: the
+[weather input](demo/data/sample/input/weather-2025-07.nc) and the
+[configuration](demo/data/sample/configuration.yml).
+
+The weather comes from the [Open-Meteo](https://open-meteo.com) historical forecast archive
+(CC BY 4.0); `docs/demo/tools/make_sample_weather.py` rebuilds it for any period.
+
 ### NetCDF inputs
 
 Every `.nc` file in the input directory is inspected. By default a file provides `latitude` and

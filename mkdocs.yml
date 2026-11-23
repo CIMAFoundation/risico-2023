@@ -7,6 +7,7 @@ repo_name: CIMAFoundation/risico-2023
 theme:
   name: material
   logo: img/cima.png
+  language: en
   features:
     - navigation.sections
     - navigation.indexes
