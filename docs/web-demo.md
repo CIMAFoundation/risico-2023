@@ -37,11 +37,14 @@ The WASI build is the same program with a few platform switches:
 
 The outputs are the binary's own NetCDF-4 files, read with [h5wasm](https://github.com/usnistgov/h5wasm).
 The shim grows a file by reallocating it on every write; `runner.js` replaces that with a doubling
-buffer, which cut the time spent writing outputs by a factor of five on the Italy run.
+buffer, which cut the time spent writing outputs by a factor of five on a run over the whole of Italy.
 
-The static layers the page loads (`docs/demo/data/static/`) are the 1 km Italian domain: domain mask,
-slope, aspect, vegetation id, PPF and the vegetation catalogue, plus the colour palettes in
-`docs/demo/data/palettes/`.
+The static layers the page loads (`docs/demo/data/static/`) are a cut-out of the 1 km Italian domain
+around Liguria (7.40–10.20 °E, 43.70–44.75 °N, 274 × 103 cells): domain mask, slope, aspect,
+vegetation id, PPF and the vegetation catalogue, plus the colour palettes in `docs/demo/data/palettes/`.
+The page reads whatever grid the layers define, so a larger domain only needs other files; for one
+the size of Italy (317 000 cells) set a coarser Open-Meteo grid (`COARSE`, `REFINE` in `app.js`) and
+expect about a minute and 1.1 GB of browser memory.
 
 ## Testing locally
 

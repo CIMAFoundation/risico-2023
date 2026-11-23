@@ -118,7 +118,7 @@ const colorAt = (stops, value) => {
 
 // ------------------------------------------------------------------ map ---
 
-const map = L.map('map', { zoomSnap: 0.25, attributionControl: true }).setView([41.9, 12.6], 5.5);
+const map = L.map('map', { zoomSnap: 0.25, attributionControl: true }).setView([44.2, 8.8], 8);
 L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
   maxZoom: 13,
   attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
@@ -262,7 +262,7 @@ function setMode(mode) {
   state.mode = mode;
   for (const tab of document.querySelectorAll('.tab')) tab.setAttribute('aria-selected', String(tab.dataset.mode === mode));
   for (const box of document.querySelectorAll('.controls')) box.classList.toggle('visible', box.dataset.for === mode);
-  $('run').textContent = mode === 'map' ? 'Run RISICO + FWI over Italy' : 'Run all indices for this cell';
+  $('run').textContent = mode === 'map' ? 'Run RISICO + FWI over Liguria' : 'Run all indices for this cell';
   if (mode === 'map' && state.mapResult) showMapFrame();
   else if (state.statics) showVegetation();
 }
@@ -574,9 +574,11 @@ async function runCell(weather, overrides, { nowLine } = {}) {
 // ------------------------------------------------------------- map mode ---
 
 // Open-Meteo counts every location as a call (600 a minute on the free
-// tier), so the weather is requested on a 0.5° grid and interpolated.
-const COARSE = { south: 35.0, north: 47.5, west: 6.0, east: 19.5, step: 0.5 };
-const REFINE = 4; // 0.5° / 4 = 0.125°
+// tier). The Liguria domain needs about 200 nodes at 0.125°, the grid the
+// model weather is written on; REFINE > 1 would request a coarser grid and
+// interpolate it, for larger domains.
+const COARSE = { south: 43.5, north: 45.0, west: 7.25, east: 10.5, step: 0.125 };
+const REFINE = 1;
 
 function weatherNodes() {
   const { grid, active } = state.statics;
@@ -686,7 +688,7 @@ async function runMap() {
     outputGrid,
     weather,
     models: MAP_MODELS,
-    outputEveryHours: 3,
+    outputEveryHours: 1,
     outputs: MAP_OUTPUTS,
   });
   const result = await runModel(run, { totalSteps: weather.times.length * MAP_MODELS.length, onPhase: setStatus });

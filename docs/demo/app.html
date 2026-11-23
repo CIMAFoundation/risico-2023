@@ -161,7 +161,7 @@
   <nav class="tabs" role="tablist">
     <button class="tab" role="tab" data-mode="scenario" aria-selected="true">1 · One cell, your weather<small>no data to download</small></button>
     <button class="tab" role="tab" data-mode="live" aria-selected="false">2 · One cell, real weather<small>Open-Meteo analysis + forecast</small></button>
-    <button class="tab" role="tab" data-mode="map" aria-selected="false">3 · Italy at 1 km<small>Open-Meteo, 317 000 cells</small></button>
+    <button class="tab" role="tab" data-mode="map" aria-selected="false">3 · Liguria at 1 km<small>Open-Meteo, 16 000 cells</small></button>
   </nav>
 
   <div class="main">
@@ -213,9 +213,8 @@
       <div class="controls" data-for="map">
         <label class="field">Spin-up (past days) <output id="mp-past-v"></output><input type="range" id="mp-past" min="1" max="5" value="2" /></label>
         <label class="field">Forecast days <output id="mp-fc-v"></output><input type="range" id="mp-fc" min="1" max="4" value="3" /></label>
-        <p class="note">RISICO and FWI on every 1 km cell of the Italian domain, with weather sampled from
-          Open-Meteo on a 0.5° grid and interpolated to 0.125°. Maps every 3 hours. Expect a couple of
-          minutes and about 1.5 GB of memory: a desktop browser is recommended.</p>
+        <p class="note">RISICO and FWI on every 1 km cell of a Liguria cut-out of the Italian domain, with
+          hourly Open-Meteo weather on a 0.125° grid. Hourly maps; the run takes about half a minute.</p>
       </div>
 
       <button class="run" id="run">Run RISICO</button>
