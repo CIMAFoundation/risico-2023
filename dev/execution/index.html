@@ -11,7 +11,7 @@
       
       
       
-        <link rel="prev" href="../indices/">
+        <link rel="prev" href="../cli/">
       
       
         <link rel="next" href="../conversion/">
@@ -25,7 +25,7 @@
     
     
       
-        <title>Tiled Streaming Execution - RISICO</title>
+        <title>Large Domains and Performance - RISICO</title>
       
     
     
@@ -68,7 +68,7 @@
     <div data-md-component="skip">
       
         
-        <a href="#tiled-streaming-execution" class="md-skip">
+        <a href="#large-domains-and-performance" class="md-skip">
           Skip to content
         </a>
       
@@ -107,7 +107,7 @@
         <div class="md-header__topic" data-md-component="header-topic">
           <span class="md-ellipsis">
             
-              Tiled Streaming Execution
+              Large Domains and Performance
             
           </span>
         </div>
@@ -269,6 +269,10 @@
       
         
       
+        
+      
+        
+      
     
     
     
@@ -349,14 +353,42 @@
   
   
     <li class="md-nav__item">
-      <a href="../cli/" class="md-nav__link">
+      <a href="../concepts/" class="md-nav__link">
         
   
   
   <span class="md-ellipsis">
     
   
-    CLI Usage
+    How RISICO Works
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../input-data/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Input Data
   
 
     
@@ -430,6 +462,34 @@
                 
   
   
+  
+  
+    <li class="md-nav__item">
+      <a href="../cli/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    CLI Usage
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
     
   
   
@@ -449,7 +509,7 @@
   <span class="md-ellipsis">
     
   
-    Tiled Streaming Execution
+    Large Domains and Performance
   
 
     
@@ -467,7 +527,7 @@
   <span class="md-ellipsis">
     
   
-    Tiled Streaming Execution
+    Large Domains and Performance
   
 
     
@@ -493,10 +553,10 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
-  <a href="#pipeline" class="md-nav__link">
+  <a href="#how-a-run-is-organised" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Pipeline
+        How a run is organised
       
     </span>
   </a>
@@ -508,17 +568,6 @@
     <span class="md-ellipsis">
       
         Configuration
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#running" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Running
       
     </span>
   </a>
@@ -796,10 +845,10 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
-  <a href="#pipeline" class="md-nav__link">
+  <a href="#how-a-run-is-organised" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Pipeline
+        How a run is organised
       
     </span>
   </a>
@@ -811,17 +860,6 @@
     <span class="md-ellipsis">
       
         Configuration
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#running" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Running
       
     </span>
   </a>
@@ -870,13 +908,15 @@
   
 
 
-<h1 id="tiled-streaming-execution">Tiled Streaming Execution<a class="headerlink" href="#tiled-streaming-execution" title="Permanent link">&para;</a></h1>
-<p>Tiled streaming is the only production execution path. The former
-whole-domain <code>run_*</code> loops and the runtime <code>enabled</code> switch have been removed.
-The same runner is used by RISICO, FWI, Mark5, KBDI, Angstrom, Fosberg,
-Nesterov, Sharples, Orieux, and HDW.</p>
-<h2 id="pipeline">Pipeline<a class="headerlink" href="#pipeline" title="Permanent link">&para;</a></h2>
-<p>For each configured model, execution proceeds as follows:</p>
+<h1 id="large-domains-and-performance">Large Domains and Performance<a class="headerlink" href="#large-domains-and-performance" title="Permanent link">&para;</a></h1>
+<p><code>risico-2023</code> runs domains of any size, from a few cells to a continent, in bounded memory.
+The defaults suit most runs; this page explains how a run is organised and how to tune it when
+the domain is large or the machine is small.</p>
+<h2 id="how-a-run-is-organised">How a run is organised<a class="headerlink" href="#how-a-run-is-organised" title="Permanent link">&para;</a></h2>
+<p>A run never holds the whole domain's time series in memory. It splits the domain into
+rectangular <strong>tiles</strong> and goes through the weather one timestamp at a time; at each timestamp
+it steps every tile, then writes that timestamp's outputs. Every model uses the same runner.</p>
+<p>In detail, for each configured model:</p>
 <ol>
 <li>Build a spatial tile plan, gather every tile's immutable properties once,
    seed every tile's live state from the warm state, and register each tile's
@@ -896,7 +936,7 @@ Nesterov, Sharples, Orieux, and HDW.</p>
    Independent output variables may be postprocessed in parallel, and the
    whole step may run in the background while the next timestamp is stepped.</li>
 <li>Assemble any scheduled warm-state records in canonical model-cell order and
-   write the configured legacy or NetCDF snapshot, in the same background
+   write the model's NetCDF (or, for the text-file indices, text) snapshot, in the same background
    step as the output.</li>
 </ol>
 <p>Raster-backed models use clipped rectangular windows and omit empty windows.
@@ -904,8 +944,8 @@ A window holding fewer than a quarter of a full tile's cells, as coastal and
 border windows do, is merged with a neighbour in its tile row, never beyond a
 full tile's worth of cells. Tiles are then ordered largest first so the
 work-stealing pool spends the tail of each timestep on the small ones.
-Models configured with legacy cell files use bounded batches in configured
-cell order. Both enter the same runner and model-adapter interface.</p>
+Models that read their cells from a text file use batches of cells in file
+order instead of windows. Both enter the same runner and model-adapter interface.</p>
 <p>Meteorological input grids may be regular or curvilinear. Curvilinear grids
 retain nearest-neighbour R-tree lookup. Because source meteorological fields
 are normally low resolution, each decoded source field is cached whole and
@@ -921,7 +961,7 @@ timestamp and then released. Scheduled warm-state
 records for the current timestamp are assembled in memory before the writer is
 called; native forecast output is the disk-backed portion of the pipeline.</p>
 <h2 id="configuration">Configuration<a class="headerlink" href="#configuration" title="Permanent link">&para;</a></h2>
-<p>The optional <code>streaming</code> section tunes the mandatory tiled runner:</p>
+<p>The optional top-level <code>streaming</code> section of the configuration tunes the runner:</p>
 <div class="highlight"><pre><span></span><code><span class="nt">streaming</span><span class="p">:</span>
 <span class="w">  </span><span class="nt">tile_height</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">1024</span>
 <span class="w">  </span><span class="nt">tile_width</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">1024</span>
@@ -931,8 +971,8 @@ called; native forecast output is the disk-backed portion of the pipeline.</p>
 <span class="w">  </span><span class="nt">overlap_postprocess</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">true</span>
 <span class="w">  </span><span class="nt">scratch_directory</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">/var/tmp/risico</span>
 </code></pre></div>
-<p>Defaults are <code>512 × 512</code> for raster tiles and 1,048,576 cells for legacy cell
-batches. <code>scratch_directory</code> defaults to a <code>risico-streaming</code> directory below
+<p>Defaults are <code>512 × 512</code> for raster tiles and 1,048,576 cells for batches of
+text-file cells. <code>scratch_directory</code> defaults to a <code>risico-streaming</code> directory below
 the operating system's temporary directory. Tile dimensions and
 <code>cells_per_tile</code> must be greater than zero.</p>
 <p><code>max_memory</code> (for example <code>6GB</code> or <code>768 MiB</code>) is a target peak resident size.
@@ -964,24 +1004,11 @@ a configuration without running it.</p>
 clustering, precision rounding, and encoding happen only during the
 postprocessing stage.</p>
 <p>See <a href="../configuration/#outputs">Configuration</a> for the output formats.</p>
-<p>NetCDF input files and warm-state snapshots are read with the pure-Rust
-<code>netcdf-reader</code> crate and snapshots are written with <code>nc4-stream</code>, so the
-build needs neither libnetcdf nor libhdf5.</p>
 <p>Allow scratch capacity for approximately four bytes multiplied by active model
 cells and configured native variables, plus, when the state is on disk, the
 serialized live-state checkpoints and filesystem overhead. An output timestamp is held on disk
 only until it is postprocessed and removed; with <code>overlap_postprocess</code> that
 can be two timestamps at once.</p>
-<h2 id="running">Running<a class="headerlink" href="#running" title="Permanent link">&para;</a></h2>
-<p>Run a configuration directly with:</p>
-<div class="highlight"><pre><span></span><code><span class="go">./target/release/risico-2023 \</span>
-<span class="go">  202607230000 \</span>
-<span class="go">  /share/risico/RISICO2023/configuration.yml \</span>
-<span class="go">  /path/to/generated-input-list.txt</span>
-</code></pre></div>
-<p>The configured output and warm-state paths are live destinations. For
-development tests, copy the configuration and redirect those paths, plus
-<code>streaming.scratch_directory</code>, to a temporary directory.</p>
 <h2 id="inspecting-a-configuration">Inspecting a configuration<a class="headerlink" href="#inspecting-a-configuration" title="Permanent link">&para;</a></h2>
 <p><code>streaming-inspect</code> builds each model, creates its tile plan, and instantiates
 the first tile's property/state adapters without running meteorological input

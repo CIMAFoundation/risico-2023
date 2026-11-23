@@ -14,7 +14,7 @@
         <link rel="prev" href="../configuration/">
       
       
-        <link rel="next" href="../execution/">
+        <link rel="next" href="../cli/">
       
       
         
@@ -269,6 +269,10 @@
       
         
       
+        
+      
+        
+      
     
     
     
@@ -349,14 +353,42 @@
   
   
     <li class="md-nav__item">
-      <a href="../cli/" class="md-nav__link">
+      <a href="../concepts/" class="md-nav__link">
         
   
   
   <span class="md-ellipsis">
     
   
-    CLI Usage
+    How RISICO Works
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../input-data/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Input Data
   
 
     
@@ -465,6 +497,17 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
+  <a href="#weather-each-model-uses" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Weather each model uses
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#risico" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -487,10 +530,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#cell-based-indices" class="md-nav__link">
+  <a href="#other-indices" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Cell-based indices
+        Other indices
       
     </span>
   </a>
@@ -513,6 +556,34 @@
   
   
     <li class="md-nav__item">
+      <a href="../cli/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    CLI Usage
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
       <a href="../execution/" class="md-nav__link">
         
   
@@ -520,7 +591,7 @@
   <span class="md-ellipsis">
     
   
-    Tiled Streaming Execution
+    Large Domains and Performance
   
 
     
@@ -774,6 +845,17 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
+  <a href="#weather-each-model-uses" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Weather each model uses
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#risico" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -796,10 +878,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#cell-based-indices" class="md-nav__link">
+  <a href="#other-indices" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Cell-based indices
+        Other indices
       
     </span>
   </a>
@@ -827,16 +909,136 @@
 
 
 <h1 id="fire-danger-indices">Fire Danger Indices<a class="headerlink" href="#fire-danger-indices" title="Permanent link">&para;</a></h1>
-<p>One configuration can run any of the models below. Each is a <code>models</code> entry whose <code>type</code> selects the
-model; all share the input handler, the tiled runner and the output writers. The variable names in
-the tables are the <code>internal_name</code>s an output type lists.</p>
+<p>Besides RISICO, <code>risico-2023</code> computes the Canadian Fire Weather Index System and eight more fire
+danger indices used in different countries. They all read the same weather inputs, so one run can
+compare them on the same domain. The <a href="../demo/">interactive demo</a> runs all of them on one cell,
+side by side.</p>
+<p>Each model is one entry of the configuration's <code>models</code> list; its <code>type</code> selects the model. The
+variable names in the tables are the <code>internal_name</code>s an output lists (see
+<a href="../configuration/#outputs">Configuration</a>).</p>
+<h2 id="weather-each-model-uses">Weather each model uses<a class="headerlink" href="#weather-each-model-uses" title="Permanent link">&para;</a></h2>
+<table>
+<thead>
+<tr>
+<th>Model</th>
+<th style="text-align: center;">Temperature</th>
+<th style="text-align: center;">Humidity</th>
+<th style="text-align: center;">Wind speed</th>
+<th style="text-align: center;">Wind direction</th>
+<th style="text-align: center;">Rain</th>
+<th style="text-align: center;">Snow cover</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>RISICO</td>
+<td style="text-align: center;">✓</td>
+<td style="text-align: center;">✓</td>
+<td style="text-align: center;">✓</td>
+<td style="text-align: center;">✓</td>
+<td style="text-align: center;">✓</td>
+<td style="text-align: center;">optional</td>
+</tr>
+<tr>
+<td>FWI</td>
+<td style="text-align: center;">✓</td>
+<td style="text-align: center;">✓</td>
+<td style="text-align: center;">✓</td>
+<td style="text-align: center;"></td>
+<td style="text-align: center;">✓</td>
+<td style="text-align: center;"></td>
+</tr>
+<tr>
+<td>Mark 5</td>
+<td style="text-align: center;">✓</td>
+<td style="text-align: center;">✓</td>
+<td style="text-align: center;">✓</td>
+<td style="text-align: center;"></td>
+<td style="text-align: center;">✓</td>
+<td style="text-align: center;"></td>
+</tr>
+<tr>
+<td>KBDI</td>
+<td style="text-align: center;">✓</td>
+<td style="text-align: center;"></td>
+<td style="text-align: center;"></td>
+<td style="text-align: center;"></td>
+<td style="text-align: center;">✓</td>
+<td style="text-align: center;"></td>
+</tr>
+<tr>
+<td>Angström</td>
+<td style="text-align: center;">✓</td>
+<td style="text-align: center;">✓</td>
+<td style="text-align: center;"></td>
+<td style="text-align: center;"></td>
+<td style="text-align: center;"></td>
+<td style="text-align: center;"></td>
+</tr>
+<tr>
+<td>Fosberg</td>
+<td style="text-align: center;">✓</td>
+<td style="text-align: center;">✓</td>
+<td style="text-align: center;">✓</td>
+<td style="text-align: center;"></td>
+<td style="text-align: center;"></td>
+<td style="text-align: center;"></td>
+</tr>
+<tr>
+<td>Nesterov</td>
+<td style="text-align: center;">✓</td>
+<td style="text-align: center;">✓ (dew point)</td>
+<td style="text-align: center;"></td>
+<td style="text-align: center;"></td>
+<td style="text-align: center;">✓</td>
+<td style="text-align: center;"></td>
+</tr>
+<tr>
+<td>Sharples</td>
+<td style="text-align: center;">✓</td>
+<td style="text-align: center;">✓</td>
+<td style="text-align: center;">✓</td>
+<td style="text-align: center;"></td>
+<td style="text-align: center;"></td>
+<td style="text-align: center;"></td>
+</tr>
+<tr>
+<td>Orieux</td>
+<td style="text-align: center;">✓</td>
+<td style="text-align: center;"></td>
+<td style="text-align: center;">✓</td>
+<td style="text-align: center;"></td>
+<td style="text-align: center;">✓</td>
+<td style="text-align: center;"></td>
+</tr>
+<tr>
+<td>Hot–Dry–Windy</td>
+<td style="text-align: center;">✓</td>
+<td style="text-align: center;">✓ (vapour pressure deficit)</td>
+<td style="text-align: center;">✓</td>
+<td style="text-align: center;"></td>
+<td style="text-align: center;"></td>
+<td style="text-align: center;"></td>
+</tr>
+</tbody>
+</table>
+<p>Humidity can be given as relative humidity, dew point or specific humidity; the dew point and
+the vapour pressure deficit are derived from what is given (see <a href="../input-data/#variables">Input Data</a>).</p>
 <h2 id="risico">RISICO<a class="headerlink" href="#risico" title="Permanent link">&para;</a></h2>
-<p><code>type: RISICO</code>, <code>model_version: legacy | v2023 | v2025</code>. Static data: GeoTIFF domain mask, slope,
-aspect, vegetation id (with its catalogue) and, optionally, summer and winter PPF. Warm state: NetCDF
-snapshots.</p>
-<p>RISICO follows the moisture of the dead fine fuel hour by hour, drying it with temperature, humidity
-and wind and wetting it with rain, and turns it into a rate of spread and a fireline intensity for the
-vegetation of each cell, corrected for wind and slope.</p>
+<p><code>type: RISICO</code>. Developed by CIMA Research Foundation and used operationally by the Italian
+Civil Protection. RISICO follows the moisture of the dead fine fuel hour by
+hour, drying it with temperature, humidity and wind and wetting it with rain, and turns it into
+the rate of spread and the intensity a fire would have in the vegetation of each cell, corrected
+for wind and slope (see <a href="../concepts/#what-risico-computes">How RISICO Works</a>).</p>
+<p>Model versions (<code>model_version</code>):</p>
+<ul>
+<li><code>v2025</code>: the current formulation: the moisture equations of <code>v2023</code>, with a revised rate of
+  spread and weather effect;</li>
+<li><code>v2023</code>: revised dead fuel moisture equations and rate of spread;</li>
+<li><code>legacy</code>: the original equations. An unknown version also selects them.</li>
+</ul>
+<p>Static data: domain mask, slope, aspect, vegetation id and catalogue, and optionally the summer
+and winter PPF layers. Warm state: yes.</p>
 <table>
 <thead>
 <tr>
@@ -863,12 +1065,12 @@ vegetation of each cell, corrected for wind and slope.</p>
 </tr>
 <tr>
 <td><code>W</code></td>
-<td>Wind effect on spread</td>
+<td>Wind effect on spread (multiplier)</td>
 <td>–</td>
 </tr>
 <tr>
 <td><code>contrT</code></td>
-<td>Temperature effect on spread</td>
+<td>Temperature effect on spread (multiplier)</td>
 <td>–</td>
 </tr>
 <tr>
@@ -888,16 +1090,33 @@ vegetation of each cell, corrected for wind and slope.</p>
 </tr>
 <tr>
 <td><code>VPPFNDWI</code>, <code>IPPFNDWI</code>, <code>VPPFNDVI</code>, <code>IPPFNDVI</code></td>
-<td>Both PPF and satellite factors</td>
+<td>With both PPF and satellite factors</td>
 <td>m/h, kW/m</td>
 </tr>
 </tbody>
 </table>
-<p>The weather actually used is available as output too: <code>temperature</code>, <code>humidity</code>, <code>windSpeed</code>,
-<code>windDir</code>, <code>rain</code> and <code>snowCover</code>.</p>
+<p>The weather the model actually used can be written too: <code>temperature</code> (°C), <code>humidity</code> (%),
+<code>windSpeed</code> (m/s), <code>windDir</code>, <code>rain</code> (mm) and <code>snowCover</code> (cm).</p>
 <h2 id="canadian-fire-weather-index-system">Canadian Fire Weather Index System<a class="headerlink" href="#canadian-fire-weather-index-system" title="Permanent link">&para;</a></h2>
-<p><code>type: FWI</code>, <code>model_version: legacy | cffdrs | sliding_window</code>. Static data: a GeoTIFF domain mask.
-Warm state: NetCDF snapshots. See <a href="../configuration/">Configuration</a> for the three versions.</p>
+<p><code>type: FWI</code>. The Canadian Forest Fire Weather Index System (Van Wagner, 1987), the most widely
+used fire danger rating system in the world. Three moisture codes track the drying of fuel
+layers of increasing depth, and three indices combine them with wind into a rating of fire
+behaviour. FWI is a daily index, computed from the weather at noon.</p>
+<p>Model versions (<code>model_version</code>):</p>
+<ul>
+<li><code>cffdrs</code>: the standard daily system, with the equations and constants of the
+  <a href="https://cran.r-project.org/package=cffdrs">cffdrs</a> R package and tested against its published
+  values. It steps at each cell's local standard noon (time zone from the cell's position, no
+  daylight saving time), with the noon weather interpolated from the hourly inputs and the rain
+  accumulated since the previous noon.</li>
+<li><code>legacy</code>: the formulation of the Italian operational chain: noon in local civil time, daily
+  step computed when the output is written.</li>
+<li><code>sliding_window</code>: computed on rolling 24-hour windows instead of at noon.</li>
+</ul>
+<p>Static data: a domain mask. Warm state: yes. Write one map per day with
+<code>output_time_resolution: 24</code>; with <code>cffdrs</code>, set <code>output_time_offset</code> to the hours from the
+run date at which every cell of the domain has passed its noon (for example <code>12</code> for a domain
+east of Greenwich).</p>
 <table>
 <thead>
 <tr>
@@ -908,43 +1127,44 @@ Warm state: NetCDF snapshots. See <a href="../configuration/">Configuration</a> 
 <tbody>
 <tr>
 <td><code>ffmc</code></td>
-<td>Fine Fuel Moisture Code</td>
+<td>Fine Fuel Moisture Code: moisture of litter and fine fuel</td>
 </tr>
 <tr>
 <td><code>dmc</code></td>
-<td>Duff Moisture Code</td>
+<td>Duff Moisture Code: moisture of loosely compacted organic layers</td>
 </tr>
 <tr>
 <td><code>dc</code></td>
-<td>Drought Code</td>
+<td>Drought Code: moisture of deep, compact organic layers</td>
 </tr>
 <tr>
 <td><code>isi</code></td>
-<td>Initial Spread Index</td>
+<td>Initial Spread Index: expected rate of spread</td>
 </tr>
 <tr>
 <td><code>bui</code></td>
-<td>Build-Up Index</td>
+<td>Build-Up Index: total fuel available</td>
 </tr>
 <tr>
 <td><code>fwi</code></td>
-<td>Fire Weather Index</td>
+<td>Fire Weather Index: overall fire intensity rating</td>
 </tr>
 <tr>
 <td><code>ifwi</code></td>
-<td>IFWI</td>
+<td>IFWI, a non-linear rescaling of <code>fwi</code></td>
 </tr>
 </tbody>
 </table>
-<h2 id="cell-based-indices">Cell-based indices<a class="headerlink" href="#cell-based-indices" title="Permanent link">&para;</a></h2>
-<p>These models read their cells from a text file (<code>cells_file_path</code>), one <code>lon lat value</code> line per
-cell, where the third column is the mean annual rainfall (KBDI, Mark 5), the heat index (Orieux) or
-unused. Those with memory keep a text warm state (<code>warm_state_path</code>).</p>
+<h2 id="other-indices">Other indices<a class="headerlink" href="#other-indices" title="Permanent link">&para;</a></h2>
+<p>These indices read their cells from a text file (<code>cells_file_path</code>, see
+<a href="../input-data/#cell-files-for-the-other-indices">Input Data</a>) instead of GeoTIFF layers. Those
+with memory keep their warm state in text files (<code>warm_state_path</code>).</p>
 <table>
 <thead>
 <tr>
 <th><code>type</code></th>
 <th>Index</th>
+<th>Origin</th>
 <th>Variables</th>
 <th>Warm state</th>
 </tr>
@@ -953,54 +1173,61 @@ unused. Those with memory keep a text warm state (<code>warm_state_path</code>).
 <tr>
 <td><code>KBDI</code></td>
 <td>Keetch–Byram Drought Index</td>
-<td><code>kbdi</code> (mm)</td>
+<td>United States</td>
+<td><code>kbdi</code> (mm of soil water deficit)</td>
 <td>yes</td>
 </tr>
 <tr>
 <td><code>Mark5</code></td>
 <td>McArthur Forest Fire Danger Index, Mark 5</td>
+<td>Australia</td>
 <td><code>df</code> drought factor, <code>ffdi</code></td>
 <td>yes</td>
 </tr>
 <tr>
 <td><code>Angstrom</code></td>
 <td>Angström index</td>
+<td>Sweden</td>
 <td><code>angstrom</code></td>
 <td>no</td>
 </tr>
 <tr>
 <td><code>Fosberg</code></td>
 <td>Fosberg Fire Weather Index</td>
+<td>United States</td>
 <td><code>ffwi</code></td>
 <td>no</td>
 </tr>
 <tr>
 <td><code>Nesterov</code></td>
 <td>Nesterov ignition index</td>
+<td>Russia</td>
 <td><code>nesterov</code></td>
 <td>yes</td>
 </tr>
 <tr>
 <td><code>Sharples</code></td>
 <td>Sharples fuel moisture and fire danger</td>
+<td>Australia</td>
 <td><code>fmi</code>, <code>f</code></td>
 <td>no</td>
 </tr>
 <tr>
 <td><code>Orieux</code></td>
 <td>Orieux water reserve and danger class</td>
-<td><code>pet_t</code> (mm), <code>orieux_wr</code> (mm), <code>orieux_fd</code> (0–3)</td>
+<td>France</td>
+<td><code>pet_t</code> (mm), <code>orieux_wr</code> (mm), <code>orieux_fd</code> (class 0–3)</td>
 <td>yes</td>
 </tr>
 <tr>
 <td><code>Hdw</code></td>
 <td>Hot–Dry–Windy Index</td>
+<td>United States</td>
 <td><code>hdw</code></td>
 <td>no</td>
 </tr>
 </tbody>
 </table>
-<p>The <a href="../demo/">interactive demo</a> runs all of them on one cell, side by side.</p>
 
 
 

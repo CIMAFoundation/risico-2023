@@ -269,6 +269,10 @@
       
         
       
+        
+      
+        
+      
     
     
     
@@ -349,14 +353,42 @@
   
   
     <li class="md-nav__item">
-      <a href="../cli/" class="md-nav__link">
+      <a href="../concepts/" class="md-nav__link">
         
   
   
   <span class="md-ellipsis">
     
   
-    CLI Usage
+    How RISICO Works
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../input-data/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Input Data
   
 
     
@@ -433,6 +465,34 @@
   
   
     <li class="md-nav__item">
+      <a href="../cli/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    CLI Usage
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
       <a href="../execution/" class="md-nav__link">
         
   
@@ -440,7 +500,7 @@
   <span class="md-ellipsis">
     
   
-    Tiled Streaming Execution
+    Large Domains and Performance
   
 
     
@@ -519,6 +579,17 @@
       Table of contents
     </label>
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#static-data" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Static data
+      
+    </span>
+  </a>
+  
+</li>
       
         <li class="md-nav__item">
   <a href="#warm-state" class="md-nav__link">
@@ -752,6 +823,17 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
+  <a href="#static-data" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Static data
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#warm-state" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -783,6 +865,17 @@
 
 
 <h1 id="converting-legacy-data">Converting Legacy Data<a class="headerlink" href="#converting-legacy-data" title="Permanent link">&para;</a></h1>
+<div class="admonition info">
+<p class="admonition-title">Only for existing RISICO installations</p>
+<p>This page is for operators of the previous RISICO implementation, whose static data,
+grids and warm states are text files. New setups prepare GeoTIFF static data directly
+(see <a href="../input-data/#static-data">Input Data</a>) and can skip it.</p>
+</div>
+<p>The previous implementation describes the land as a text file of cells (<code>lon lat slope aspect
+vegetation</code> per line) with a separate grid file, and saves its warm state as text files. The
+two converters below turn them, once, into the GeoTIFF layers and NetCDF snapshots this version
+reads.</p>
+<h2 id="static-data">Static data<a class="headerlink" href="#static-data" title="Permanent link">&para;</a></h2>
 <p>Convert existing regular-grid static files with the offline <code>static-converter</code>
 utility, which writes single-band EPSG:4326 GeoTIFF layers. The converter
 detects, per axis, whether legacy bounds represent outer edges or cell centres;

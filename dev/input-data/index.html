@@ -1,0 +1,1335 @@
+
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+        <meta name="description" content="RISICO: the wildfire danger forecasting model of CIMA Research Foundation">
+      
+      
+      
+      
+        <link rel="prev" href="../concepts/">
+      
+      
+        <link rel="next" href="../configuration/">
+      
+      
+        
+      
+      
+      <link rel="icon" href="../assets/images/favicon.png">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.8.2">
+    
+    
+      
+        <title>Input Data - RISICO</title>
+      
+    
+    
+      <link rel="stylesheet" href="../assets/stylesheets/main.57a0d79d.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+        
+        
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto:300,300i,400,400i,700,700i%7CRoboto+Mono:400,400i,700,700i&display=fallback">
+        <style>:root{--md-text-font:"Roboto";--md-code-font:"Roboto Mono"}</style>
+      
+    
+    
+      <link rel="stylesheet" href="../stylesheets/cima-theme.css">
+    
+    <script>__md_scope=new URL("..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+
+    
+    
+  </head>
+  
+  
+    <body dir="ltr">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#input-data" class="md-skip">
+          Skip to content
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+    </div>
+    
+      <div data-md-color-scheme="default" data-md-component="outdated" hidden>
+        
+      </div>
+    
+    
+      
+
+  
+
+<header class="md-header md-header--shadow" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Header">
+    <a href=".." title="RISICO" class="md-header__button md-logo" aria-label="RISICO" data-md-component="logo">
+      
+  <img src="../img/cima.png" alt="logo">
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            RISICO
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              Input Data
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+    
+      <script>var palette=__md_get("__palette");if(palette&&palette.color){if("(prefers-color-scheme)"===palette.color.media){var media=matchMedia("(prefers-color-scheme: light)"),input=document.querySelector(media.matches?"[data-md-color-media='(prefers-color-scheme: light)']":"[data-md-color-media='(prefers-color-scheme: dark)']");palette.color.media=input.getAttribute("data-md-color-media"),palette.color.scheme=input.getAttribute("data-md-color-scheme"),palette.color.primary=input.getAttribute("data-md-color-primary"),palette.color.accent=input.getAttribute("data-md-color-accent")}for(var[key,value]of Object.entries(palette.color))document.body.setAttribute("data-md-color-"+key,value)}</script>
+    
+    
+    
+      
+      
+        <label class="md-header__button md-icon" for="__search">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        </label>
+        <div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="Search" placeholder="Search" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
+      <label class="md-search__icon md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+      </label>
+      <nav class="md-search__options" aria-label="Search">
+        
+        <button type="reset" class="md-search__icon md-icon" title="Clear" aria-label="Clear" tabindex="-1">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+        </button>
+      </nav>
+      
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" tabindex="0" data-md-scrollfix>
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            Initializing search
+          </div>
+          <ol class="md-search-result__list" role="presentation"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+      
+    
+    
+      <div class="md-header__source">
+        <a href="https://github.com/CIMAFoundation/risico-2023" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    CIMAFoundation/risico-2023
+  </div>
+</a>
+      </div>
+    
+  </nav>
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+          
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+
+<nav class="md-nav md-nav--primary" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href=".." title="RISICO" class="md-nav__button md-logo" aria-label="RISICO" data-md-component="logo">
+      
+  <img src="../img/cima.png" alt="logo">
+
+    </a>
+    RISICO
+  </label>
+  
+    <div class="md-nav__source">
+      <a href="https://github.com/CIMAFoundation/risico-2023" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    CIMAFoundation/risico-2023
+  </div>
+</a>
+    </div>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href=".." class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Home
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+    
+  
+  
+  
+    
+    
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--active md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_2" checked>
+        
+          
+          <label class="md-nav__link" for="__nav_2" id="__nav_2_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    User Guide
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_2_label" aria-expanded="true">
+          <label class="md-nav__title" for="__nav_2">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    User Guide
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../getting-started/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Getting Started
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../concepts/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    How RISICO Works
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+    
+  
+  
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Input Data
+  
+
+    
+  </span>
+  
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Input Data
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#weather-inputs" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Weather inputs
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Weather inputs">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#file-layout" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        File layout
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#variables" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Variables
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#other-variable-names" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Other variable names
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#legacy-zbin-inputs" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Legacy zbin inputs
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#static-data" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Static data
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Static data">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#vegetation-catalogue" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Vegetation catalogue
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#cell-files-for-the-other-indices" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Cell files for the other indices
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../configuration/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Configuration
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../indices/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Fire Danger Indices
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../cli/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    CLI Usage
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../execution/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Large Domains and Performance
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../conversion/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Converting Legacy Data
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+      
+        
+      
+        
+      
+        
+      
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_3" >
+        
+          
+          <label class="md-nav__link" for="__nav_3" id="__nav_3_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Developer Guide
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_3_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_3">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Developer Guide
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../programmatic/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Programmatic Workflow
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../api-reference/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    API Reference
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../web-demo/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Building the Web Demo
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../demo/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Interactive Demo
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+              
+              <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#weather-inputs" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Weather inputs
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Weather inputs">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#file-layout" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        File layout
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#variables" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Variables
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#other-variable-names" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Other variable names
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#legacy-zbin-inputs" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Legacy zbin inputs
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#static-data" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Static data
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Static data">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#vegetation-catalogue" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Vegetation catalogue
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#cell-files-for-the-other-indices" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Cell files for the other indices
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              
+              <article class="md-content__inner md-typeset">
+                
+                  
+
+
+  
+  
+
+
+<h1 id="input-data">Input Data<a class="headerlink" href="#input-data" title="Permanent link">&para;</a></h1>
+<p>A run needs two kinds of data: weather inputs, which change at every run, and static data,
+which you prepare once for your domain. This page describes the format of both. The
+<a href="../getting-started/#run-the-sample">sample data</a> is a complete, small example of each.</p>
+<h2 id="weather-inputs">Weather inputs<a class="headerlink" href="#weather-inputs" title="Permanent link">&para;</a></h2>
+<p>Weather inputs are NetCDF files (NetCDF-4 or classic) in one directory. Every <code>.nc</code> file in it
+is read; a run can mix files, for example one per variable or one per forecast day, as long as
+each file carries its own coordinates and time axis.</p>
+<h3 id="file-layout">File layout<a class="headerlink" href="#file-layout" title="Permanent link">&para;</a></h3>
+<p>Each file holds:</p>
+<ul>
+<li>a <code>time</code> variable: one value per timestamp, with a CF <code>units</code> attribute such as
+  <code>hours since 2025-07-01 00:00:00</code> (without the attribute, seconds since 1970-01-01 are
+  assumed);</li>
+<li><code>latitude</code> and <code>longitude</code> variables with <strong>two dimensions</strong> <code>(y, x)</code>, giving the position
+  of each grid point in degrees (WGS84);</li>
+<li>the weather variables, with dimensions <code>(time, y, x)</code>.</li>
+</ul>
+<div class="highlight"><pre><span></span><code>dimensions:
+    time = 744 ;  y = 11 ;  x = 24 ;
+variables:
+    int64 time(time) ;          time:units = "seconds since 1970-01-01 00:00:00" ;
+    float latitude(y, x) ;
+    float longitude(y, x) ;
+    float T(time, y, x) ;       T:units = "degC" ;
+    float H(time, y, x) ;
+    ...
+</code></pre></div>
+<p>The grid can be regular or curvilinear and can have any resolution: each model cell takes the
+value of the nearest grid point. Missing values are written as <code>-9999</code>.</p>
+<div class="admonition tip">
+<p class="admonition-title">Files with one-dimensional coordinates</p>
+<p>Many datasets store <code>latitude(latitude)</code> and <code>longitude(longitude)</code> as 1-D axes. Expand
+them to 2-D before a run, for example with xarray:</p>
+<div class="highlight"><pre><span></span><code><span class="kn">import</span><span class="w"> </span><span class="nn">numpy</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">np</span><span class="o">,</span><span class="w"> </span><span class="nn">xarray</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">xr</span>
+
+<span class="n">ds</span> <span class="o">=</span> <span class="n">xr</span><span class="o">.</span><span class="n">open_dataset</span><span class="p">(</span><span class="s2">"forecast.nc"</span><span class="p">)</span><span class="o">.</span><span class="n">rename</span><span class="p">({</span><span class="s2">"latitude"</span><span class="p">:</span> <span class="s2">"y"</span><span class="p">,</span> <span class="s2">"longitude"</span><span class="p">:</span> <span class="s2">"x"</span><span class="p">})</span>
+<span class="n">lon</span><span class="p">,</span> <span class="n">lat</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">meshgrid</span><span class="p">(</span><span class="n">ds</span><span class="o">.</span><span class="n">x</span><span class="o">.</span><span class="n">values</span><span class="p">,</span> <span class="n">ds</span><span class="o">.</span><span class="n">y</span><span class="o">.</span><span class="n">values</span><span class="p">)</span>
+<span class="n">ds</span> <span class="o">=</span> <span class="n">ds</span><span class="o">.</span><span class="n">assign</span><span class="p">(</span><span class="n">latitude</span><span class="o">=</span><span class="p">((</span><span class="s2">"y"</span><span class="p">,</span> <span class="s2">"x"</span><span class="p">),</span> <span class="n">lat</span><span class="p">),</span> <span class="n">longitude</span><span class="o">=</span><span class="p">((</span><span class="s2">"y"</span><span class="p">,</span> <span class="s2">"x"</span><span class="p">),</span> <span class="n">lon</span><span class="p">))</span>
+<span class="n">ds</span><span class="o">.</span><span class="n">to_netcdf</span><span class="p">(</span><span class="s2">"input/forecast.nc"</span><span class="p">)</span>
+</code></pre></div>
+</div>
+<h3 id="variables">Variables<a class="headerlink" href="#variables" title="Permanent link">&para;</a></h3>
+<p>Name each variable as in the first column. Give the ones your models need; the others can be
+left out.</p>
+<table>
+<thead>
+<tr>
+<th>Name</th>
+<th>Meaning</th>
+<th>Units</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>T</code></td>
+<td>Air temperature at 2 m</td>
+<td>°C or K (detected)</td>
+</tr>
+<tr>
+<td><code>H</code></td>
+<td>Relative humidity at 2 m</td>
+<td>%</td>
+</tr>
+<tr>
+<td><code>R</code></td>
+<td>Dew point temperature at 2 m, instead of <code>H</code></td>
+<td>°C or K</td>
+</tr>
+<tr>
+<td><code>Q</code>, <code>PSFC</code></td>
+<td>Specific humidity and surface pressure, instead of <code>H</code></td>
+<td>kg/kg, Pa</td>
+</tr>
+<tr>
+<td><code>W</code>, <code>D</code></td>
+<td>Wind speed at 10 m and the direction it blows <strong>from</strong></td>
+<td>m/s, degrees</td>
+</tr>
+<tr>
+<td><code>U</code>, <code>V</code></td>
+<td>Wind components at 10 m, instead of <code>W</code> and <code>D</code></td>
+<td>m/s</td>
+</tr>
+<tr>
+<td><code>P</code></td>
+<td>Rain fallen since the previous timestamp</td>
+<td>mm</td>
+</tr>
+<tr>
+<td><code>SNOW</code></td>
+<td>Snow cover depth</td>
+<td>cm</td>
+</tr>
+<tr>
+<td><code>K</code>, <code>F</code>, <code>O</code></td>
+<td>Observed temperature, humidity and rain, alternatives to <code>T</code>, <code>H</code>, <code>P</code></td>
+<td>as above</td>
+</tr>
+<tr>
+<td><code>NDVI</code>, <code>NDWI</code>, <code>M</code>, <code>SWI</code></td>
+<td>Satellite vegetation, water, moisture and soil water indices</td>
+<td>–</td>
+</tr>
+</tbody>
+</table>
+<p>Use <strong>hourly</strong> timestamps for RISICO: it is built for hourly steps, and rain must be the amount
+of the step, not an accumulation since the start of the forecast. Which variables each model
+uses is listed in <a href="../indices/">Fire Danger Indices</a>.</p>
+<h3 id="other-variable-names">Other variable names<a class="headerlink" href="#other-variable-names" title="Permanent link">&para;</a></h3>
+<p>If your files use other names, map them in the configuration with a
+<code>netcdf_input_configuration</code> section at the top level:</p>
+<div class="highlight"><pre><span></span><code><span class="nt">netcdf_input_configuration</span><span class="p">:</span>
+<span class="w">  </span><span class="nt">lat_name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">lat</span><span class="w">              </span><span class="c1"># name of the latitude variable</span>
+<span class="w">  </span><span class="nt">lon_name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">lon</span><span class="w">              </span><span class="c1"># name of the longitude variable</span>
+<span class="w">  </span><span class="nt">time_name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">valid_time</span><span class="w">      </span><span class="c1"># name of the time variable</span>
+<span class="w">  </span><span class="nt">variable_map</span><span class="p">:</span>
+<span class="w">    </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="p p-Indicator">{</span><span class="nt"> internal_name</span><span class="p">:</span><span class="w"> </span><span class="nv">T</span><span class="p p-Indicator">,</span><span class="nt"> name</span><span class="p">:</span><span class="w"> </span><span class="nv">t2m</span><span class="w"> </span><span class="p p-Indicator">}</span>
+<span class="w">    </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="p p-Indicator">{</span><span class="nt"> internal_name</span><span class="p">:</span><span class="w"> </span><span class="nv">H</span><span class="p p-Indicator">,</span><span class="nt"> name</span><span class="p">:</span><span class="w"> </span><span class="nv">rh2m</span><span class="w"> </span><span class="p p-Indicator">}</span>
+<span class="w">    </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="p p-Indicator">{</span><span class="nt"> internal_name</span><span class="p">:</span><span class="w"> </span><span class="nv">P</span><span class="p p-Indicator">,</span><span class="nt"> name</span><span class="p">:</span><span class="w"> </span><span class="nv">tp_hourly</span><span class="p p-Indicator">,</span><span class="nt"> offset</span><span class="p">:</span><span class="w"> </span><span class="nv">-3600</span><span class="w"> </span><span class="p p-Indicator">}</span>
+</code></pre></div>
+<p><code>offset</code>, in seconds, shifts the time axis of one variable: for example <code>-3600</code> when the rain of
+the hour ending at 13:00 is stored at 13:00 but should be read at 12:00. Two optional keys handle
+unusual files: <code>time_units</code> names the attribute that holds the time units, when it is not
+<code>units</code>, and <code>coords_dims</code> (a pair of dimension names) selects the latitude and longitude
+dimensions when the coordinate variables have more than two.</p>
+<h3 id="legacy-zbin-inputs">Legacy <code>zbin</code> inputs<a class="headerlink" href="#legacy-zbin-inputs" title="Permanent link">&para;</a></h3>
+<p>Instead of a directory, the input argument can be a text file listing <code>.zbin</code> files, one per
+line: the binary format of the previous RISICO implementation. New setups should use NetCDF.</p>
+<h2 id="static-data">Static data<a class="headerlink" href="#static-data" title="Permanent link">&para;</a></h2>
+<p>Static data describe the land on the grid the model computes on. They are single-band GeoTIFF
+files, all with exactly the same grid:</p>
+<ul>
+<li>geographic coordinates (EPSG:4326), north up, not rotated;</li>
+<li>the same number of rows and columns and the same pixel size and origin.</li>
+</ul>
+<table>
+<thead>
+<tr>
+<th>Layer</th>
+<th>Content</th>
+<th>Needed by</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Domain mask</td>
+<td>Non-zero on the cells to compute, 0 or nodata elsewhere. It defines the model grid.</td>
+<td>every model with <code>static_data</code></td>
+</tr>
+<tr>
+<td>Slope</td>
+<td>Terrain slope, degrees</td>
+<td>RISICO</td>
+</tr>
+<tr>
+<td>Aspect</td>
+<td>Direction the slope faces, degrees clockwise from north</td>
+<td>RISICO</td>
+</tr>
+<tr>
+<td>Vegetation id</td>
+<td>Vegetation type of each cell, an id of the vegetation catalogue</td>
+<td>RISICO</td>
+</tr>
+<tr>
+<td>PPF summer, PPF winter</td>
+<td>Seasonal weights of spread and intensity (optional, both or neither)</td>
+<td>RISICO</td>
+</tr>
+</tbody>
+</table>
+<p>Slope and aspect are usually derived from a digital elevation model, for example with
+<code>gdaldem slope</code> and <code>gdaldem aspect</code>; the vegetation id from a land-cover map reclassified to
+the catalogue's ids.</p>
+<h3 id="vegetation-catalogue">Vegetation catalogue<a class="headerlink" href="#vegetation-catalogue" title="Permanent link">&para;</a></h3>
+<p>A whitespace-separated text file with one line per vegetation type. The first line is a header
+and starts with <code>#</code>:</p>
+<div class="highlight"><pre><span></span><code>#ID d0  d1  hhv    umid   v0   T0     sat  use_ndvi     decodifica
+0   0   0   -9999  -9999  0    -9999 -9999 false        non vegetato
+1   0.5 0   17000  -9999  84   12     40   true         praterie_bassa_susc
+</code></pre></div>
+<table>
+<thead>
+<tr>
+<th>Column</th>
+<th>Meaning</th>
+<th>Units</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>ID</code></td>
+<td>Value used in the vegetation-id layer</td>
+<td>–</td>
+</tr>
+<tr>
+<td><code>d0</code></td>
+<td>Dead fine fuel load</td>
+<td>kg/m²</td>
+</tr>
+<tr>
+<td><code>d1</code></td>
+<td>Live fuel load</td>
+<td>kg/m²</td>
+</tr>
+<tr>
+<td><code>hhv</code></td>
+<td>Higher heating value of the fuel</td>
+<td>kJ/kg</td>
+</tr>
+<tr>
+<td><code>umid</code></td>
+<td>Moisture of the live fuel</td>
+<td>%</td>
+</tr>
+<tr>
+<td><code>v0</code></td>
+<td>Base rate of spread, with no wind, slope or drying</td>
+<td>m/h</td>
+</tr>
+<tr>
+<td><code>T0</code></td>
+<td>Time the dead fuel takes to respond to the weather</td>
+<td>h</td>
+</tr>
+<tr>
+<td><code>sat</code></td>
+<td>Moisture of the dead fuel when saturated</td>
+<td>%</td>
+</tr>
+<tr>
+<td><code>use_ndvi</code></td>
+<td>Whether the satellite NDVI modulates this type</td>
+<td><code>true</code>/<code>false</code></td>
+</tr>
+<tr>
+<td>last column</td>
+<td>Description</td>
+<td>–</td>
+</tr>
+</tbody>
+</table>
+<p><code>-9999</code> marks a value that does not apply. The <a href="../getting-started/#run-the-sample">sample data</a>
+ships the catalogue used for Italy (<code>p_vegetazione.csv</code>).</p>
+<h2 id="cell-files-for-the-other-indices">Cell files for the other indices<a class="headerlink" href="#cell-files-for-the-other-indices" title="Permanent link">&para;</a></h2>
+<p>The indices other than RISICO and FWI (KBDI, Mark 5, Angström and others, see
+<a href="../indices/#other-indices">Fire Danger Indices</a>) read their cells from a text file instead of
+GeoTIFF layers: one line per cell with longitude, latitude and a third value, separated by
+spaces. The third value is the mean annual rainfall in mm for KBDI and Mark 5, the heat index
+for Orieux, and is ignored by the others.</p>
+<div class="highlight"><pre><span></span><code>8.900 44.400 1100
+8.910 44.400 1100
+</code></pre></div>
+
+
+
+
+
+
+
+
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+  
+    Made with
+    <a href="https://squidfunk.github.io/mkdocs-material/" target="_blank" rel="noopener">
+      Material for MkDocs
+    </a>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    
+      
+      
+      <script id="__config" type="application/json">{"annotate": null, "base": "..", "features": ["navigation.sections", "navigation.indexes", "navigation.instant", "content.code.copy", "toc.follow"], "search": "../assets/javascripts/workers/search.a7633da7.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": {"provider": "mike"}}</script>
+    
+    
+      <script src="../assets/javascripts/bundle.a5f9d56c.min.js"></script>
+      
+        <script src="../javascripts/cima-brand.js"></script>
+      
+    
+  </body>
+</html>

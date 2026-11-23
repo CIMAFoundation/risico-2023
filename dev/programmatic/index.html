@@ -267,6 +267,10 @@
       
         
       
+        
+      
+        
+      
     
     
     
@@ -347,14 +351,42 @@
   
   
     <li class="md-nav__item">
-      <a href="../cli/" class="md-nav__link">
+      <a href="../concepts/" class="md-nav__link">
         
   
   
   <span class="md-ellipsis">
     
   
-    CLI Usage
+    How RISICO Works
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../input-data/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Input Data
   
 
     
@@ -431,6 +463,34 @@
   
   
     <li class="md-nav__item">
+      <a href="../cli/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    CLI Usage
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
       <a href="../execution/" class="md-nav__link">
         
   
@@ -438,7 +498,7 @@
   <span class="md-ellipsis">
     
   
-    Tiled Streaming Execution
+    Large Domains and Performance
   
 
     
@@ -1297,7 +1357,7 @@ and prints the codes at noon:</p>
 <code>InputElement</code> per cell in each <code>Input</code>. <code>update</code> and <code>output</code> process the cells in parallel
 with <code>ndarray</code>'s <code>Zip</code>. The <code>risico-2023</code> runner does exactly this on tiles of the domain,
 so memory stays bounded however large the domain is (see
-<a href="../execution/">Tiled Streaming Execution</a>).</p>
+<a href="../execution/">Large Domains and Performance</a>).</p>
 <p>To save and restore a run, map the state's cells back to warm-state records (for RISICO,
 the <code>dffm</code>, snow and satellite fields of each <code>RISICOStateElement</code>) and pass them to
 <code>State::new</code> next time.</p>

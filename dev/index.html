@@ -66,7 +66,7 @@
     <div data-md-component="skip">
       
         
-        <a href="#whats-included" class="md-skip">
+        <a href="#what-you-can-do-with-it" class="md-skip">
           Skip to content
         </a>
       
@@ -280,10 +280,10 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
-  <a href="#whats-included" class="md-nav__link">
+  <a href="#what-you-can-do-with-it" class="md-nav__link">
     <span class="md-ellipsis">
       
-        What's included
+        What you can do with it
       
     </span>
   </a>
@@ -291,10 +291,21 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#typical-workflow" class="md-nav__link">
+  <a href="#what-it-is" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Typical workflow
+        What it is
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#where-to-start" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Where to start
       
     </span>
   </a>
@@ -317,6 +328,10 @@
   
     
     
+      
+        
+      
+        
       
         
       
@@ -410,14 +425,42 @@
   
   
     <li class="md-nav__item">
-      <a href="cli/" class="md-nav__link">
+      <a href="concepts/" class="md-nav__link">
         
   
   
   <span class="md-ellipsis">
     
   
-    CLI Usage
+    How RISICO Works
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="input-data/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Input Data
   
 
     
@@ -494,6 +537,34 @@
   
   
     <li class="md-nav__item">
+      <a href="cli/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    CLI Usage
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
       <a href="execution/" class="md-nav__link">
         
   
@@ -501,7 +572,7 @@
   <span class="md-ellipsis">
     
   
-    Tiled Streaming Execution
+    Large Domains and Performance
   
 
     
@@ -753,10 +824,10 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
-  <a href="#whats-included" class="md-nav__link">
+  <a href="#what-you-can-do-with-it" class="md-nav__link">
     <span class="md-ellipsis">
       
-        What's included
+        What you can do with it
       
     </span>
   </a>
@@ -764,10 +835,21 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#typical-workflow" class="md-nav__link">
+  <a href="#what-it-is" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Typical workflow
+        What it is
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#where-to-start" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Where to start
       
     </span>
   </a>
@@ -800,44 +882,52 @@
   <p class="hero__lead">
     RISICO (<em>Rischio Incendi E Coordinamento</em>) is the wildfire danger forecasting model
     developed by <a href="https://www.cimafoundation.org" target="_blank" rel="noopener">CIMA Research Foundation</a>
-    and used operationally by the Italian Civil Protection. This Rust implementation runs RISICO, the Canadian
-    Fire Weather Index and eight more fire danger indices on gridded weather forecasts, from a single cell up
-    to continental domains.
+    and used operationally by the Italian Civil Protection. From a weather forecast and maps of
+    vegetation and terrain, it computes hour by hour how dry the vegetation is and how fast and
+    how intensely a fire would spread on every cell of a map.
   </p>
   <div class="hero__actions">
     <a class="md-button md-button--primary" href="demo/">Try it in your browser</a>
     <a class="md-button" href="getting-started/">Get started</a>
-    <a class="md-button" href="cli/">CLI usage</a>
+    <a class="md-button" href="concepts/">How it works</a>
     <a class="md-button" href="programmatic/">Developer guide</a>
     <a class="md-button" href="api/risico/index.html">API reference</a>
   </div>
 </div>
 
-<h2 id="whats-included">What's included<a class="headerlink" href="#whats-included" title="Permanent link">&para;</a></h2>
+<h2 id="what-you-can-do-with-it">What you can do with it<a class="headerlink" href="#what-you-can-do-with-it" title="Permanent link">&para;</a></h2>
 <ul>
-<li><strong>The RISICO model</strong>: dead fine fuel moisture, rate of spread and fireline intensity on every cell,
-  driven by temperature, humidity, wind, rain and snow cover, with vegetation, slope and aspect from
-  static layers.</li>
-<li><strong>More indices from the same inputs</strong>: the Canadian FWI System, Keetch–Byram, McArthur Mark 5,
-  Angström, Fosberg, Nesterov, Sharples, Orieux and Hot–Dry–Windy (see <a href="indices/">Fire danger indices</a>).</li>
-<li><strong>A streaming runner</strong>: every model is processed in spatial tiles, timestamp by timestamp, so
-  memory stays bounded however large the domain (<a href="execution/">Tiled streaming execution</a>).</li>
-<li><strong>Pure-Rust I/O</strong>: NetCDF and legacy <code>zbin</code> inputs, NetCDF / GeoTIFF / Zarr / PNG outputs,
-  GeoTIFF static data and NetCDF warm state, with no native C libraries.</li>
-<li><strong>A Rust library</strong>: the models without the runner, to embed in other programs
-  (<a href="programmatic/">Programmatic workflow</a>, <a href="api-reference/">API reference</a>).</li>
-<li><strong>A WebAssembly build</strong>: the same binary compiled for <code>wasm32-wasip1</code>, which powers the
-  <a href="demo/">interactive demo</a>.</li>
+<li><strong>Forecast fire danger</strong> over a region or a country: run it every day on a weather forecast
+  and get maps of fuel moisture, rate of spread and fireline intensity for the coming days.</li>
+<li><strong>Compare indices</strong>: the same run computes the Canadian Fire Weather Index and eight more
+  indices used around the world (Keetch–Byram, McArthur Mark 5, Angström, Fosberg, Nesterov,
+  Sharples, Orieux, Hot–Dry–Windy). See <a href="indices/">Fire Danger Indices</a>.</li>
+<li><strong>Study past seasons</strong>: run it on weather reanalyses or archived forecasts.</li>
+<li><strong>Embed the models</strong> in your own Rust program, without the files: see the
+  <a href="programmatic/">Developer Guide</a>.</li>
 </ul>
-<h2 id="typical-workflow">Typical workflow<a class="headerlink" href="#typical-workflow" title="Permanent link">&para;</a></h2>
+<h2 id="what-it-is">What it is<a class="headerlink" href="#what-it-is" title="Permanent link">&para;</a></h2>
+<p><code>risico-2023</code> is the current implementation of RISICO, written in Rust:</p>
+<ul>
+<li>one command-line program, with no external libraries to install;</li>
+<li>NetCDF weather inputs and outputs, GeoTIFF land data, plus GeoTIFF, Zarr and PNG outputs;</li>
+<li>domains of any size in bounded memory, from one cell to a continent
+  (<a href="execution/">Large Domains and Performance</a>);</li>
+<li>a Rust library with the models alone (<a href="api-reference/">API reference</a>);</li>
+<li>a WebAssembly build of the same program, which runs the <a href="demo/">interactive demo</a> in your
+  browser.</li>
+</ul>
+<p>The source code is on <a href="https://github.com/CIMAFoundation/risico-2023">GitHub</a>.</p>
+<h2 id="where-to-start">Where to start<a class="headerlink" href="#where-to-start" title="Permanent link">&para;</a></h2>
 <ol>
-<li>Prepare the static data as aligned GeoTIFF layers: a domain mask, slope, aspect and vegetation
-   (see <a href="configuration/">Configuration</a>).</li>
-<li>Write a <code>configuration.yml</code> listing the models, their warm-state directory and their outputs.</li>
-<li>Run <code>risico-2023 &lt;run date&gt; configuration.yml &lt;input&gt;</code> on a directory of NetCDF weather inputs
-   (or a list of legacy <code>zbin</code> files).</li>
-<li>Read the NetCDF (or GeoTIFF, Zarr, PNG) outputs; the warm state written at the configured hour
-   seeds the next day's run.</li>
+<li><strong>See it</strong>: the <a href="demo/">interactive demo</a> runs the real model on one cell or on a map of
+   Liguria, in your browser, with nothing to install.</li>
+<li><strong>Understand it</strong>: <a href="concepts/">How RISICO Works</a> explains weather inputs, land data, warm
+   state and outputs.</li>
+<li><strong>Run it</strong>: <a href="getting-started/">Getting Started</a> installs the program and runs it on the
+   sample data shipped with the repository.</li>
+<li><strong>Use your data</strong>: <a href="input-data/">Input Data</a> and <a href="configuration/">Configuration</a>
+   describe how to set up your own domain.</li>
 </ol>
 
 

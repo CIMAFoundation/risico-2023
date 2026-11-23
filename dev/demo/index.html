@@ -265,6 +265,10 @@
       
         
       
+        
+      
+        
+      
     
     
     
@@ -345,14 +349,42 @@
   
   
     <li class="md-nav__item">
-      <a href="../cli/" class="md-nav__link">
+      <a href="../concepts/" class="md-nav__link">
         
   
   
   <span class="md-ellipsis">
     
   
-    CLI Usage
+    How RISICO Works
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../input-data/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Input Data
   
 
     
@@ -429,6 +461,34 @@
   
   
     <li class="md-nav__item">
+      <a href="../cli/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    CLI Usage
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
       <a href="../execution/" class="md-nav__link">
         
   
@@ -436,7 +496,7 @@
   <span class="md-ellipsis">
     
   
-    Tiled Streaming Execution
+    Large Domains and Performance
   
 
     
@@ -857,11 +917,11 @@
 
 
 <h1 id="interactive-demo">Interactive Demo<a class="headerlink" href="#interactive-demo" title="Permanent link">&para;</a></h1>
-<p>The <code>risico-2023</code> binary is compiled to <strong>WebAssembly</strong> (<code>wasm32-wasip1</code>) and runs entirely in your
-browser: no server, no upload. It is the same program as the operational build. The page writes its
-weather inputs as NetCDF files and its static layers as GeoTIFFs into an in-memory filesystem, runs the
-binary on them in a Web Worker, and reads back the NetCDF-4 files it writes.</p>
-<p>Three levels, from a single cell to the whole country:</p>
+<p>This page runs the real RISICO program in your browser, with nothing to install: the same
+<code>risico-2023</code> used operationally, compiled to WebAssembly. It covers a 1 km grid over Liguria,
+in north-western Italy. Your browser prepares the input files, runs the model and draws its
+outputs; no data is sent to a server.</p>
+<p>Three levels, from a single cell to a regional map:</p>
 <ol>
 <li><strong>One cell, your weather.</strong> Pick a cell on the map, set a weather scenario with the sliders and,
    if you like, change its vegetation, slope and aspect. Nothing is downloaded: all ten models run on
@@ -881,8 +941,8 @@ binary on them in a Web Worker, and reads back the NetCDF-4 files it writes.</p>
 </p>
 <h2 id="what-it-does">What it does<a class="headerlink" href="#what-it-does" title="Permanent link">&para;</a></h2>
 <h3 id="1-one-cell-your-weather">1 · One cell, your weather<a class="headerlink" href="#1-one-cell-your-weather" title="Permanent link">&para;</a></h3>
-<p>Click any cell of the domain, a 1 km cut-out of the Italian one around Liguria: the panel shows its vegetation, slope and aspect from
-the static layers. Set a weather scenario (start date, length, mean temperature and daily
+<p>Click any cell of the map: the panel shows its vegetation, slope and aspect, read from the
+land data. Set a weather scenario (start date, length, mean temperature and daily
 range, humidity, wind, a rain event) and, if you like, override the vegetation class, slope
 and aspect. <strong>Run all indices</strong> runs the ten models on that cell.</p>
 <p><img alt="Cell selection and weather scenario" src="../img/demo/cell-scenario.jpg" /></p>
@@ -907,15 +967,15 @@ with the slider; the legend uses the operational palettes.</p>
 <p><img alt="Series of one cell" src="../img/demo/map-popup.jpg" /></p>
 <div class="admonition note">
 <p class="admonition-title">About this demo</p>
-<p>The run is <strong>single-threaded</strong>, since <code>wasm32</code> has no threads; the native build processes tiles in
-parallel. Every run starts from default moisture (<code>on_missing: defaults</code>) and spins up on the past
-days of weather. That is enough for the fine fuel moisture of RISICO, but slow codes such as the FWI
+<p>In the browser the model runs on one processor core; the installed program uses all of
+them. Every run starts from default moisture, with no <a href="../concepts/">warm state</a>, and
+spins up on the first days of weather. That is enough for the fine fuel moisture of RISICO, but slow codes such as the FWI
 drought code (DC) or KBDI need months to settle. Mark 5 and KBDI use a mean annual rainfall of
 800 mm and Orieux a heat index of 70 for every cell.</p>
 <p>The July 2025 sample comes from the Open-Meteo historical forecast archive and is served with the
 site; weather data by <a href="https://open-meteo.com">Open-Meteo.com</a>, licensed under
 <a href="https://creativecommons.org/licenses/by/4.0/">CC BY 4.0</a>; the same files run with the command-line model, see
-<a href="../getting-started/#try-it-with-the-sample-data">Try it with the sample data</a>. Today's weather is
+<a href="../getting-started/#run-the-sample">Run the sample</a>. Today's weather is
 requested by your browser from Open-Meteo's free API: 2 m temperature and humidity, 10 m wind,
 precipitation and snow depth. The free tier allows about 600 locations a minute; the Liguria map
 needs about 200, and the page waits and retries if the limit is reached.</p>

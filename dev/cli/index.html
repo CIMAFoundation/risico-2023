@@ -11,10 +11,10 @@
       
       
       
-        <link rel="prev" href="../getting-started/">
+        <link rel="prev" href="../indices/">
       
       
-        <link rel="next" href="../configuration/">
+        <link rel="next" href="../execution/">
       
       
         
@@ -269,6 +269,10 @@
       
         
       
+        
+      
+        
+      
     
     
     
@@ -329,6 +333,118 @@
     
   
     Getting Started
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../concepts/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    How RISICO Works
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../input-data/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Input Data
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../configuration/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Configuration
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../indices/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Fire Danger Indices
   
 
     
@@ -507,62 +623,6 @@
   
   
     <li class="md-nav__item">
-      <a href="../configuration/" class="md-nav__link">
-        
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    Configuration
-  
-
-    
-  </span>
-  
-  
-
-      </a>
-    </li>
-  
-
-              
-            
-              
-                
-  
-  
-  
-  
-    <li class="md-nav__item">
-      <a href="../indices/" class="md-nav__link">
-        
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    Fire Danger Indices
-  
-
-    
-  </span>
-  
-  
-
-      </a>
-    </li>
-  
-
-              
-            
-              
-                
-  
-  
-  
-  
-    <li class="md-nav__item">
       <a href="../execution/" class="md-nav__link">
         
   
@@ -570,7 +630,7 @@
   <span class="md-ellipsis">
     
   
-    Tiled Streaming Execution
+    Large Domains and Performance
   
 
     
@@ -946,16 +1006,17 @@
 </tr>
 <tr>
 <td><code>static-converter</code></td>
-<td>Convert legacy RISICO/FWI cell files to GeoTIFF static layers</td>
+<td>Convert the text static data of the previous RISICO implementation to GeoTIFF layers</td>
 </tr>
 <tr>
 <td><code>warm-state-converter</code></td>
-<td>Convert legacy warm-state files to NetCDF snapshots</td>
+<td>Convert the text warm states of the previous RISICO implementation to NetCDF snapshots</td>
 </tr>
 </tbody>
 </table>
-<div class="highlight"><pre><span></span><code>cargo<span class="w"> </span>build<span class="w"> </span>--release<span class="w"> </span>--bins
-ls<span class="w"> </span>target/release/<span class="o">{</span>risico-2023,streaming-inspect,static-converter,warm-state-converter<span class="o">}</span>
+<p>Most users need only <code>risico-2023</code>. The two converters are for existing installations of the
+previous RISICO implementation (see <a href="../conversion/">Converting Legacy Data</a>).</p>
+<div class="highlight"><pre><span></span><code>cargo<span class="w"> </span>build<span class="w"> </span>--release<span class="w"> </span>--bins<span class="w">    </span><span class="c1"># builds all four in target/release/</span>
 </code></pre></div>
 <p>Every command prints its usage with <code>--help</code>.</p>
 <h2 id="risico-2023"><code>risico-2023</code><a class="headerlink" href="#risico-2023" title="Permanent link">&para;</a></h2>
@@ -973,15 +1034,17 @@ Options:
 <h3 id="arguments">Arguments<a class="headerlink" href="#arguments" title="Permanent link">&para;</a></h3>
 <dl>
 <dt><code>DATE</code></dt>
-<dd>The run date, in UTC. Each model loads the newest warm-state snapshot at or before it
-(within <code>max_age_hours</code>) and starts from there. The weather inputs must start after it.</dd>
+<dd>The run date, in UTC. Each model starts from the warm-state snapshot of the day before
+(see <a href="../configuration/#warm-state">Configuration</a>), and output times are counted from it.
+Every timestamp of the inputs is processed, so give inputs that start after that
+snapshot.</dd>
 <dt><code>CONFIG_PATH</code></dt>
 <dd>A YAML configuration: the models to run, their static data, warm state and outputs
 (see <a href="../configuration/">Configuration</a>).</dd>
 <dt><code>INPUT_PATH</code></dt>
 <dd>Either a <strong>directory</strong> of NetCDF weather files (every <code>.nc</code> file in it is read, see
-<a href="../getting-started/#netcdf-inputs">Getting Started</a>) or a <strong>text file</strong> listing legacy
-<code>.zbin</code> files, one per line.</dd>
+<a href="../input-data/#weather-inputs">Input Data</a>) or a <strong>text file</strong> listing <code>.zbin</code> files of the
+previous RISICO implementation, one per line.</dd>
 </dl>
 <h3 id="example">Example<a class="headerlink" href="#example" title="Permanent link">&para;</a></h3>
 <div class="highlight"><pre><span></span><code>./target/release/risico-2023<span class="w"> </span><span class="se">\</span>
@@ -992,7 +1055,7 @@ Options:
 <p>A run reads the static data and warm state of every model, then streams the inputs one
 timestamp at a time through each tile of each model, writing outputs at the configured
 hours and the warm state at <code>warm_state_hour</code> (see
-<a href="../execution/">Tiled Streaming Execution</a>).</p>
+<a href="../execution/">Large Domains and Performance</a>).</p>
 <h3 id="environment">Environment<a class="headerlink" href="#environment" title="Permanent link">&para;</a></h3>
 <table>
 <thead>
