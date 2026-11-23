@@ -1909,6 +1909,16 @@ impl FWIConfig {
         palettes: &HashMap<String, String>,
     ) -> Result<FWIConfig, RISICOError> {
         let palettes = load_palettes(palettes);
+        // The model falls back to the legacy formulation for any other
+        // version, so the rest of the configuration (warm-state layout,
+        // output resolution) must treat it as legacy too.
+        let model_version = match config_defs.model_version.as_str() {
+            version @ ("legacy" | "cffdrs" | "sliding_window") => version,
+            other => {
+                warn!("FWI: unknown model_version {other:?}, the legacy model is used");
+                "legacy"
+            }
+        };
 
         let StaticDataConfig::GeoTiff { domain_mask, .. } = &config_defs.static_data;
         let domain = RasterDomain::open(domain_mask)?;
@@ -1948,7 +1958,7 @@ impl FWIConfig {
             directory,
             latest_warm_state_time,
             max_age_hours.unwrap_or(120),
-            &config_defs.model_version,
+            model_version,
             grid_ref,
             &cell_indexes,
         )? {
@@ -1975,25 +1985,22 @@ impl FWIConfig {
             .into());
         }
 
-        if !["legacy", "cffdrs", "sliding_window"].contains(&config_defs.model_version.as_str()) {
-            warn!("FWI: unknown model_version {:?}, the legacy model is used", config_defs.model_version);
-        }
         info!(
             "FWI ({}): warm state at {} for run date {}",
-            config_defs.model_version,
+            model_version,
             warm_state_time.format("%Y-%m-%d %H:%M"),
             date.format("%Y-%m-%d %H:%M")
         );
 
         let mut props = FWIProperties::new(props_container);
-        if config_defs.model_version == "cffdrs" {
+        if model_version == "cffdrs" {
             // daily step at local standard noon: one time-zone lookup per cell
             props.compute_standard_offsets(&date);
         }
 
         // if config_defs.model_version = 'legacy' them put output_time_resolution to 24
         let mut output_time_resolution = config_defs.output_time_resolution.unwrap_or(24);
-        if config_defs.model_version == "legacy" && output_time_resolution != 24 {
+        if model_version == "legacy" && output_time_resolution != 24 {
             warn!("Using legacy model version, setting output_time_resolution to 24");
             output_time_resolution = 24;
         }
@@ -2011,7 +2018,7 @@ impl FWIConfig {
             palettes,
             output_time_resolution,
             output_time_offset,
-            model_version: config_defs.model_version.clone(),
+            model_version: model_version.to_owned(),
             output_types_defs: config_defs.output_types.clone(),
         };
 
