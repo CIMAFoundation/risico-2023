@@ -276,12 +276,10 @@ fn register_nc_file(
 
 /// read a slice of a variable from a netcdf file
 fn read_variable_from_file(
-    file: &str,
+    nc_file: &NcFile,
     variable: &str,
     time_index: usize,
 ) -> Result<Array1<f32>, Box<dyn Error>> {
-    let nc_file = crate::common::io::open_netcdf(file)?;
-
     let var = nc_file
         .variable(variable)
         .map_err(|_| format!("Could not find variable '{}'", variable))?;
@@ -297,7 +295,7 @@ fn read_variable_from_file(
         step: 1,
     }));
     let selection = NcSliceInfo { selections };
-    let values = Array1::from_vec(read_f32_values(&nc_file, var, Some(&selection))?);
+    let values = Array1::from_vec(read_f32_values(nc_file, var, Some(&selection))?);
 
     Ok(values)
 }
@@ -309,6 +307,10 @@ pub struct NetCdfInputHandler {
     grids: Vec<Box<dyn Grid>>,
     config: NetCdfInputConfiguration,
     source_values: Mutex<HashMap<(String, String, usize), Arc<Array1<f32>>>>,
+    /// The most recently read files, kept open: a file holding many
+    /// timestamps is read at every step, and opening it parses its whole
+    /// HDF5 header (and on WASI reads it into memory).
+    open_files: Mutex<Vec<(String, Arc<NcFile>)>>,
     /// Per registered selection, the indexes on each grid in `grids`.
     coordinate_registry: Vec<Vec<CellIndexes>>,
 }
@@ -365,8 +367,37 @@ impl NetCdfInputHandler {
             grids,
             config: config.clone(),
             source_values: Mutex::new(HashMap::new()),
+            open_files: Mutex::new(Vec::new()),
             coordinate_registry: Vec::new(),
         })
+    }
+
+    /// The open handle of `path`, from the few most recently used ones.
+    fn open_file(&self, path: &str) -> Result<Arc<NcFile>, Box<dyn Error>> {
+        const KEEP_OPEN: usize = 8;
+        {
+            let mut files = self.open_files.lock().expect("NetCDF file cache lock is poisoned");
+            if let Some(position) = files.iter().position(|(open, _)| open == path) {
+                let entry = files.remove(position);
+                let file = entry.1.clone();
+                files.push(entry);
+                return Ok(file);
+            }
+        }
+        let file = Arc::new(crate::common::io::open_netcdf(path)?);
+        let mut files = self.open_files.lock().expect("NetCDF file cache lock is poisoned");
+        if !files.iter().any(|(open, _)| open == path) {
+            files.push((path.to_string(), file.clone()));
+            if files.len() > KEEP_OPEN {
+                files.remove(0);
+            }
+        }
+        Ok(file)
+    }
+
+    fn read_variable(&self, path: &str, variable: &str, time_index: usize) -> Result<Array1<f32>, Box<dyn Error>> {
+        let file = self.open_file(path)?;
+        read_variable_from_file(&file, variable, time_index)
     }
 }
 
@@ -400,7 +431,7 @@ impl InputHandler for NetCdfInputHandler {
             .into_par_iter()
             .filter_map(|key| {
                 let (file, variable, time_index) = &key;
-                match read_variable_from_file(file, variable, *time_index) {
+                match self.read_variable(file, variable, *time_index) {
                     Ok(values) => Some((key.clone(), Arc::new(values))),
                     Err(error) => {
                         warn!("Error reading variable {variable} from file {file}: {error}");
@@ -445,7 +476,7 @@ impl InputHandler for NetCdfInputHandler {
                 .cloned();
             let values = match values {
                 Some(values) => Ok(values),
-                None => read_variable_from_file(&record.file, variable, time_index).map(Arc::new),
+                None => self.read_variable(&record.file, variable, time_index).map(Arc::new),
             };
 
             match values {
