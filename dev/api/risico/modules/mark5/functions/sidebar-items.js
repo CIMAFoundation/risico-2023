@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["drought_factor","ffdi","find_rain_events","get_output_fn","kbdi_output","rainfall_effect","store_day_fn"]};

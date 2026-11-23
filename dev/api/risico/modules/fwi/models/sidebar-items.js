@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"struct":["FWICellPropertiesContainer","FWIProperties","FWIPropertiesElement","FWIState","FWIStateElement","FWIWarmState"]};

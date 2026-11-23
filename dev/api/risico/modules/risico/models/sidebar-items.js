@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"struct":["RISICOCellPropertiesContainer","RISICOProperties","RISICOPropertiesElement","RISICOState","RISICOStateElement","RISICOVegetation","RISICOWarmState"]};

@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"struct":["SharplesCellPropertiesContainer","SharplesProperties","SharplesPropertiesElement","SharplesState","SharplesStateElement"]};

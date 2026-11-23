@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"constant":["DC_INIT","DMC_INIT","FFMC_INIT","NODATAVAL","TIME_WINDOW"]};

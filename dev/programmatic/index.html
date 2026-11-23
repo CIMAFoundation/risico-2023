@@ -1,0 +1,1362 @@
+
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+        <meta name="description" content="RISICO: the wildfire danger forecasting model of CIMA Research Foundation">
+      
+      
+      
+      
+        <link rel="prev" href="../conversion/">
+      
+      
+        <link rel="next" href="../api-reference/">
+      
+      
+        
+      
+      
+      <link rel="icon" href="../assets/images/favicon.png">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.8.2">
+    
+    
+      
+        <title>Programmatic Workflow - RISICO</title>
+      
+    
+    
+      <link rel="stylesheet" href="../assets/stylesheets/main.57a0d79d.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+        
+        
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto:300,300i,400,400i,700,700i%7CRoboto+Mono:400,400i,700,700i&display=fallback">
+        <style>:root{--md-text-font:"Roboto";--md-code-font:"Roboto Mono"}</style>
+      
+    
+    
+      <link rel="stylesheet" href="../stylesheets/cima-theme.css">
+    
+    <script>__md_scope=new URL("..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+
+    
+    
+  </head>
+  
+  
+    <body dir="ltr">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#programmatic-workflow" class="md-skip">
+          Skip to content
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+    </div>
+    
+      <div data-md-color-scheme="default" data-md-component="outdated" hidden>
+        
+      </div>
+    
+    
+      
+
+  
+
+<header class="md-header md-header--shadow" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Header">
+    <a href=".." title="RISICO" class="md-header__button md-logo" aria-label="RISICO" data-md-component="logo">
+      
+  <img src="../img/cima.png" alt="logo">
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            RISICO
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              Programmatic Workflow
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+    
+      <script>var palette=__md_get("__palette");if(palette&&palette.color){if("(prefers-color-scheme)"===palette.color.media){var media=matchMedia("(prefers-color-scheme: light)"),input=document.querySelector(media.matches?"[data-md-color-media='(prefers-color-scheme: light)']":"[data-md-color-media='(prefers-color-scheme: dark)']");palette.color.media=input.getAttribute("data-md-color-media"),palette.color.scheme=input.getAttribute("data-md-color-scheme"),palette.color.primary=input.getAttribute("data-md-color-primary"),palette.color.accent=input.getAttribute("data-md-color-accent")}for(var[key,value]of Object.entries(palette.color))document.body.setAttribute("data-md-color-"+key,value)}</script>
+    
+    
+    
+      
+      
+        <label class="md-header__button md-icon" for="__search">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        </label>
+        <div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="Search" placeholder="Search" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
+      <label class="md-search__icon md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+      </label>
+      <nav class="md-search__options" aria-label="Search">
+        
+        <button type="reset" class="md-search__icon md-icon" title="Clear" aria-label="Clear" tabindex="-1">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+        </button>
+      </nav>
+      
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" tabindex="0" data-md-scrollfix>
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            Initializing search
+          </div>
+          <ol class="md-search-result__list" role="presentation"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+      
+    
+    
+      <div class="md-header__source">
+        <a href="https://github.com/CIMAFoundation/risico-2023" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    CIMAFoundation/risico-2023
+  </div>
+</a>
+      </div>
+    
+  </nav>
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+          
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+
+<nav class="md-nav md-nav--primary" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href=".." title="RISICO" class="md-nav__button md-logo" aria-label="RISICO" data-md-component="logo">
+      
+  <img src="../img/cima.png" alt="logo">
+
+    </a>
+    RISICO
+  </label>
+  
+    <div class="md-nav__source">
+      <a href="https://github.com/CIMAFoundation/risico-2023" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    CIMAFoundation/risico-2023
+  </div>
+</a>
+    </div>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href=".." class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Home
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_2" >
+        
+          
+          <label class="md-nav__link" for="__nav_2" id="__nav_2_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    User Guide
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_2_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_2">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    User Guide
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../getting-started/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Getting Started
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../cli/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    CLI Usage
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../configuration/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Configuration
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../indices/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Fire Danger Indices
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../execution/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Tiled Streaming Execution
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../conversion/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Converting Legacy Data
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+    
+  
+  
+  
+    
+    
+      
+        
+      
+        
+      
+        
+      
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--active md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_3" checked>
+        
+          
+          <label class="md-nav__link" for="__nav_3" id="__nav_3_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Developer Guide
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_3_label" aria-expanded="true">
+          <label class="md-nav__title" for="__nav_3">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Developer Guide
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+    
+  
+  
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Programmatic Workflow
+  
+
+    
+  </span>
+  
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Programmatic Workflow
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#add-the-dependency" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Add the dependency
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#the-model-api" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The model API
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="The model API">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#units" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Units
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#stepping-each-model" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Stepping each model
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#risico-on-one-cell" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        RISICO on one cell
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="RISICO on one cell">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#vegetation" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Vegetation
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#fwi-on-one-cell" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        FWI on one cell
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#many-cells" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Many cells
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../api-reference/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    API Reference
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../web-demo/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Building the Web Demo
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../demo/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Interactive Demo
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+              
+              <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#add-the-dependency" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Add the dependency
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#the-model-api" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The model API
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="The model API">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#units" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Units
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#stepping-each-model" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Stepping each model
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#risico-on-one-cell" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        RISICO on one cell
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="RISICO on one cell">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#vegetation" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Vegetation
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#fwi-on-one-cell" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        FWI on one cell
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#many-cells" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Many cells
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              
+              <article class="md-content__inner md-typeset">
+                
+                  
+
+
+  
+  
+
+
+<h1 id="programmatic-workflow">Programmatic Workflow<a class="headerlink" href="#programmatic-workflow" title="Permanent link">&para;</a></h1>
+<p>The models are a Rust library, <code>risico</code>, separate from the <code>risico-2023</code> runner: every index
+is a pure computation on arrays of cells, with no files involved. Use it to embed RISICO in
+another program, run it on cells you already hold in memory, or test a formulation. This
+guide shows the model API; the full item-by-item documentation is in the
+<a href="../api-reference/">API Reference</a>.</p>
+<h2 id="add-the-dependency">Add the dependency<a class="headerlink" href="#add-the-dependency" title="Permanent link">&para;</a></h2>
+<p>The library is published as the <code>risico-2023</code> crate. Without the default <code>build-binary</code>
+feature it leaves out the runner's dependencies (NetCDF, GeoTIFF, Zarr, CLI):</p>
+<div class="highlight"><pre><span></span><code><span class="k">[dependencies]</span>
+<span class="n">risico-2023</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="n">git</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="s2">"https://github.com/CIMAFoundation/risico-2023"</span><span class="p">,</span><span class="w"> </span><span class="n">branch</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="s2">"dev"</span><span class="p">,</span><span class="w"> </span><span class="n">default-features</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="kc">false</span><span class="w"> </span><span class="p">}</span>
+<span class="n">chrono</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">"0.4"</span>
+</code></pre></div>
+<p>The crate is imported as <code>risico</code>. Add the <code>config</code> feature for the <code>configuration.yml</code>
+schema types (<code>risico::config</code>).</p>
+<h2 id="the-model-api">The model API<a class="headerlink" href="#the-model-api" title="Permanent link">&para;</a></h2>
+<p>Every model in <code>risico::modules</code> is made of the same pieces:</p>
+<table>
+<thead>
+<tr>
+<th>Piece</th>
+<th>Type</th>
+<th>What it holds</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Properties</td>
+<td><code>RISICOProperties</code>, <code>FWIProperties</code>, ...</td>
+<td>What does not change during a run, one element per cell: coordinates, and for RISICO slope, aspect, vegetation and PPF</td>
+</tr>
+<tr>
+<td>Warm state</td>
+<td><code>RISICOWarmState</code>, <code>FWIWarmState</code>, ...</td>
+<td>The per-cell memory a run starts from and saves at its end</td>
+</tr>
+<tr>
+<td>State</td>
+<td><code>RISICOState</code>, <code>FWIState</code>, ...</td>
+<td>The running state, created from the warm state and a start time</td>
+</tr>
+<tr>
+<td>Input</td>
+<td><code>models::input::Input</code></td>
+<td>The weather of one timestamp on every cell</td>
+</tr>
+<tr>
+<td>Output</td>
+<td><code>models::output::Output</code></td>
+<td>The variables computed at one timestamp, read by <code>OutputVariableName</code></td>
+</tr>
+</tbody>
+</table>
+<p>Properties, states and inputs are aligned arrays: element <code>i</code> of each is the same cell.</p>
+<h3 id="units">Units<a class="headerlink" href="#units" title="Permanent link">&para;</a></h3>
+<p>The library has its own units; the runner converts the input files to them:</p>
+<table>
+<thead>
+<tr>
+<th>Quantity</th>
+<th>Unit</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Temperature</td>
+<td>°C</td>
+</tr>
+<tr>
+<td>Relative humidity</td>
+<td>%</td>
+</tr>
+<tr>
+<td>Wind speed</td>
+<td><strong>m/h</strong></td>
+</tr>
+<tr>
+<td>Wind direction</td>
+<td><strong>radians</strong>, the direction the wind comes from</td>
+</tr>
+<tr>
+<td>Rain</td>
+<td>mm</td>
+</tr>
+<tr>
+<td>Snow cover</td>
+<td>cm</td>
+</tr>
+<tr>
+<td>Slope, aspect</td>
+<td><strong>radians</strong></td>
+</tr>
+</tbody>
+</table>
+<p>Missing values are <code>risico::constants::NODATAVAL</code>. <code>InputElement::default()</code> fills every
+field with it, so set the variables a model needs and leave the others.</p>
+<h3 id="stepping-each-model">Stepping each model<a class="headerlink" href="#stepping-each-model" title="Permanent link">&para;</a></h3>
+<p>The runner drives each model with the same calls in every tile; follow the same order:</p>
+<table>
+<thead>
+<tr>
+<th>Model</th>
+<th>Every timestamp</th>
+<th>When an output is wanted</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>RISICO</td>
+<td><code>state.update(&amp;props, &amp;input)</code></td>
+<td><code>state.output(&amp;props, &amp;input)</code></td>
+</tr>
+<tr>
+<td>FWI</td>
+<td><code>state.update(&amp;props, &amp;input)</code></td>
+<td><code>state.output(&amp;props)</code></td>
+</tr>
+<tr>
+<td>Mark 5</td>
+<td><code>state.store(&amp;input, &amp;props)</code></td>
+<td><code>state.output(&amp;props)</code>, once a day</td>
+</tr>
+<tr>
+<td>KBDI, Orieux</td>
+<td><code>state.store(&amp;input)</code></td>
+<td><code>state.update(&amp;props)</code> then <code>state.output()</code>, once a day</td>
+</tr>
+<tr>
+<td>Nesterov</td>
+<td><code>state.store(&amp;input, &amp;props)</code></td>
+<td><code>state.update()</code> then <code>state.output()</code>, once a day</td>
+</tr>
+<tr>
+<td>Angström, Fosberg, Sharples, HDW</td>
+<td><code>state.store(&amp;input)</code></td>
+<td><code>state.output()</code></td>
+</tr>
+</tbody>
+</table>
+<p>FWI steps at local standard noon: call <code>FWIProperties::compute_standard_offsets</code> once
+before the run.</p>
+<h2 id="risico-on-one-cell">RISICO on one cell<a class="headerlink" href="#risico-on-one-cell" title="Permanent link">&para;</a></h2>
+<p><code>examples/risico_single_cell.rs</code> runs RISICO for two days of synthetic weather and prints
+the fine fuel moisture, rate of spread and intensity every six hours:</p>
+<div class="highlight"><pre><span></span><code><span class="k">use</span><span class="w"> </span><span class="n">std</span><span class="p">::{</span><span class="n">collections</span><span class="p">::</span><span class="n">HashMap</span><span class="p">,</span><span class="w"> </span><span class="kt">f32</span><span class="p">::</span><span class="n">consts</span><span class="p">::</span><span class="n">PI</span><span class="p">,</span><span class="w"> </span><span class="n">sync</span><span class="p">::</span><span class="n">Arc</span><span class="p">};</span>
+
+<span class="k">use</span><span class="w"> </span><span class="n">chrono</span><span class="p">::{</span><span class="n">Duration</span><span class="p">,</span><span class="w"> </span><span class="n">TimeZone</span><span class="p">,</span><span class="w"> </span><span class="n">Utc</span><span class="p">};</span>
+<span class="k">use</span><span class="w"> </span><span class="n">risico</span><span class="p">::{</span>
+<span class="w">    </span><span class="n">models</span><span class="p">::{</span>
+<span class="w">        </span><span class="n">input</span><span class="p">::{</span><span class="n">Input</span><span class="p">,</span><span class="w"> </span><span class="n">InputElement</span><span class="p">},</span>
+<span class="w">        </span><span class="n">output</span><span class="p">::</span><span class="n">OutputVariableName</span><span class="p">,</span>
+<span class="w">    </span><span class="p">},</span>
+<span class="w">    </span><span class="n">modules</span><span class="p">::</span><span class="n">risico</span><span class="p">::{</span>
+<span class="w">        </span><span class="n">config</span><span class="p">::</span><span class="n">RISICOModelConfig</span><span class="p">,</span>
+<span class="w">        </span><span class="n">models</span><span class="p">::{</span>
+<span class="w">            </span><span class="n">RISICOCellPropertiesContainer</span><span class="p">,</span><span class="w"> </span><span class="n">RISICOProperties</span><span class="p">,</span><span class="w"> </span><span class="n">RISICOState</span><span class="p">,</span><span class="w"> </span><span class="n">RISICOVegetation</span><span class="p">,</span>
+<span class="w">            </span><span class="n">RISICOWarmState</span><span class="p">,</span>
+<span class="w">        </span><span class="p">},</span>
+<span class="w">    </span><span class="p">},</span>
+<span class="p">};</span>
+
+<span class="k">fn</span><span class="w"> </span><span class="nf">main</span><span class="p">()</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="c1">// One cell: position, terrain and vegetation. The vegetation parameters</span>
+<span class="w">    </span><span class="c1">// normally come from the catalogue CSV; the default is a generic fuel.</span>
+<span class="w">    </span><span class="kd">let</span><span class="w"> </span><span class="n">vegetation</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">Arc</span><span class="p">::</span><span class="n">new</span><span class="p">(</span><span class="n">RISICOVegetation</span><span class="p">::</span><span class="n">default</span><span class="p">());</span>
+<span class="w">    </span><span class="kd">let</span><span class="w"> </span><span class="n">properties</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">RISICOProperties</span><span class="p">::</span><span class="n">new</span><span class="p">(</span>
+<span class="w">        </span><span class="n">RISICOCellPropertiesContainer</span><span class="w"> </span><span class="p">{</span>
+<span class="w">            </span><span class="n">lons</span><span class="p">:</span><span class="w"> </span><span class="nc">vec</span><span class="o">!</span><span class="p">[</span><span class="mf">8.86</span><span class="p">],</span>
+<span class="w">            </span><span class="n">lats</span><span class="p">:</span><span class="w"> </span><span class="nc">vec</span><span class="o">!</span><span class="p">[</span><span class="mf">44.45</span><span class="p">],</span>
+<span class="w">            </span><span class="n">slopes</span><span class="p">:</span><span class="w"> </span><span class="nc">vec</span><span class="o">!</span><span class="p">[</span><span class="mf">5.0_</span><span class="k">f32</span><span class="p">.</span><span class="n">to_radians</span><span class="p">()],</span>
+<span class="w">            </span><span class="n">aspects</span><span class="p">:</span><span class="w"> </span><span class="nc">vec</span><span class="o">!</span><span class="p">[</span><span class="mf">160.0_</span><span class="k">f32</span><span class="p">.</span><span class="n">to_radians</span><span class="p">()],</span>
+<span class="w">            </span><span class="n">vegetations</span><span class="p">:</span><span class="w"> </span><span class="nc">vec</span><span class="o">!</span><span class="p">[</span><span class="n">vegetation</span><span class="p">.</span><span class="n">clone</span><span class="p">()],</span>
+<span class="w">        </span><span class="p">},</span>
+<span class="w">        </span><span class="n">HashMap</span><span class="p">::</span><span class="n">from</span><span class="p">([(</span><span class="n">vegetation</span><span class="p">.</span><span class="n">id</span><span class="p">.</span><span class="n">clone</span><span class="p">(),</span><span class="w"> </span><span class="n">vegetation</span><span class="p">)]),</span>
+<span class="w">        </span><span class="fm">vec!</span><span class="p">[</span><span class="mf">1.0</span><span class="p">],</span><span class="w"> </span><span class="c1">// summer PPF</span>
+<span class="w">        </span><span class="fm">vec!</span><span class="p">[</span><span class="mf">1.0</span><span class="p">],</span><span class="w"> </span><span class="c1">// winter PPF</span>
+<span class="w">    </span><span class="p">);</span>
+
+<span class="w">    </span><span class="c1">// Start from 40 % fine fuel moisture, the default warm state.</span>
+<span class="w">    </span><span class="kd">let</span><span class="w"> </span><span class="n">start</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">Utc</span><span class="p">.</span><span class="n">with_ymd_and_hms</span><span class="p">(</span><span class="mi">2026</span><span class="p">,</span><span class="w"> </span><span class="mi">7</span><span class="p">,</span><span class="w"> </span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="mi">0</span><span class="p">,</span><span class="w"> </span><span class="mi">0</span><span class="p">,</span><span class="w"> </span><span class="mi">0</span><span class="p">).</span><span class="n">unwrap</span><span class="p">();</span>
+<span class="w">    </span><span class="kd">let</span><span class="w"> </span><span class="k">mut</span><span class="w"> </span><span class="n">state</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">RISICOState</span><span class="p">::</span><span class="n">new</span><span class="p">(</span><span class="o">&amp;</span><span class="p">[</span><span class="n">RISICOWarmState</span><span class="p">::</span><span class="n">default</span><span class="p">()],</span><span class="w"> </span><span class="o">&amp;</span><span class="n">start</span><span class="p">,</span><span class="w"> </span><span class="n">RISICOModelConfig</span><span class="p">::</span><span class="n">new</span><span class="p">(</span><span class="s">"v2025"</span><span class="p">));</span>
+
+<span class="w">    </span><span class="k">for</span><span class="w"> </span><span class="n">hour</span><span class="w"> </span><span class="k">in</span><span class="w"> </span><span class="mi">1</span><span class="o">..=</span><span class="mi">48</span><span class="w"> </span><span class="p">{</span>
+<span class="w">        </span><span class="kd">let</span><span class="w"> </span><span class="n">time</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">start</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">Duration</span><span class="p">::</span><span class="n">hours</span><span class="p">(</span><span class="n">hour</span><span class="p">);</span>
+<span class="w">        </span><span class="kd">let</span><span class="w"> </span><span class="n">phase</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mf">2.0</span><span class="w"> </span><span class="o">*</span><span class="w"> </span><span class="n">PI</span><span class="w"> </span><span class="o">*</span><span class="w"> </span><span class="p">((</span><span class="n">hour</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="kt">f32</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="mf">15.0</span><span class="p">)</span><span class="w"> </span><span class="o">/</span><span class="w"> </span><span class="mf">24.0</span><span class="p">);</span>
+<span class="w">        </span><span class="c1">// Units are the library's own: wind speed in m/h, direction in radians.</span>
+<span class="w">        </span><span class="kd">let</span><span class="w"> </span><span class="n">weather</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">InputElement</span><span class="w"> </span><span class="p">{</span>
+<span class="w">            </span><span class="n">temperature</span><span class="p">:</span><span class="w"> </span><span class="mf">26.0</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mf">6.0</span><span class="w"> </span><span class="o">*</span><span class="w"> </span><span class="n">phase</span><span class="p">.</span><span class="n">cos</span><span class="p">(),</span>
+<span class="w">            </span><span class="n">humidity</span><span class="p">:</span><span class="w"> </span><span class="mf">45.0</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="mf">20.0</span><span class="w"> </span><span class="o">*</span><span class="w"> </span><span class="n">phase</span><span class="p">.</span><span class="n">cos</span><span class="p">(),</span>
+<span class="w">            </span><span class="n">wind_speed</span><span class="p">:</span><span class="w"> </span><span class="mf">4.0</span><span class="w"> </span><span class="o">*</span><span class="w"> </span><span class="mf">3600.0</span><span class="p">,</span>
+<span class="w">            </span><span class="n">wind_dir</span><span class="p">:</span><span class="w"> </span><span class="mf">270.0_</span><span class="k">f32</span><span class="p">.</span><span class="n">to_radians</span><span class="p">(),</span>
+<span class="w">            </span><span class="n">rain</span><span class="p">:</span><span class="w"> </span><span class="mf">0.0</span><span class="p">,</span>
+<span class="w">            </span><span class="n">snow_cover</span><span class="p">:</span><span class="w"> </span><span class="mf">0.0</span><span class="p">,</span>
+<span class="w">            </span><span class="o">..</span><span class="n">InputElement</span><span class="p">::</span><span class="n">default</span><span class="p">()</span>
+<span class="w">        </span><span class="p">};</span>
+<span class="w">        </span><span class="kd">let</span><span class="w"> </span><span class="n">input</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">Input</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="n">time</span><span class="p">,</span><span class="w"> </span><span class="n">data</span><span class="p">:</span><span class="w"> </span><span class="nc">vec</span><span class="o">!</span><span class="p">[</span><span class="n">weather</span><span class="p">].</span><span class="n">into</span><span class="p">()</span><span class="w"> </span><span class="p">};</span>
+
+<span class="w">        </span><span class="n">state</span><span class="p">.</span><span class="n">update</span><span class="p">(</span><span class="o">&amp;</span><span class="n">properties</span><span class="p">,</span><span class="w"> </span><span class="o">&amp;</span><span class="n">input</span><span class="p">);</span>
+<span class="w">        </span><span class="k">if</span><span class="w"> </span><span class="n">hour</span><span class="w"> </span><span class="o">%</span><span class="w"> </span><span class="mi">6</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="mi">0</span><span class="w"> </span><span class="p">{</span>
+<span class="w">            </span><span class="kd">let</span><span class="w"> </span><span class="n">output</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">state</span><span class="p">.</span><span class="n">output</span><span class="p">(</span><span class="o">&amp;</span><span class="n">properties</span><span class="p">,</span><span class="w"> </span><span class="o">&amp;</span><span class="n">input</span><span class="p">);</span>
+<span class="w">            </span><span class="kd">let</span><span class="w"> </span><span class="n">value</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="o">|</span><span class="n">name</span><span class="o">|</span><span class="w"> </span><span class="n">output</span><span class="p">.</span><span class="n">get</span><span class="p">(</span><span class="o">&amp;</span><span class="n">name</span><span class="p">).</span><span class="n">unwrap</span><span class="p">()[</span><span class="mi">0</span><span class="p">];</span>
+<span class="w">            </span><span class="fm">println!</span><span class="p">(</span>
+<span class="w">                </span><span class="s">"{time}  dffm {:5.1} %  V {:6.1} m/h  I {:7.1} kW/m"</span><span class="p">,</span>
+<span class="w">                </span><span class="n">value</span><span class="p">(</span><span class="n">OutputVariableName</span><span class="p">::</span><span class="n">dffm</span><span class="p">),</span>
+<span class="w">                </span><span class="n">value</span><span class="p">(</span><span class="n">OutputVariableName</span><span class="p">::</span><span class="n">V</span><span class="p">),</span>
+<span class="w">                </span><span class="n">value</span><span class="p">(</span><span class="n">OutputVariableName</span><span class="p">::</span><span class="n">I</span><span class="p">),</span>
+<span class="w">            </span><span class="p">);</span>
+<span class="w">        </span><span class="p">}</span>
+<span class="w">    </span><span class="p">}</span>
+<span class="p">}</span>
+</code></pre></div>
+<div class="highlight"><pre><span></span><code><span class="gp">$ </span>cargo<span class="w"> </span>run<span class="w"> </span>--release<span class="w"> </span>--example<span class="w"> </span>risico_single_cell
+<span class="go">2026-07-01 06:00:00 UTC  dffm  35.7 %  V    7.1 m/h  I    10.6 kW/m</span>
+<span class="go">2026-07-01 12:00:00 UTC  dffm  30.8 %  V   17.7 m/h  I    28.7 kW/m</span>
+<span class="go">2026-07-01 18:00:00 UTC  dffm  25.7 %  V   41.4 m/h  I    73.3 kW/m</span>
+<span class="go">...</span>
+<span class="go">2026-07-03 00:00:00 UTC  dffm  12.7 %  V  139.6 m/h  I   298.9 kW/m</span>
+</code></pre></div>
+<p><code>RISICOModelConfig::new</code> selects the formulation: <code>legacy</code>, <code>v2023</code> or <code>v2025</code>.</p>
+<h3 id="vegetation">Vegetation<a class="headerlink" href="#vegetation" title="Permanent link">&para;</a></h3>
+<p><code>RISICOVegetation</code> holds one row of the vegetation catalogue (<code>p_vegetazione.csv</code>):</p>
+<table>
+<thead>
+<tr>
+<th>Field</th>
+<th>Meaning</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>id</code>, <code>name</code></td>
+<td>Identifier in the vegetation-id layer, description</td>
+</tr>
+<tr>
+<td><code>d0</code>, <code>d1</code></td>
+<td>Dead fine fuel load, live fuel load</td>
+</tr>
+<tr>
+<td><code>hhv</code></td>
+<td>Higher heating value [kJ/kg]</td>
+</tr>
+<tr>
+<td><code>umid</code></td>
+<td>Live fuel moisture</td>
+</tr>
+<tr>
+<td><code>v0</code></td>
+<td>Base rate of spread [m/h]</td>
+</tr>
+<tr>
+<td><code>T0</code></td>
+<td>Response time of the dead fine fuel moisture [h]</td>
+</tr>
+<tr>
+<td><code>sat</code></td>
+<td>Saturation moisture of the dead fine fuel [%]</td>
+</tr>
+<tr>
+<td><code>use_ndvi</code></td>
+<td>Whether satellite NDVI modulates the live fuel</td>
+</tr>
+</tbody>
+</table>
+<h2 id="fwi-on-one-cell">FWI on one cell<a class="headerlink" href="#fwi-on-one-cell" title="Permanent link">&para;</a></h2>
+<p><code>examples/fwi_single_cell.rs</code> runs the Canadian FWI System for five days of hourly weather
+and prints the codes at noon:</p>
+<div class="highlight"><pre><span></span><code><span class="k">use</span><span class="w"> </span><span class="n">chrono</span><span class="p">::{</span><span class="n">Duration</span><span class="p">,</span><span class="w"> </span><span class="n">TimeZone</span><span class="p">,</span><span class="w"> </span><span class="n">Utc</span><span class="p">};</span>
+<span class="k">use</span><span class="w"> </span><span class="n">risico</span><span class="p">::{</span>
+<span class="w">    </span><span class="n">models</span><span class="p">::{</span>
+<span class="w">        </span><span class="n">input</span><span class="p">::{</span><span class="n">Input</span><span class="p">,</span><span class="w"> </span><span class="n">InputElement</span><span class="p">},</span>
+<span class="w">        </span><span class="n">output</span><span class="p">::</span><span class="n">OutputVariableName</span><span class="p">,</span>
+<span class="w">    </span><span class="p">},</span>
+<span class="w">    </span><span class="n">modules</span><span class="p">::</span><span class="n">fwi</span><span class="p">::{</span>
+<span class="w">        </span><span class="n">config</span><span class="p">::</span><span class="n">FWIModelConfig</span><span class="p">,</span>
+<span class="w">        </span><span class="n">models</span><span class="p">::{</span><span class="n">FWICellPropertiesContainer</span><span class="p">,</span><span class="w"> </span><span class="n">FWIProperties</span><span class="p">,</span><span class="w"> </span><span class="n">FWIState</span><span class="p">,</span><span class="w"> </span><span class="n">FWIWarmState</span><span class="p">},</span>
+<span class="w">    </span><span class="p">},</span>
+<span class="p">};</span>
+
+<span class="k">fn</span><span class="w"> </span><span class="nf">main</span><span class="p">()</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="kd">let</span><span class="w"> </span><span class="n">start</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">Utc</span><span class="p">.</span><span class="n">with_ymd_and_hms</span><span class="p">(</span><span class="mi">2026</span><span class="p">,</span><span class="w"> </span><span class="mi">7</span><span class="p">,</span><span class="w"> </span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="mi">0</span><span class="p">,</span><span class="w"> </span><span class="mi">0</span><span class="p">,</span><span class="w"> </span><span class="mi">0</span><span class="p">).</span><span class="n">unwrap</span><span class="p">();</span>
+
+<span class="w">    </span><span class="kd">let</span><span class="w"> </span><span class="k">mut</span><span class="w"> </span><span class="n">properties</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">FWIProperties</span><span class="p">::</span><span class="n">new</span><span class="p">(</span><span class="n">FWICellPropertiesContainer</span><span class="w"> </span><span class="p">{</span>
+<span class="w">        </span><span class="n">lons</span><span class="p">:</span><span class="w"> </span><span class="nc">vec</span><span class="o">!</span><span class="p">[</span><span class="mf">8.86</span><span class="p">],</span>
+<span class="w">        </span><span class="n">lats</span><span class="p">:</span><span class="w"> </span><span class="nc">vec</span><span class="o">!</span><span class="p">[</span><span class="mf">44.45</span><span class="p">],</span>
+<span class="w">    </span><span class="p">});</span>
+<span class="w">    </span><span class="c1">// FWI steps at local standard noon: resolve each cell's UTC offset once.</span>
+<span class="w">    </span><span class="n">properties</span><span class="p">.</span><span class="n">compute_standard_offsets</span><span class="p">(</span><span class="o">&amp;</span><span class="n">start</span><span class="p">);</span>
+
+<span class="w">    </span><span class="c1">// A warm state is a short history of codes; start from the standard</span>
+<span class="w">    </span><span class="c1">// FFMC 85, DMC 6, DC 15 the day before.</span>
+<span class="w">    </span><span class="kd">let</span><span class="w"> </span><span class="n">warm_state</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">FWIWarmState</span><span class="w"> </span><span class="p">{</span>
+<span class="w">        </span><span class="n">dates</span><span class="p">:</span><span class="w"> </span><span class="nc">vec</span><span class="o">!</span><span class="p">[</span><span class="n">start</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="n">Duration</span><span class="p">::</span><span class="n">days</span><span class="p">(</span><span class="mi">1</span><span class="p">)],</span>
+<span class="w">        </span><span class="n">ffmc</span><span class="p">:</span><span class="w"> </span><span class="nc">vec</span><span class="o">!</span><span class="p">[</span><span class="mf">85.0</span><span class="p">],</span>
+<span class="w">        </span><span class="n">dmc</span><span class="p">:</span><span class="w"> </span><span class="nc">vec</span><span class="o">!</span><span class="p">[</span><span class="mf">6.0</span><span class="p">],</span>
+<span class="w">        </span><span class="n">dc</span><span class="p">:</span><span class="w"> </span><span class="nc">vec</span><span class="o">!</span><span class="p">[</span><span class="mf">15.0</span><span class="p">],</span>
+<span class="w">        </span><span class="n">rain</span><span class="p">:</span><span class="w"> </span><span class="nc">vec</span><span class="o">!</span><span class="p">[</span><span class="mf">0.0</span><span class="p">],</span>
+<span class="w">    </span><span class="p">};</span>
+<span class="w">    </span><span class="kd">let</span><span class="w"> </span><span class="k">mut</span><span class="w"> </span><span class="n">state</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">FWIState</span><span class="p">::</span><span class="n">new</span><span class="p">(</span><span class="o">&amp;</span><span class="p">[</span><span class="n">warm_state</span><span class="p">],</span><span class="w"> </span><span class="o">&amp;</span><span class="n">start</span><span class="p">,</span><span class="w"> </span><span class="n">FWIModelConfig</span><span class="p">::</span><span class="n">new</span><span class="p">(</span><span class="s">"legacy"</span><span class="p">));</span>
+
+<span class="w">    </span><span class="k">for</span><span class="w"> </span><span class="n">hour</span><span class="w"> </span><span class="k">in</span><span class="w"> </span><span class="mi">1</span><span class="o">..=</span><span class="mi">5</span><span class="w"> </span><span class="o">*</span><span class="w"> </span><span class="mi">24</span><span class="w"> </span><span class="p">{</span>
+<span class="w">        </span><span class="kd">let</span><span class="w"> </span><span class="n">time</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">start</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">Duration</span><span class="p">::</span><span class="n">hours</span><span class="p">(</span><span class="n">hour</span><span class="p">);</span>
+<span class="w">        </span><span class="kd">let</span><span class="w"> </span><span class="n">weather</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">InputElement</span><span class="w"> </span><span class="p">{</span>
+<span class="w">            </span><span class="n">temperature</span><span class="p">:</span><span class="w"> </span><span class="mf">28.0</span><span class="p">,</span>
+<span class="w">            </span><span class="n">humidity</span><span class="p">:</span><span class="w"> </span><span class="mf">30.0</span><span class="p">,</span>
+<span class="w">            </span><span class="n">wind_speed</span><span class="p">:</span><span class="w"> </span><span class="mf">5.0</span><span class="w"> </span><span class="o">*</span><span class="w"> </span><span class="mf">3600.0</span><span class="p">,</span><span class="w"> </span><span class="c1">// m/h</span>
+<span class="w">            </span><span class="n">rain</span><span class="p">:</span><span class="w"> </span><span class="mf">0.0</span><span class="p">,</span>
+<span class="w">            </span><span class="o">..</span><span class="n">InputElement</span><span class="p">::</span><span class="n">default</span><span class="p">()</span>
+<span class="w">        </span><span class="p">};</span>
+<span class="w">        </span><span class="n">state</span><span class="p">.</span><span class="n">update</span><span class="p">(</span><span class="o">&amp;</span><span class="n">properties</span><span class="p">,</span><span class="w"> </span><span class="o">&amp;</span><span class="n">Input</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="n">time</span><span class="p">,</span><span class="w"> </span><span class="n">data</span><span class="p">:</span><span class="w"> </span><span class="nc">vec</span><span class="o">!</span><span class="p">[</span><span class="n">weather</span><span class="p">].</span><span class="n">into</span><span class="p">()</span><span class="w"> </span><span class="p">});</span>
+
+<span class="w">        </span><span class="k">if</span><span class="w"> </span><span class="n">hour</span><span class="w"> </span><span class="o">%</span><span class="w"> </span><span class="mi">24</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="mi">12</span><span class="w"> </span><span class="p">{</span>
+<span class="w">            </span><span class="kd">let</span><span class="w"> </span><span class="n">output</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">state</span><span class="p">.</span><span class="n">output</span><span class="p">(</span><span class="o">&amp;</span><span class="n">properties</span><span class="p">);</span>
+<span class="w">            </span><span class="kd">let</span><span class="w"> </span><span class="n">value</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="o">|</span><span class="n">name</span><span class="o">|</span><span class="w"> </span><span class="n">output</span><span class="p">.</span><span class="n">get</span><span class="p">(</span><span class="o">&amp;</span><span class="n">name</span><span class="p">).</span><span class="n">unwrap</span><span class="p">()[</span><span class="mi">0</span><span class="p">];</span>
+<span class="w">            </span><span class="fm">println!</span><span class="p">(</span>
+<span class="w">                </span><span class="s">"{time}  FFMC {:5.1}  DMC {:5.1}  DC {:6.1}  ISI {:4.1}  BUI {:5.1}  FWI {:4.1}"</span><span class="p">,</span>
+<span class="w">                </span><span class="n">value</span><span class="p">(</span><span class="n">OutputVariableName</span><span class="p">::</span><span class="n">ffmc</span><span class="p">),</span>
+<span class="w">                </span><span class="n">value</span><span class="p">(</span><span class="n">OutputVariableName</span><span class="p">::</span><span class="n">dmc</span><span class="p">),</span>
+<span class="w">                </span><span class="n">value</span><span class="p">(</span><span class="n">OutputVariableName</span><span class="p">::</span><span class="n">dc</span><span class="p">),</span>
+<span class="w">                </span><span class="n">value</span><span class="p">(</span><span class="n">OutputVariableName</span><span class="p">::</span><span class="n">isi</span><span class="p">),</span>
+<span class="w">                </span><span class="n">value</span><span class="p">(</span><span class="n">OutputVariableName</span><span class="p">::</span><span class="n">bui</span><span class="p">),</span>
+<span class="w">                </span><span class="n">value</span><span class="p">(</span><span class="n">OutputVariableName</span><span class="p">::</span><span class="n">fwi</span><span class="p">),</span>
+<span class="w">            </span><span class="p">);</span>
+<span class="w">        </span><span class="p">}</span>
+<span class="w">    </span><span class="p">}</span>
+<span class="p">}</span>
+</code></pre></div>
+<div class="highlight"><pre><span></span><code><span class="gp">$ </span>cargo<span class="w"> </span>run<span class="w"> </span>--release<span class="w"> </span>--example<span class="w"> </span>fwi_single_cell
+<span class="go">2026-07-01 12:00:00 UTC  FFMC  91.8  DMC  10.8  DC   23.7  ISI 13.8  BUI  10.7  FWI 13.5</span>
+<span class="go">2026-07-02 12:00:00 UTC  FFMC  92.4  DMC  15.6  DC   32.5  ISI 15.0  BUI  15.5  FWI 17.0</span>
+<span class="go">...</span>
+<span class="go">2026-07-05 12:00:00 UTC  FFMC  92.6  DMC  29.9  DC   58.7  ISI 15.3  BUI  29.8  FWI 23.3</span>
+</code></pre></div>
+<h2 id="many-cells">Many cells<a class="headerlink" href="#many-cells" title="Permanent link">&para;</a></h2>
+<p>Nothing changes for a grid: pass one element per cell in every vector, and one
+<code>InputElement</code> per cell in each <code>Input</code>. <code>update</code> and <code>output</code> process the cells in parallel
+with <code>ndarray</code>'s <code>Zip</code>. The <code>risico-2023</code> runner does exactly this on tiles of the domain,
+so memory stays bounded however large the domain is (see
+<a href="../execution/">Tiled Streaming Execution</a>).</p>
+<p>To save and restore a run, map the state's cells back to warm-state records (for RISICO,
+the <code>dffm</code>, snow and satellite fields of each <code>RISICOStateElement</code>) and pass them to
+<code>State::new</code> next time.</p>
+
+
+
+
+
+
+
+
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+  
+    Made with
+    <a href="https://squidfunk.github.io/mkdocs-material/" target="_blank" rel="noopener">
+      Material for MkDocs
+    </a>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    
+      
+      
+      <script id="__config" type="application/json">{"annotate": null, "base": "..", "features": ["navigation.sections", "navigation.indexes", "navigation.instant", "content.code.copy", "toc.follow"], "search": "../assets/javascripts/workers/search.a7633da7.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": {"provider": "mike"}}</script>
+    
+    
+      <script src="../assets/javascripts/bundle.a5f9d56c.min.js"></script>
+      
+        <script src="../javascripts/cima-brand.js"></script>
+      
+    
+  </body>
+</html>

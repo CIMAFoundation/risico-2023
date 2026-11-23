@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["daylight_hours","evapotranspiration_thornthwaite","heat_index"]};

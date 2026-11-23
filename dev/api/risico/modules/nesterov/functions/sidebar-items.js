@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["get_output_fn","nesterov_update","store_day_fn","update_fn"]};

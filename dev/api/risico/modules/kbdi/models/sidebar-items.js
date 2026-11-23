@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"struct":["KBDICellPropertiesContainer","KBDIProperties","KBDIPropertiesElement","KBDIState","KBDIStateElement","KBDIWarmState"]};

@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["get_output_fn","kbdi_update_mm","store_day_fn","update_fn"]};

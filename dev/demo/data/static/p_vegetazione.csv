@@ -1,0 +1,14 @@
+#ID d0  d1  hhv    umid   v0   T0     sat  use_ndvi     decodifica
+0   0   0   -9999  -9999  0    -9999 -9999 false        non vegetato
+1   0.5 0   17000  -9999  84   12     40   true         praterie_bassa_susc
+2   0.5 0   17000  -9999  96   12     40   true         praterie_media_susc
+3   0.5 0   17000  -9999  120  12     40   true         praterie_alta_susc
+4   1.5 3   20000  60     77   60     60   false        foresta_latifoglie_bassa_susc
+5   1.5 3   20000  60     88   60     60   false        foresta_latifoglie_media_susc
+6   1.5 3   20000  60     110  60     60   false        foresta_latifoglie_alta_susc
+7   1   3   21000  45     98   24     40   false        macchia_bassa_susc
+8   1   3   21000  45     112  24     40   false        macchia_media_susc
+9   1   3   21000  45     140  24     40   false        macchia_alta_susc
+10  1   4   21000  55     84   48     50   false        foresta_conifere_bassa_susc
+11  1   4   21000  55     96   48     50   false        foresta_conifere_media_susc
+12  1   4   21000  55     120  48     50   false        foresta_conifere_alta_susc

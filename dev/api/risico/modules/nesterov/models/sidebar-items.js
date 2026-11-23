@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"struct":["NesterovCellPropertiesContainer","NesterovProperties","NesterovPropertiesElement","NesterovState","NesterovStateElement","NesterovWarmState"]};

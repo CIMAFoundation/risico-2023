@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["fire_class","get_output_fn","store_day_fn","update_fn"]};

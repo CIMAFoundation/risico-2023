@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"constant":["NESTEROV_INIT","NODATAVAL","RAIN_TH","TIME_WEATHER"]};

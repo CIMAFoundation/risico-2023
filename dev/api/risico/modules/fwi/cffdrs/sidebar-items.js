@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"constant":["FFMC_COEFFICIENT"],"fn":["buildup_index","daily_codes","daily_severity_rating","day_length_le","day_length_lf","drought_code","duff_moisture_code","ffmc_to_moisture","fine_fuel_moisture_code","fire_weather_index","initial_spread_index","moisture_to_ffmc"]};

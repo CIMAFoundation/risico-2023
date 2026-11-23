@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"mod":["angstrom","fosberg","functions","fwi","hdw","kbdi","mark5","nesterov","orieux","risico","sharples"]};

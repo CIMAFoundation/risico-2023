@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["angstrom_index","get_output_fn"]};

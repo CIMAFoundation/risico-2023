@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"constant":["DEFAULT_DT_BOUNDS_HOURS"],"struct":["RISICOModelConfig"]};
