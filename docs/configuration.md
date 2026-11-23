@@ -151,10 +151,9 @@ one format, on one grid, into one directory:
 |---|---|
 | `internal_name`, `name` | Names of the output type, used in logs and file names |
 | `path` | Output directory, created if missing |
-| `format` | `NETCDF`, `GEOTIFF`, `ZARR`, `PNGWJSON` or `ZBIN`, [below](#formats) |
+| `format` | `NETCDF`, `GEOTIFF`, `ZARR` or `PNGWJSON`, [below](#formats) |
 | `compression_level` | `NETCDF`: deflate level 0–9; `ZARR`: zstd level 0–22. Default `7` |
 | `grid` | The output grid: `nrows` × `ncols` cell centres from `min_lat`/`min_lon` to `max_lat`/`max_lon`, both included |
-| `grid_path` | Instead of `grid`: a text grid file of the previous RISICO implementation |
 | `variables` | The variables to write |
 
 Each variable has:
@@ -181,7 +180,6 @@ hour, `24` once a day at the hour of the run date (shifted by `output_time_offse
 | `GEOTIFF` | One GeoTIFF per variable and output time |
 | `ZARR` | One Zarr v3 store per variable, `<path>/<name>.zarr`, same axes as NetCDF |
 | `PNGWJSON` | One coloured PNG image per variable and output time, with a JSON file describing its georeference, for web maps. Needs a palette per variable. |
-| `ZBIN` | The binary format of the previous RISICO implementation |
 
 ### PNG palettes
 

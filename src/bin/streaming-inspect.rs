@@ -14,7 +14,7 @@ use common::process::format_bytes;
 struct Args {
     /// Model date in YYYYMMDDHHMM form.
     date: String,
-    /// YAML or legacy text configuration.
+    /// YAML configuration.
     config: String,
     /// Override raster tile height.
     #[arg(long)]
@@ -22,7 +22,7 @@ struct Args {
     /// Override raster tile width.
     #[arg(long)]
     tile_width: Option<usize>,
-    /// Override legacy cells per tile.
+    /// Override cells per batch for models reading a cell file.
     #[arg(long)]
     cells_per_tile: Option<usize>,
 }

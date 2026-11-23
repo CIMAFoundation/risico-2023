@@ -93,11 +93,6 @@ unusual files: `time_units` names the attribute that holds the time units, when 
 `units`, and `coords_dims` (a pair of dimension names) selects the latitude and longitude
 dimensions when the coordinate variables have more than two.
 
-### Legacy `zbin` inputs
-
-Instead of a directory, the input argument can be a text file listing `.zbin` files, one per
-line: the binary format of the previous RISICO implementation. New setups should use NetCDF.
-
 ## Static data
 
 Static data describe the land on the grid the model computes on. They are single-band GeoTIFF

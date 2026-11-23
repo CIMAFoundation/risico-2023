@@ -54,7 +54,7 @@ Warm state
 Outputs
 :   Maps of the variables you ask for, written at the times you ask for, on an output grid of
     your choice (the native grid, or a coarser one). NetCDF is the usual format; GeoTIFF,
-    Zarr, PNG and a legacy binary format are also available.
+    Zarr and PNG are also available.
 
 Configuration
 :   A YAML file listing the models to run and, for each, where its static data, warm state
@@ -121,4 +121,3 @@ how to tune it.
 | Snapshot | Saved warm state at one time, a NetCDF file |
 | Static data | Maps that do not change during a run: mask, slope, aspect, vegetation |
 | Warm state | Model memory carried from one run to the next |
-| `zbin` | Binary input and output format of the previous RISICO implementation |

@@ -25,7 +25,7 @@ In detail, for each configured model:
    plane-oriented, little-endian output scratch file and, when the state is
    on disk, checkpoint its updated state.
 5. After all tiles complete that timestamp, resample its native
-   variables onto each configured output grid, encode NETCDF, ZBIN, ZARR,
+   variables onto each configured output grid, encode NETCDF, ZARR,
    PNGWJSON or GEOTIFF output, and remove the scratch file.
    Independent output variables may be postprocessed in parallel, and the
    whole step may run in the background while the next timestamp is stepped.

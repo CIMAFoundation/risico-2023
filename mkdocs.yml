@@ -29,7 +29,6 @@ nav:
       - Fire Danger Indices: indices.md
       - CLI Usage: cli.md
       - Large Domains and Performance: execution.md
-      - Converting Legacy Data: conversion.md
       - References: references.md
   - Developer Guide:
       - Programmatic Workflow: programmatic.md
