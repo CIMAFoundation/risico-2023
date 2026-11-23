@@ -72,8 +72,9 @@ Click a cell for its full series of the selected variable:
     drought code (DC) or KBDI need months to settle. Mark 5 and KBDI use a mean annual rainfall of
     800 mm and Orieux a heat index of 70 for every cell.
 
-    The July 2025 sample comes from the Open-Meteo historical forecast archive (CC BY 4.0) and is
-    served with the site; the same files run with the command-line model, see
+    The July 2025 sample comes from the Open-Meteo historical forecast archive and is served with the
+    site; weather data by [Open-Meteo.com](https://open-meteo.com), licensed under
+    [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/); the same files run with the command-line model, see
     [Try it with the sample data](getting-started.md#try-it-with-the-sample-data). Today's weather is
     requested by your browser from Open-Meteo's free API: 2 m temperature and humidity, 10 m wind,
     precipitation and snow depth. The free tier allows about 600 locations a minute; the Liguria map

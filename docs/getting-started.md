@@ -63,8 +63,11 @@ from the warm state saved on that day. The same files are online: the
 [weather input](demo/data/sample/input/weather-2025-07.nc) and the
 [configuration](demo/data/sample/configuration.yml).
 
-The weather comes from the [Open-Meteo](https://open-meteo.com) historical forecast archive
-(CC BY 4.0); `docs/demo/tools/make_sample_weather.py` rebuilds it for any period.
+The weather comes from the Open-Meteo historical forecast archive: weather data by
+[Open-Meteo.com](https://open-meteo.com), licensed under
+[CC BY 4.0](https://creativecommons.org/licenses/by/4.0/); the file carries the same attribution
+in its `attribution` and `license` attributes. `docs/demo/tools/make_sample_weather.py` rebuilds it
+for any period.
 
 ### NetCDF inputs
 

@@ -125,6 +125,7 @@
   }
   .run:disabled { opacity: 0.55; cursor: progress; }
   progress { width: 100%; height: 8px; accent-color: var(--accent); }
+  aside a { color: var(--accent); }
   .status { font-size: 12px; color: var(--muted); min-height: 1.5em; }
   .status.error { color: #c0392b; }
   details pre {
@@ -224,6 +225,8 @@
             <a href="https://open-meteo.com" target="_blank" rel="noopener">Open-Meteo</a>, requested by your browser.</p>
         </div>
         <p class="note">The model starts from default moisture and spins up on the first days.</p>
+        <p class="note">Weather data by <a href="https://open-meteo.com" target="_blank" rel="noopener">Open-Meteo.com</a>,
+          licensed under <a href="https://creativecommons.org/licenses/by/4.0/" target="_blank" rel="noopener">CC BY 4.0</a>.</p>
       </div>
 
       <div class="controls" data-for="map">
@@ -242,6 +245,8 @@
         </div>
         <p class="note">RISICO and FWI on every 1 km cell of a Liguria cut-out of the Italian domain, with
           hourly weather on a 0.125° grid. Hourly maps.</p>
+        <p class="note">Weather data by <a href="https://open-meteo.com" target="_blank" rel="noopener">Open-Meteo.com</a>,
+          licensed under <a href="https://creativecommons.org/licenses/by/4.0/" target="_blank" rel="noopener">CC BY 4.0</a>.</p>
       </div>
 
       <button class="run" id="run">Run RISICO</button>
