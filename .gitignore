@@ -273,3 +273,7 @@ $RECYCLE.BIN/
 # End of https://www.toptal.com/developers/gitignore/api/rust,macos,linux,windows,python
 
 .codex
+# Browser demo: the wasm binary is built by the docs workflow
+docs/demo/risico-2023.wasm
+# Demo static data, not published yet
+docs/demo/data/

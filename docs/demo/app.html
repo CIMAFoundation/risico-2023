@@ -1,0 +1,236 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>RISICO in the browser</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css" />
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/uplot@1.6.31/dist/uPlot.min.css" />
+<style>
+  :root {
+    --bg: #ffffff;
+    --panel: #f5f7fa;
+    --border: #d9dee5;
+    --text: #1f2d3a;
+    --muted: #5d6b78;
+    --primary: #002d4b;
+    --accent: #dd7600;
+    --accent-ink: #0e1a24;
+    --grid: rgba(31, 45, 58, 0.09);
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #14181d;
+      --panel: #1b2128;
+      --border: #313a44;
+      --text: #e4e9ee;
+      --muted: #9aa6b2;
+      --primary: #7fb3d9;
+      --accent: #f29b3d;
+      --accent-ink: #14181d;
+      --grid: rgba(228, 233, 238, 0.1);
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg: #14181d;
+    --panel: #1b2128;
+    --border: #313a44;
+    --text: #e4e9ee;
+    --muted: #9aa6b2;
+    --primary: #7fb3d9;
+    --accent: #f29b3d;
+    --accent-ink: #14181d;
+    --grid: rgba(228, 233, 238, 0.1);
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--text);
+    font: 14px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  }
+  .app { padding: 12px 16px 24px; max-width: 1400px; margin: 0 auto; }
+  .tabs { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 12px; }
+  .tab {
+    border: 1px solid var(--border);
+    background: var(--panel);
+    color: var(--text);
+    border-radius: 8px;
+    padding: 7px 12px;
+    font: inherit;
+    cursor: pointer;
+  }
+  .tab small { display: block; color: var(--muted); font-size: 12px; }
+  .tab[aria-selected="true"] { border-color: var(--accent); box-shadow: inset 0 -3px 0 var(--accent); }
+  .main { display: grid; grid-template-columns: minmax(0, 1fr) 320px; gap: 14px; }
+  @media (max-width: 860px) { .main { grid-template-columns: minmax(0, 1fr); } }
+  .map-pane { position: relative; }
+  #map {
+    height: 520px;
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    background: var(--panel);
+  }
+  @media (max-width: 860px) { #map { height: 380px; } }
+  .map-tools {
+    display: none;
+    gap: 10px;
+    align-items: center;
+    flex-wrap: wrap;
+    margin-top: 8px;
+  }
+  .map-tools.visible { display: flex; }
+  .map-tools input[type="range"] { flex: 1 1 200px; }
+  .legend { display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--muted); flex-wrap: wrap; }
+  .legend canvas { border-radius: 3px; border: 1px solid var(--border); }
+  aside {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 12px 14px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+  }
+  aside h2 { font-size: 14px; margin: 0; }
+  .cell-info { font-size: 13px; }
+  .cell-info dl { display: grid; grid-template-columns: auto 1fr; gap: 2px 10px; margin: 6px 0 0; }
+  .cell-info dt { color: var(--muted); }
+  .cell-info dd { margin: 0; }
+  .controls { display: none; flex-direction: column; gap: 8px; }
+  .controls.visible { display: flex; }
+  label.field { display: grid; grid-template-columns: 1fr auto; gap: 2px 8px; align-items: center; font-size: 13px; }
+  label.field input[type="range"], label.field select, label.field input[type="date"] { grid-column: 1 / -1; width: 100%; }
+  label.field output { color: var(--muted); font-variant-numeric: tabular-nums; }
+  select, input[type="date"], input[type="number"] {
+    font: inherit;
+    color: var(--text);
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 3px 6px;
+  }
+  fieldset { border: 1px solid var(--border); border-radius: 8px; padding: 6px 10px 10px; margin: 0; display: flex; flex-direction: column; gap: 8px; }
+  legend { font-size: 12px; color: var(--muted); padding: 0 4px; }
+  .run {
+    border: 0;
+    border-radius: 8px;
+    background: var(--accent);
+    color: var(--accent-ink);
+    font: 600 14px/1 inherit;
+    padding: 10px 14px;
+    cursor: pointer;
+  }
+  .run:disabled { opacity: 0.55; cursor: progress; }
+  progress { width: 100%; height: 8px; accent-color: var(--accent); }
+  .status { font-size: 12px; color: var(--muted); min-height: 1.5em; }
+  .status.error { color: #c0392b; }
+  details pre {
+    max-height: 220px;
+    overflow: auto;
+    font-size: 11px;
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 6px;
+    white-space: pre-wrap;
+    word-break: break-all;
+  }
+  .note { font-size: 12px; color: var(--muted); margin: 0; }
+  #charts { margin-top: 16px; display: grid; gap: 14px; }
+  .chart-group h3 { font-size: 14px; margin: 6px 0; }
+  .chart-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 420px), 1fr)); gap: 12px; }
+  .chart {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 8px 8px 4px;
+    min-width: 0;
+  }
+  .chart h4 { margin: 0 0 2px 4px; font-size: 13px; }
+  .chart p { margin: 0 0 4px 4px; font-size: 12px; color: var(--muted); }
+  .uplot { font-family: inherit; }
+  .uplot .u-legend { font-size: 12px; }
+  .empty { color: var(--muted); font-size: 13px; padding: 12px 0; }
+  .leaflet-container { background: var(--panel); font: inherit; }
+  .pixel-popup canvas { display: block; }
+</style>
+</head>
+<body>
+<div class="app">
+  <nav class="tabs" role="tablist">
+    <button class="tab" role="tab" data-mode="scenario" aria-selected="true">1 · One cell, your weather<small>no data to download</small></button>
+    <button class="tab" role="tab" data-mode="live" aria-selected="false">2 · One cell, real weather<small>Open-Meteo analysis + forecast</small></button>
+    <button class="tab" role="tab" data-mode="map" aria-selected="false">3 · Italy at 1 km<small>Open-Meteo, 317 000 cells</small></button>
+  </nav>
+
+  <div class="main">
+    <section class="map-pane">
+      <div id="map"></div>
+      <div class="map-tools" id="map-tools">
+        <select id="map-variable" aria-label="Output variable"></select>
+        <input id="map-time" type="range" min="0" max="0" value="0" aria-label="Time" />
+        <span id="map-time-label" class="status"></span>
+        <div class="legend" id="map-legend"></div>
+      </div>
+    </section>
+
+    <aside>
+      <div class="cell-info" id="cell-info">
+        <h2>Cell</h2>
+        <p class="note">Click the map to pick a cell of the 1 km domain.</p>
+      </div>
+
+      <div class="controls" data-for="scenario">
+        <fieldset>
+          <legend>Weather</legend>
+          <label class="field">Start <input type="date" id="sc-start" /></label>
+          <label class="field">Days <output id="sc-days-v"></output><input type="range" id="sc-days" min="2" max="21" value="10" /></label>
+          <label class="field">Mean temperature (°C) <output id="sc-t-v"></output><input type="range" id="sc-t" min="-5" max="40" value="26" /></label>
+          <label class="field">Daily temperature range (°C) <output id="sc-tr-v"></output><input type="range" id="sc-tr" min="0" max="25" value="12" /></label>
+          <label class="field">Mean relative humidity (%) <output id="sc-h-v"></output><input type="range" id="sc-h" min="5" max="100" value="45" /></label>
+          <label class="field">Wind speed (m/s) <output id="sc-w-v"></output><input type="range" id="sc-w" min="0" max="20" value="4" step="0.5" /></label>
+          <label class="field">Wind from (°) <output id="sc-d-v"></output><input type="range" id="sc-d" min="0" max="350" value="270" step="10" /></label>
+          <label class="field">Rain on day <output id="sc-rd-v"></output><input type="range" id="sc-rd" min="1" max="21" value="5" /></label>
+          <label class="field">Rain amount (mm) <output id="sc-ra-v"></output><input type="range" id="sc-ra" min="0" max="60" value="0" /></label>
+        </fieldset>
+        <fieldset>
+          <legend>Cell properties (override)</legend>
+          <label class="field">Vegetation <select id="sc-veg"></select></label>
+          <label class="field">Slope (°) <output id="sc-slope-v"></output><input type="range" id="sc-slope" min="0" max="60" value="0" /></label>
+          <label class="field">Aspect (°) <output id="sc-aspect-v"></output><input type="range" id="sc-aspect" min="0" max="350" value="180" step="10" /></label>
+        </fieldset>
+      </div>
+
+      <div class="controls" data-for="live">
+        <label class="field">Spin-up (past days) <output id="lv-past-v"></output><input type="range" id="lv-past" min="2" max="60" value="14" /></label>
+        <label class="field">Forecast days <output id="lv-fc-v"></output><input type="range" id="lv-fc" min="1" max="10" value="7" /></label>
+        <p class="note">Hourly 2 m temperature, humidity, 10 m wind, rain and snow depth from
+          <a href="https://open-meteo.com" target="_blank" rel="noopener">Open-Meteo</a>, requested by your browser.
+          The model starts from default moisture and spins up on the past days.</p>
+      </div>
+
+      <div class="controls" data-for="map">
+        <label class="field">Spin-up (past days) <output id="mp-past-v"></output><input type="range" id="mp-past" min="1" max="5" value="2" /></label>
+        <label class="field">Forecast days <output id="mp-fc-v"></output><input type="range" id="mp-fc" min="1" max="4" value="3" /></label>
+        <p class="note">RISICO and FWI on every 1 km cell of the Italian domain, with weather sampled from
+          Open-Meteo on a 0.5° grid and interpolated to 0.125°. Maps every 3 hours. Expect a couple of
+          minutes and about 1.5 GB of memory: a desktop browser is recommended.</p>
+      </div>
+
+      <button class="run" id="run">Run RISICO</button>
+      <progress id="progress" max="1" value="0" hidden></progress>
+      <div class="status" id="status" role="status"></div>
+      <details>
+        <summary class="note">Model log</summary>
+        <pre id="log"></pre>
+      </details>
+    </aside>
+  </div>
+
+  <section id="charts"></section>
+</div>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+<script type="module" src="app.js"></script>
+</body>
+</html>

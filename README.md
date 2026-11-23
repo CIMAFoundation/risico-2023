@@ -3,6 +3,8 @@
 RISICO  (Rischio Incendi E Coordinamento) is a wildfire risk forecast model written in rust and developed by CIMA Research Foundation. 
 It is designed to predict the likelihood and potential impact of wildfires in a given region, given a set of input parameters.
 
+Documentation and an interactive in-browser demo: <https://cimafoundation.github.io/risico-2023/>.
+
 ### Project Status
 This project is ongoing. We welcome contributions and feedback.
 

@@ -1,0 +1,46 @@
+site_name: RISICO
+site_description: "RISICO: the wildfire danger forecasting model of CIMA Research Foundation"
+site_url: ""
+repo_url: https://github.com/CIMAFoundation/risico-2023
+repo_name: CIMAFoundation/risico-2023
+
+theme:
+  name: material
+  logo: img/cima.png
+  features:
+    - navigation.sections
+    - navigation.indexes
+    - navigation.instant
+    - content.code.copy
+    - toc.follow
+
+extra:
+  version:
+    provider: mike
+
+nav:
+  - Home: index.md
+  - Interactive Demo: demo.md
+  - Getting Started: getting-started.md
+  - Fire Danger Indices: indices.md
+  - Configuration: configuration.md
+  - Tiled Streaming Execution: execution.md
+  - Converting Legacy Data: conversion.md
+  - Using the Crate: library.md
+  - Building the Web Demo: web-demo.md
+
+markdown_extensions:
+  - admonition
+  - attr_list
+  - md_in_html
+  - tables
+  - toc:
+      permalink: true
+  - pymdownx.highlight
+  - pymdownx.superfences
+
+extra_css:
+  - stylesheets/cima-theme.css
+
+extra_javascript:
+  - javascripts/cima-brand.js

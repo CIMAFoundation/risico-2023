@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 160 160" role="img" aria-label="RISICO">
+  <rect width="160" height="160" rx="28" fill="#0b2f4a"/>
+  <g opacity="0.35" stroke="#7fb3d9" stroke-width="1">
+    <path d="M20 40h120M20 60h120M20 80h120M20 100h120M20 120h120M40 20v120M60 20v120M80 20v120M100 20v120M120 20v120"/>
+  </g>
+  <rect x="60" y="100" width="20" height="20" fill="#f29b3d"/>
+  <rect x="80" y="100" width="20" height="20" fill="#dd7600"/>
+  <rect x="80" y="80" width="20" height="20" fill="#f29b3d"/>
+  <rect x="100" y="100" width="20" height="20" fill="#f6c26b"/>
+  <path d="M80 34c6 16 26 26 26 50a26 26 0 0 1-52 0c0-12 6-20 12-26 0 10 4 16 10 18-4-14 0-30 4-42z" fill="#dd7600"/>
+  <path d="M81 64c4 9 13 14 13 25a13 13 0 0 1-26 0c0-6 3-10 6-13 0 5 2 8 5 9-2-7 0-15 2-21z" fill="#ffd27a"/>
+</svg>
